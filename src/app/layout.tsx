@@ -1,5 +1,5 @@
-import { ModeToggle } from '@/components/common/theme/ModeToggle';
 import { ThemeProvider } from '@/components/common/theme/theme-provider';
+import AppLayout from '@/components/layout/AppLayout';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ReactNode } from 'react';
@@ -19,10 +19,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             enableSystem
             disableTransitionOnChange
           >
-            <header>
-              <ModeToggle />
-            </header>
-            <main>{children}</main>
+            <AppLayout>{children}</AppLayout>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

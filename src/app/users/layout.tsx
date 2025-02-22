@@ -1,14 +1,15 @@
-// app/user/layout.tsx
+'use client';
+import { ModeToggle } from '@/components/common/theme/ModeToggle';
 import { ReactNode } from 'react';
 
 export default function UserLayout({ children }: { children: ReactNode }) {
   return (
-    <div>
+    <>
       <header>
         <h1>User Home Page</h1>
-        {/* Add User-specific header/navigation here */}
+        <ModeToggle />
       </header>
       <main>{children}</main>
-    </div>
+    </>
   );
 }

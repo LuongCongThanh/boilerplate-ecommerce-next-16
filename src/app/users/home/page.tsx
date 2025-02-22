@@ -1,3 +1,5 @@
+'use client';
+
 import LanguageSwitcher from '@/components/common/lang/LanguageSwitcher';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from 'next-intl';
