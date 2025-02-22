@@ -1,10 +1,10 @@
 {
-    "homepage": {
-      "hello": "Hello world!"
-    },
-    "common": {
-      "switchLanguage": "Switch Language",
-      "english": "English",
-      "vietnam": "vietnam"
-    }
+  "homepage": {
+    "hello": "Hello world!"
+  },
+  "common": {
+    "switchLanguage": "Switch Language",
+    "english": "English",
+    "vietnam": "vietnam"
   }
+}
