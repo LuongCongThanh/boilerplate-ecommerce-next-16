@@ -1,0 +1,10 @@
+{
+    "homepage": {
+      "hello": "Xin chào"
+    },
+    "common": {
+      "switchLanguage": "Đổi ngôn ngữ",
+      "english": "Tiếng Anh",
+      "vietnam": "Tiếng Việt"
+    }
+  }

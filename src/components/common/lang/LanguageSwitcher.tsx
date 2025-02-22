@@ -10,18 +10,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
 const LanguageSwitcher = () => {
   const t = useTranslations('common');
   const locale = useLocale();
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const handleLanguageChange = (value: string) => {
+  const handleLanguageChange = (newLocale: string) => {
     startTransition(() => {
-      router.replace(`/${value}`);
+      // Lưu locale vào localStorage
+      localStorage.setItem('NEXT_LOCALE', newLocale);
+      // Refresh trang
+      window.location.reload();
     });
   };
 
@@ -34,7 +35,7 @@ const LanguageSwitcher = () => {
         <SelectGroup>
           <SelectLabel>{t('switchLanguage')}</SelectLabel>
           <SelectItem value="en">{t('english')}</SelectItem>
-          <SelectItem value="tr">{t('turkish')}</SelectItem>
+          <SelectItem value="vi">{t('vietnam')}</SelectItem>
         </SelectGroup>
       </SelectContent>
     </Select>
