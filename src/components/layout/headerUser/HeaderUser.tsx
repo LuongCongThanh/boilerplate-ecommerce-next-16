@@ -1,4 +1,5 @@
 'use client';
+import { ModeToggle } from '@/components/theme/ModeToggle';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -129,6 +130,9 @@ const HeaderUser: React.FC = () => {
               <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
                 Sign In
               </button>
+
+              {/* Theme Button */}
+              <ModeToggle />
 
               {/* Mobile Menu Button */}
               <button

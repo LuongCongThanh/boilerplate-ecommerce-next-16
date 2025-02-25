@@ -1,9 +1,9 @@
 import AppLayout from '@/components/layout/AppLayout';
 import { ThemeProvider } from '@/components/theme/theme-provider';
+import '@/styles/globals.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ReactNode } from 'react';
-import '@/styles/globals.css';
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
