@@ -1,3 +1,4 @@
+import { ToastProvider } from '@/components/core/toast/ToastProvider';
 import AppLayout from '@/components/layout/AppLayout';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import '@/styles/globals.css';
@@ -19,6 +20,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             enableSystem
             disableTransitionOnChange
           >
+            <ToastProvider />
             <AppLayout>{children}</AppLayout>
           </ThemeProvider>
         </NextIntlClientProvider>
