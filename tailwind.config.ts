@@ -15,7 +15,7 @@ const config: Config = {
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        border: "hsl(var(--border, 220, 13%, 91%))",// Fix lỗi border-border
+        border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         card: {
