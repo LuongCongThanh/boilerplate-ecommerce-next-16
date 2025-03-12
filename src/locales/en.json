@@ -7,11 +7,11 @@
     "english": "English",
     "vietnam": "vietnam"
   },
-    "theme": {
-      "light": "Light",
-      "dark": "Dark",
-      "secondaryLight": "Secondary Light",
-      "white": "White",
-      "system": "System"
-    }
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "secondaryLight": "Secondary Light",
+    "white": "White",
+    "system": "System"
+  }
 }
