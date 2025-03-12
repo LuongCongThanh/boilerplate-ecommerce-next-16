@@ -1,5 +1,4 @@
 'use client';
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   FaEnvelope,
@@ -143,9 +142,9 @@ const FooterUser = () => {
               Reserved.
             </p>
             <div className="flex items-center gap-4">
-              <Image src="/images/payment/visa.png" alt="Visa" width={32} height={32} />
+              {/* <Image src="/images/payment/visa.png" alt="Visa" width={32} height={32} />
               <Image src="/images/payment/mastercard.png" alt="Mastercard" width={32} height={32} />
-              <Image src="/images/payment/paypal.png" alt="PayPal" width={32} height={32} />
+              <Image src="/images/payment/paypal.png" alt="PayPal" width={32} height={32} /> */}
             </div>
           </div>
         </div>

@@ -6,5 +6,12 @@
     "switchLanguage": "Đổi ngôn ngữ",
     "english": "Tiếng Anh",
     "vietnam": "Tiếng Việt"
+  },
+  "theme": {
+    "light": "Sáng",
+    "dark": "Tối",
+    "secondaryLight": "Sáng phụ",
+    "white": "Trắng",
+    "system": "Hệ thống"
   }
 }

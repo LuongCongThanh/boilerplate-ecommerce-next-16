@@ -11,9 +11,9 @@
 // };
 
 
+import { authMiddleware } from '@/middleware/authMiddleware';
+import { i18nMiddleware } from '@/middleware/i18nMiddleware';
 import { NextRequest } from 'next/server';
-import { authMiddleware } from './middleware/authMiddleware';
-import { i18nMiddleware } from 'middleware/i18nMiddleware';
 
 export function middleware(req: NextRequest) {
     // 1. Chạy middleware i18n trước
