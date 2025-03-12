@@ -1,4 +1,5 @@
 'use client';
+import LanguageSwitcher from '@/components/lang/LanguageSwitcher';
 import { ModeToggle } from '@/components/theme/ModeToggle';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -6,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { FaBars, FaSearch, FaShoppingCart } from 'react-icons/fa';
 import HamburgerMenu from './HamburgerMenu';
 
-const HeaderUser: React.FC = () => {
+const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
 
@@ -144,6 +145,7 @@ const HeaderUser: React.FC = () => {
               >
                 <FaBars size={20} />
               </button>
+              <LanguageSwitcher />
             </div>
           </div>
         </div>
@@ -155,4 +157,4 @@ const HeaderUser: React.FC = () => {
   );
 };
 
-export default HeaderUser;
+export default Header;

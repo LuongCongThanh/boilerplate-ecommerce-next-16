@@ -1,6 +1,6 @@
 'use client';
-import FooterUser from '@/components/layout/footerUser/FooterUser';
-import HeaderUser from '@/components/layout/headerUser/HeaderUser';
+import FooterUser from '@/components/layout/footer/Footer';
+import Header from '@/components/layout/header/Header';
 import { useEffect, useState } from 'react';
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
@@ -25,7 +25,7 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
             : ''
         }`}
       >
-        <HeaderUser />
+        <Header />
       </header>
       {/* Spacing when header is fixed */}
       {isHeaderFixed && <div className="h-[120px]" />}
