@@ -12,11 +12,19 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { setToCookie, setToLocalStorage } from '@/shares/services/storage.service';
 import { useTranslations } from 'next-intl';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export function ModeToggle() {
   const { theme, setTheme } = useTheme();
   const t = useTranslations('theme');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  if (!mounted) {
+    return <div className="h-[1.2rem] w-[1.2rem]" />; // Placeholder with same dimensions
+  }
   // Hàm để xác định icon nào sẽ hiển thị dựa trên theme hiện tại
   const getThemeIcon = () => {
     switch (theme) {
@@ -44,14 +52,6 @@ export function ModeToggle() {
     setToLocalStorage('theme', newTheme); // Lưu theme vào localStorage
     setToCookie('theme', newTheme, 7); // Lưu theme vào cookie với thời gian hết hạn 7 ngày
   };
-
-  // Lấy theme từ localStorage khi component được mount
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
-      setTheme(savedTheme);
-    }
-  }, [setTheme]);
 
   return (
     <DropdownMenu>
