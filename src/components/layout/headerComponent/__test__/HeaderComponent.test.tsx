@@ -1,8 +1,7 @@
-import React from 'react';
+import HeaderComponent from '@/components/layout/headerComponent/HeaderComponent';
+import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import '@testing-library/jest-dom';
-import Header from '../Header';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
@@ -23,7 +22,7 @@ jest.mock('next-themes', () => ({
 
 // Mock components
 jest.mock('@/components/core/themeToggle/ThemeToggle', () => ({
-  ModeToggle: () => <div data-testid="mode-toggle">Mode Toggle</div>,
+  ThemeToggle: () => <div data-testid="theme-toggle">Theme Toggle</div>,
 }));
 
 jest.mock('@/components/core/lang/LanguageSwitcher', () => {
@@ -32,7 +31,7 @@ jest.mock('@/components/core/lang/LanguageSwitcher', () => {
   });
 });
 
-jest.mock('../../../core/HamburgerMenu', () => {
+jest.mock('@/components/core/HamburgerMenu', () => {
   return jest.fn().mockImplementation(({ isOpen, onClose }) => {
     return (
       isOpen && (
@@ -47,9 +46,17 @@ jest.mock('../../../core/HamburgerMenu', () => {
   });
 });
 
+// Mock document.body.style to avoid JSDOM warnings
+Object.defineProperty(document.body, 'style', {
+  value: {
+    overflow: '',
+  },
+  writable: true,
+});
+
 describe('Header Component', () => {
   it('renders correctly', () => {
-    render(<Header />);
+    render(<HeaderComponent />);
 
     // Test for logo
     expect(screen.getByText('Estore.')).toBeInTheDocument();
@@ -72,13 +79,13 @@ describe('Header Component', () => {
     expect(screen.getByText('Sign In')).toBeInTheDocument();
 
     // Test for mocked components
-    expect(screen.getByTestId('mode-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
     expect(screen.getByTestId('language-switcher')).toBeInTheDocument();
   });
 
   it('toggles mobile menu when hamburger button is clicked', async () => {
     const user = userEvent.setup();
-    render(<Header />);
+    render(<HeaderComponent />);
 
     // Mobile menu should not be visible initially
     expect(screen.queryByTestId('hamburger-menu')).not.toBeInTheDocument();
@@ -99,7 +106,7 @@ describe('Header Component', () => {
   });
 
   it('has correct links in the top bar', () => {
-    render(<Header />);
+    render(<HeaderComponent />);
 
     // Test for top bar links
     const myAccountLink = screen.getByText('My Account');
@@ -125,7 +132,7 @@ describe('Header Component', () => {
 
   it('has a working search input', async () => {
     const user = userEvent.setup();
-    render(<Header />);
+    render(<HeaderComponent />);
 
     // Find search input
     const searchInput = screen.getByPlaceholderText('Search products');
@@ -134,5 +141,69 @@ describe('Header Component', () => {
     // Type in search input
     await user.type(searchInput, 'test search');
     expect(searchInput).toHaveValue('test search');
+  });
+
+  it('sets body overflow to hidden when menu is open', async () => {
+    const user = userEvent.setup();
+    render(<HeaderComponent />);
+
+    // Initial state
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    // Open menu
+    const menuButton = screen.getByLabelText('Toggle menu');
+    await user.click(menuButton);
+
+    // Body should have overflow hidden
+    expect(document.body.style.overflow).toBe('hidden');
+
+    // Close menu
+    const closeButton = screen.getByTestId('close-menu');
+    await user.click(closeButton);
+
+    // Body should have overflow unset
+    expect(document.body.style.overflow).toBe('unset');
+  });
+
+  it('renders country selector correctly', () => {
+    render(<HeaderComponent />);
+
+    const countrySelect = screen.getByRole('combobox');
+    expect(countrySelect).toBeInTheDocument();
+
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(2);
+    expect(options[0]).toHaveValue('USA');
+    expect(options[1]).toHaveValue('VN');
+  });
+
+  it('renders phone number correctly', () => {
+    render(<HeaderComponent />);
+
+    const phoneLink = screen.getByText('+777 2345 7886');
+    expect(phoneLink).toBeInTheDocument();
+    expect(phoneLink).toHaveAttribute('href', 'tel:+7772345786');
+  });
+
+  it('renders cart with correct badge', () => {
+    render(<HeaderComponent />);
+
+    const cartBadge = screen.getByText('0');
+    expect(cartBadge).toBeInTheDocument();
+    expect(cartBadge.closest('span')).toHaveClass('bg-blue-600');
+  });
+
+  it('unmounts cleanly and resets body overflow', () => {
+    const { unmount } = render(<HeaderComponent />);
+
+    // Open menu to set body overflow to hidden
+    const menuButton = screen.getByLabelText('Toggle menu');
+    userEvent.click(menuButton);
+
+    // Unmount component
+    unmount();
+
+    // Body overflow should be reset
+    expect(document.body.style.overflow).toBe('unset');
   });
 });
