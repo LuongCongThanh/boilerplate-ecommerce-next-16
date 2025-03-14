@@ -14,7 +14,7 @@ import { setToCookie, setToLocalStorage } from '@/shares/services/storage.servic
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
-export function ModeToggle() {
+export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const t = useTranslations('theme');
   const [mounted, setMounted] = useState(false);
@@ -25,7 +25,6 @@ export function ModeToggle() {
   if (!mounted) {
     return <div className="h-[1.2rem] w-[1.2rem]" />; // Placeholder with same dimensions
   }
-  // Hàm để xác định icon nào sẽ hiển thị dựa trên theme hiện tại
   const getThemeIcon = () => {
     switch (theme) {
       case 'dark':

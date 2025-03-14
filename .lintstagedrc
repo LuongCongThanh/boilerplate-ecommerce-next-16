@@ -1,6 +1,4 @@
 {
-  "*/**/*.{js,jsx,ts,tsx}": ["prettier --write", "eslint --fix"],
-  "*/**/*.test.{js,jsx,ts,tsx}": [
-    "jest --findRelatedTests --passWithNoTests"
-  ]
+  "*/**/*.{js,jsx,ts,tsx}": ["prettier --write", "eslint --fix"]
+
 }

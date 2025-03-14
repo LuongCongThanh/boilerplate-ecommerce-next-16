@@ -1,13 +1,13 @@
 'use client';
-import LanguageSwitcher from '@/components/lang/LanguageSwitcher';
-import { ModeToggle } from '@/components/theme/ModeToggle';
+import HamburgerMenu from '@/components/core/HamburgerMenu';
+import LanguageSwitcher from '@/components/core/lang/LanguageSwitcher';
+import { ThemeToggle } from '@/components/core/themeToggle/ThemeToggle';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FaBars, FaSearch, FaShoppingCart } from 'react-icons/fa';
-import HamburgerMenu from './HamburgerMenu';
 
-const Header: React.FC = () => {
+const HeaderComponent: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
 
@@ -133,7 +133,7 @@ const Header: React.FC = () => {
               </button>
 
               {/* Theme Button */}
-              <ModeToggle />
+              <ThemeToggle />
 
               {/* Mobile Menu Button */}
               <button
@@ -157,4 +157,4 @@ const Header: React.FC = () => {
   );
 };
 
-export default Header;
+export default HeaderComponent;
