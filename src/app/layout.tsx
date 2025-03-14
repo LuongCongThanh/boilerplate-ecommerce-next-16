@@ -1,11 +1,19 @@
 import { ToastProvider } from '@/components/core/toast/ToastProvider';
 import AppLayout from '@/components/layout/AppLayout';
-import { ThemeProvider } from '@/components/theme/theme-provider';
+import { ThemeProvider } from '@/components/layout/theme/Theme-provider';
 import '@/styles/globals.css';
+import { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ReactNode } from 'react';
 
+export const metadata: Metadata = {
+  title: 'My E-commerce',
+  description: 'E-commerce',
+  icons: {
+    icon: '/images/favicon.ico',
+  },
+};
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
   const messages = await getMessages({ locale });

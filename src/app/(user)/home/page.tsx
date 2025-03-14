@@ -1,7 +1,7 @@
 'use client';
 
-import { Counter } from '@/components/Counter';
-import LanguageSwitcher from '@/components/lang/LanguageSwitcher';
+import { Counter } from '@/components/core/Counter';
+import LanguageSwitcher from '@/components/core/lang/LanguageSwitcher';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from 'next-intl';
 

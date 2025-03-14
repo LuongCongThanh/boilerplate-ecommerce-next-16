@@ -1,4 +1,4 @@
-require("@testing-library/jest-dom");
+import '@testing-library/jest-dom';
 
 // Mocking window.matchMedia
 Object.defineProperty(window, "matchMedia", {

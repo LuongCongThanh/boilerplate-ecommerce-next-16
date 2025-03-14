@@ -31,4 +31,4 @@ const config = {
   testResultsProcessor: "jest-sonar-reporter",
 };
 
-module.exports = config;
+export default config;

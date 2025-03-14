@@ -1,4 +1,4 @@
-import { apiService } from '@/config/api/apiService';
+import { apiService } from '@/shares/services/apiService/apiService';
 import { API_ENDPOINTS } from '@/shares/contants/endpoints';
 
 // Types

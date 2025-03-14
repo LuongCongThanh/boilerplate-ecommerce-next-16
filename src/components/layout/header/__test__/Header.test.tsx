@@ -22,17 +22,17 @@ jest.mock('next-themes', () => ({
 }));
 
 // Mock components
-jest.mock('@/components/theme/ModeToggle', () => ({
+jest.mock('@/components/core/themeToggle/ThemeToggle', () => ({
   ModeToggle: () => <div data-testid="mode-toggle">Mode Toggle</div>,
 }));
 
-jest.mock('@/components/lang/LanguageSwitcher', () => {
+jest.mock('@/components/core/lang/LanguageSwitcher', () => {
   return jest.fn().mockImplementation(() => {
     return <div data-testid="language-switcher">Language Switcher</div>;
   });
 });
 
-jest.mock('../HamburgerMenu', () => {
+jest.mock('../../../core/HamburgerMenu', () => {
   return jest.fn().mockImplementation(({ isOpen, onClose }) => {
     return (
       isOpen && (
