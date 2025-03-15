@@ -3,14 +3,14 @@
 import { Monitor, Moon, Palette, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { setToCookie, setToLocalStorage } from '@/shares/services/storage.service';
+} from '@/shared/components/ui/dropdown-menu';
+import { setToCookie, setToLocalStorage } from '@/shared/services/storage.service';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 

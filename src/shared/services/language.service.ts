@@ -1,6 +1,6 @@
 'use server';
 
-import { COOKIE_NAME } from '@/shares/contants/config';
+import { COOKIE_NAME } from '@/shared/contants/config';
 import { defaultLocale, Locale } from '@/i18n/config';
 import { cookies } from 'next/headers';
 

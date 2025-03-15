@@ -8,8 +8,8 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { setToCookie, setToLocalStorage } from '@/shares/services/storage.service';
+} from '@/shared/components/ui/select';
+import { setToCookie, setToLocalStorage } from '@/shared/services/storage.service';
 import { useLocale, useTranslations } from 'next-intl';
 import { useTransition } from 'react';
 

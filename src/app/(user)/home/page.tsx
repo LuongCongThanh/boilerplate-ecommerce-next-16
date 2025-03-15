@@ -1,8 +1,8 @@
 'use client';
 
-import { Counter } from '@/components/core/Counter';
-import LanguageSwitcher from '@/components/core/lang/LanguageSwitcher';
-import { Button } from '@/components/ui/button';
+import { Counter } from '@/shared/components/core/Counter';
+import LanguageSwitcher from '@/shared/components/core/lang/LanguageSwitcher';
+import { Button } from '@/shared/components/ui/button';
 import { useTranslations } from 'next-intl';
 
 export default function UserHome() {

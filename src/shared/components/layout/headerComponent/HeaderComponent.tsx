@@ -1,7 +1,7 @@
 'use client';
-import HamburgerMenu from '@/components/core/HamburgerMenu';
-import LanguageSwitcher from '@/components/core/lang/LanguageSwitcher';
-import { ThemeToggle } from '@/components/core/themeToggle/ThemeToggle';
+import HamburgerMenu from '@/shared/components/core/HamburgerMenu';
+import LanguageSwitcher from '@/shared/components/core/lang/LanguageSwitcher';
+import { ThemeToggle } from '@/shared/components/core/themeToggle/ThemeToggle';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';

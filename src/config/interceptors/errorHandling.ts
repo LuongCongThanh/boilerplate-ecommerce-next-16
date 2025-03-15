@@ -1,4 +1,4 @@
-import { ERROR_MESSAGES } from '@/shares/contants/errorMessages';
+import { ERROR_MESSAGES } from '@/shared/contants/errorMessages';
 import { AxiosError } from 'axios';
 import { toast } from 'sonner';
 

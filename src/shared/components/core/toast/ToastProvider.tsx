@@ -1,6 +1,6 @@
 'use client';
 
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/shared/components/ui/sonner';
 
 export const ToastProvider = () => {
   return <Toaster position="top-right" />;

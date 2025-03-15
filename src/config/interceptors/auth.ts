@@ -1,5 +1,5 @@
-import { API_ENDPOINTS } from '@/shares/contants/endpoints';
-import { ERROR_MESSAGES } from '@/shares/contants/errorMessages';
+import { API_ENDPOINTS } from '@/shared/contants/endpoints';
+import { ERROR_MESSAGES } from '@/shared/contants/errorMessages';
 import { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { toast } from 'sonner';
 

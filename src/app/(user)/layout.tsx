@@ -1,6 +1,6 @@
 'use client';
-import FooterUser from '@/components/layout/footerComponent/FooterComponent';
-import HeaderComponent from '@/components/layout/headerComponent/HeaderComponent';
+import FooterUser from '@/shared/components/layout/footerComponent/FooterComponent';
+import HeaderComponent from '@/shared/components/layout/headerComponent/HeaderComponent';
 import { useEffect, useState } from 'react';
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {

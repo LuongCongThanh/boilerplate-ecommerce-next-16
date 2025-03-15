@@ -1,4 +1,4 @@
-// src/shares/services/storage.service.ts
+// src/shared/services/storage.service.ts
 
 export const COOKIE_NAME = 'NEXT_LOCALE'; // Tên cookie cho ngôn ngữ
 

@@ -1,4 +1,4 @@
-import HeaderComponent from '@/components/layout/headerComponent/HeaderComponent';
+import HeaderComponent from '@/shared/components/layout/headerComponent/HeaderComponent';
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -21,17 +21,17 @@ jest.mock('next-themes', () => ({
 }));
 
 // Mock components
-jest.mock('@/components/core/themeToggle/ThemeToggle', () => ({
+jest.mock('@/shared/components/core/themeToggle/ThemeToggle', () => ({
   ThemeToggle: () => <div data-testid="theme-toggle">Theme Toggle</div>,
 }));
 
-jest.mock('@/components/core/lang/LanguageSwitcher', () => {
+jest.mock('@/shared/components/core/lang/LanguageSwitcher', () => {
   return jest.fn().mockImplementation(() => {
     return <div data-testid="language-switcher">Language Switcher</div>;
   });
 });
 
-jest.mock('@/components/core/HamburgerMenu', () => {
+jest.mock('@/shared/components/core/HamburgerMenu', () => {
   return jest.fn().mockImplementation(({ isOpen, onClose }) => {
     return (
       isOpen && (
