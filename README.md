@@ -1,41 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Boilerplate E-commerce Next.js 15
 
-## Getting Started
+Đây là một boilerplate cho ứng dụng E-commerce sử dụng Next.js 15 với Turbopack, được thiết kế với nhiều tính năng hiện đại và tối ưu hóa hiệu suất.
 
-First, run the development server:
+## Công nghệ sử dụng
 
+### Core
+- **Next.js**: v15.1.7 - Framework React với SSR, SSG và nhiều tính năng khác
+- **React**: v19.0.0 - Thư viện UI
+- **TypeScript**: v5 - JavaScript với kiểu dữ liệu tĩnh
+- **Yarn** - Package manager
+
+### UI & Styling
+- **Tailwind CSS**: v4.0.14 - Framework CSS utility-first
+- **Shadcn UI**: v0.0.4 - Thư viện component UI có thể tùy chỉnh
+- **Framer Motion**: v12.4.7 - Thư viện animation
+- **SASS**: v1.85.0 - CSS preprocessor
+
+### State Management & Data Fetching
+- **Zustand**: v5.0.3 - Thư viện quản lý state đơn giản
+- **TanStack Query**: v5.66.5 - Thư viện quản lý data fetching và caching
+- **Axios**: v1.8.3 - Thư viện HTTP client
+
+### Internationalization
+- **next-intl**: v3.26.5 - Thư viện i18n cho Next.js
+- **react-intl**: v7.1.6 - Thư viện i18n cho React
+
+### Testing
+- **Jest**: v29.7.0 - Framework testing
+- **Testing Library**: v16.2.0 - Thư viện testing cho React
+- **SWC**: v1.11.9 - Compiler JavaScript/TypeScript nhanh
+
+### Linting & Formatting
+- **ESLint**: v9.21.0 - Linter cho JavaScript/TypeScript
+- **Prettier**: v3.5.1 - Code formatter
+- **Husky**: v9.1.7 - Git hooks
+
+## Cài đặt dự án
+
+### Yêu cầu hệ thống
+- Node.js 18.x hoặc cao hơn
+- Yarn
+
+### Các bước cài đặt
+
+1. Clone repository
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd boilerplate-ecommerce-next-15
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2.Cài đặt dependencies
+```bash
+yarn install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3.Khởi chạy môi trường development
+```bash
+yarn dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Ứng dụng sẽ chạy tại http://localhost:3000
 
-## Learn More
+4.Build cho production
+```bash
+yarn build
+```
 
-To learn more about Next.js, take a look at the following resources:
+5.Chạy ứng dụng đã build
+```bash
+yarn start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-src/
+Cấu trúc thư mục
+```
+├── src/
 ├── app/                  # App Router
 │   ├── (user)/           # Route group cho user
 │   │   ├── layout.tsx    # Layout cho user
@@ -59,3 +97,52 @@ src/
 ├── types/                # Global TypeScript types
 ├── public/               # Static assets (images, fonts)
 └── styles/               # Global CSS/Tailwind
+```
+Components chính
+Layout Components
+- Header: Component hiển thị phần đầu trang
+- Footer: Component hiển thị phần chân trang
+UI Components
+- Các component từ shadcn UI (dropdown, select, switch, etc.)
+Pages đã được tạo
+Dự án sử dụng App Router của Next.js 15, với các route được định nghĩa trong thư mục src/app/:
+
+User Pages:
+- Trang chủ: /
+- Layout chung cho user: /app/(user)/layout.tsx
+Admin Pages:
+- Trang quản trị: /admin
+- Layout chung cho admin: /app/(admin)/layout.tsx
+
+Tính năng
+1.Đa ngôn ngữ: Hỗ trợ đa ngôn ngữ với next-intl và react-intl
+2.Theming: Hỗ trợ nhiều theme (dark, light, system) với next-themes
+3.State Management: Quản lý state với Zustand
+4.API Integration: Tích hợp API với Axios và TanStack Query
+5.Testing: Unit và integration testing với Jest và Testing Library
+6.Responsive Design: Thiết kế responsive với Tailwind CSS
+
+Phát triển
+Linting & Formatting
+```bash
+# Kiểm tra lỗi
+yarn lint
+
+# Sửa lỗi tự động
+yarn lint:fix
+
+# Format code
+yarn format
+```
+
+Testing
+```bash
+# Chạy tất cả tests
+yarn test
+
+# Chạy tests ở chế độ watch
+yarn test:watch
+
+# Kiểm tra coverage
+yarn test:coverage
+```
