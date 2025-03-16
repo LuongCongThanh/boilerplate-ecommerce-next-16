@@ -1,7 +1,8 @@
 'use client';
+import { useEffect, useState } from 'react';
+
 import FooterUser from '@/shared/components/layout/footerComponent/FooterComponent';
 import HeaderComponent from '@/shared/components/layout/headerComponent/HeaderComponent';
-import { useEffect, useState } from 'react';
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
   const [isHeaderFixed, setIsHeaderFixed] = useState(false);

@@ -1,7 +1,8 @@
-import HeaderComponent from '@/shared/components/layout/headerComponent/HeaderComponent';
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+import HeaderComponent from '@/shared/components/layout/headerComponent/HeaderComponent';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({

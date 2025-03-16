@@ -1,5 +1,7 @@
-import { setupInterceptors } from '@/config/interceptors';
 import axios from 'axios';
+
+import { setupInterceptors } from '@/config/interceptors';
+
 import { API_CONFIG } from './config';
 
 // Khởi tạo Axios instance

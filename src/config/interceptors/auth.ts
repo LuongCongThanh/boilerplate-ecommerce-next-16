@@ -1,7 +1,8 @@
-import { API_ENDPOINTS } from '@/shared/contants/endpoints';
-import { ERROR_MESSAGES } from '@/shared/contants/errorMessages';
 import { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { toast } from 'sonner';
+
+import { API_ENDPOINTS } from '@/shared/contants/endpoints';
+import { ERROR_MESSAGES } from '@/shared/contants/errorMessages';
 
 // Type definitions
 export type RefreshTokenResponse = {

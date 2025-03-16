@@ -1,9 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { Monitor, Moon, Palette, Sun } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
 
 import { Button } from '@/shared/components/shadcn/ui/button';
 import {

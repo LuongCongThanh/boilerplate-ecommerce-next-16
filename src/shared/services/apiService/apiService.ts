@@ -1,5 +1,6 @@
-import apiClient from '@/config/api/instance';
 import { AxiosRequestConfig } from 'axios';
+
+import apiClient from '@/config/api/instance';
 
 // Hàm xử lý lỗi tập trung
 function handleApiError(error: unknown): Error {

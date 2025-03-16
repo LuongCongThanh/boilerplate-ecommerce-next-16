@@ -1,6 +1,7 @@
-import { ERROR_MESSAGES } from '@/shared/contants/errorMessages';
 import { AxiosError } from 'axios';
 import { toast } from 'sonner';
+
+import { ERROR_MESSAGES } from '@/shared/contants/errorMessages';
 
 export type ErrorResponse = {
   message?: string;

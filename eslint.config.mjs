@@ -73,6 +73,29 @@ const eslintConfig = [
             "object",
             "type"
           ],
+          "pathGroups": [
+            {
+              "pattern": "react",
+              "group": "external",
+              "position": "before"
+            },
+            {
+              "pattern": "@testing-library/**",
+              "group": "external",
+              "position": "before"
+            },
+            {
+              "pattern": "next/**",
+              "group": "external",
+              "position": "before"
+            },
+            {
+              "pattern": "next-*/**",
+              "group": "external",
+              "position": "before"
+            }
+          ],
+          "pathGroupsExcludedImportTypes": ["react", "@testing-library/**"],
           "newlines-between": "always",
           "alphabetize": {
             "order": "asc",

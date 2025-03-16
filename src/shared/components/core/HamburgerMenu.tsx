@@ -1,8 +1,10 @@
 'use client';
-import { AnimatePresence, motion } from 'framer-motion';
+import React, { useEffect } from 'react';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useEffect } from 'react';
+
+import { AnimatePresence, motion } from 'framer-motion';
 import { FaEnvelope, FaHeart, FaPhone, FaShoppingCart, FaUser } from 'react-icons/fa';
 
 interface HamburgerMenuProps {
@@ -15,8 +17,8 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ isOpen, onClose }) => {
 
   // Handle Escape key
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+    const handleEscape = (_e: KeyboardEvent) => {
+      if (_e.key === 'Escape' && isOpen) {
         onClose();
       }
     };
@@ -63,7 +65,7 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ isOpen, onClose }) => {
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.2}
-            onDragEnd={(e, info) => {
+            onDragEnd={(_e, info) => {
               if (info.offset.x < -50) {
                 onClose();
               }

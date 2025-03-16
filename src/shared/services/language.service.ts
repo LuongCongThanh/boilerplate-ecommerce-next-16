@@ -1,8 +1,9 @@
 'use server';
 
-import { COOKIE_NAME } from '@/shared/contants/config';
-import { defaultLocale, Locale } from '@/i18n/config';
 import { cookies } from 'next/headers';
+
+import { defaultLocale, Locale } from '@/i18n/config';
+import { COOKIE_NAME } from '@/shared/contants/config';
 
 export async function getUserLocale() {
   return (await cookies()).get(COOKIE_NAME)?.value || defaultLocale;
