@@ -10,7 +10,7 @@
   "theme": {
     "light": "Sáng",
     "dark": "Tối",
-    "secondaryLight": "Sáng phụ",
+    "primary": "Xanh dương",
     "white": "Trắng",
     "system": "Hệ thống"
   }

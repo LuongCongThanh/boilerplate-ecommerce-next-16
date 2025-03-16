@@ -17,9 +17,7 @@ const AppLayout = ({ children }: Readonly<{ children: React.ReactNode }>) => {
       {/* <ShareDownloadProductsModal /> */}
       {/* <NavigationGuardProvider> */}
       <div className="flex flex-col min-h-screen">
-        {/* <Header /> */}
-        {children}
-        {/* <Footer /> */}
+        <main className="flex-grow">{children}</main>
       </div>
       {/* </NavigationGuardProvider> */}
     </QueryClientProvider>

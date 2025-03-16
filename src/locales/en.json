@@ -10,7 +10,7 @@
   "theme": {
     "light": "Light",
     "dark": "Dark",
-    "secondaryLight": "Secondary Light",
+    "primary": "primary",
     "white": "White",
     "system": "System"
   }

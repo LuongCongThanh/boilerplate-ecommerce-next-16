@@ -1,18 +1,18 @@
 'use client';
 
 import { Monitor, Moon, Palette, Sun } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
 
-import { Button } from '@/shared/components/ui/button';
+import { Button } from '@/shared/components/shadcn/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/shared/components/ui/dropdown-menu';
+} from '@/shared/components/shadcn/ui/dropdown-menu';
 import { setToCookie, setToLocalStorage } from '@/shared/services/storage.service';
-import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -29,7 +29,7 @@ export function ThemeToggle() {
     switch (theme) {
       case 'dark':
         return <Moon className="h-[1.2rem] w-[1.2rem]" />;
-      case 'secondary-light':
+      case 'primary':
         return <Palette className="h-[1.2rem] w-[1.2rem]" />;
       case 'white':
         return <Sun className="h-[1.2rem] w-[1.2rem] text-black" />;
@@ -63,8 +63,8 @@ export function ThemeToggle() {
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => handleThemeChange('light')}>{t('light')}</DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('dark')}>{t('dark')}</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleThemeChange('secondary-light')}>
-          {t('secondaryLight')}
+        <DropdownMenuItem onClick={() => handleThemeChange('primary')}>
+          {t('primary')}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('white')}>{t('white')}</DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleThemeChange('system')}>

@@ -1,5 +1,5 @@
-import { apiService } from '@/shared/services/apiService/apiService';
 import { API_ENDPOINTS } from '@/shared/contants/endpoints';
+import { apiService } from '@/shared/services/apiService/apiService';
 
 // Types
 export type LoginRequest = {

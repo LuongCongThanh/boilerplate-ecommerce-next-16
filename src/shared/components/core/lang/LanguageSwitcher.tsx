@@ -1,5 +1,8 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import { useTransition } from 'react';
+
 import {
   Select,
   SelectContent,
@@ -8,10 +11,8 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@/shared/components/ui/select';
+} from '@/shared/components/shadcn/ui/select';
 import { setToCookie, setToLocalStorage } from '@/shared/services/storage.service';
-import { useLocale, useTranslations } from 'next-intl';
-import { useTransition } from 'react';
 
 const LanguageSwitcher = () => {
   const t = useTranslations('common');
