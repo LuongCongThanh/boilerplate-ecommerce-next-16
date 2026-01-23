@@ -1,6 +1,0 @@
-# Ignore everything
-*
-
-# But not the src directory
-!src
-!src/**/* 
