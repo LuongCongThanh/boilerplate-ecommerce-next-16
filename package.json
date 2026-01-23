@@ -16,7 +16,9 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "mcp:files": "npx @modelcontextprotocol/filesystem-server $(pwd)",
-    "mcp:playwright": "npx @playwright/mcp"
+    "mcp:playwright": "npx @playwright/mcp",
+    "mcp:context7": "npx -y @upstash/context7-mcp",
+    "mcp:thinking": "npx -y @modelcontextprotocol/server-sequential-thinking"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
