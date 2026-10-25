@@ -70,6 +70,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `time-machine` | — | Cố định thời gian khi test (Giữ hàng 15 phút, Hoàn tất sau 7 ngày) |
 | `django-zeal` | 2.3.0 | Phát hiện lỗi N+1 query khi chạy test |
 | `debugpy` | — | Debug từ IDE vào container |
+| `pip-audit` | 2.10.1 | Kiểm tra lỗ hổng đã công bố trong dependency (chạy trong CI) |
 | `pre-commit` | 4.7.0 | Chạy ruff, mypy, import-linter và các hook `pre-commit-hooks` (`check-yaml`, `check-toml`, `end-of-file-fixer`, `trailing-whitespace`) trước khi commit |
 | `commitizen` | — | Kiểm tra commit message theo Conventional Commits, gắn tag phiên bản, sinh CHANGELOG ([11](./11-git-workflow.md)) |
 

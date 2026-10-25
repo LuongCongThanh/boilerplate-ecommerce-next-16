@@ -18,6 +18,8 @@ jobs:
   secrets:
     name: secrets
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,6 +46,8 @@ jobs:
   backend:
     name: backend
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: backend
@@ -80,6 +84,5 @@ jobs:
         run: uv run pytest
       - name: pip-audit
         if: steps.detect.outputs.present == 'true'
-        run: |
-          uv export --frozen --no-emit-project --format requirements-txt > "$RUNNER_TEMP/requirements.txt"
-          uvx pip-audit --strict --disable-pip -r "$RUNNER_TEMP/requirements.txt"
+        # pip-audit nằm trong nhóm dev của uv.lock, không cài bằng uvx (phiên bản không được khoá)
+        run: uv run --frozen pip-audit --strict
