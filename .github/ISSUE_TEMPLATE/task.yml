@@ -1,0 +1,36 @@
+name: Công việc kỹ thuật
+description: Refactor, nâng cấp package, CI, hạ tầng, tài liệu
+title: "chore(<scope>): <mô tả ngắn>"
+labels: ["task"]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Loại
+      options:
+        - refactor
+        - build (dependency, Docker)
+        - ci
+        - docs
+        - test
+        - perf
+        - chore
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Cần làm gì
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Vì sao
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Hoàn thành khi
+      placeholder: "- [ ] CI xanh\n- [ ] ..."
