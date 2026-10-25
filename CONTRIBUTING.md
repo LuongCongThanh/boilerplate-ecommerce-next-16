@@ -28,6 +28,15 @@ git push -u origin feat/<ticket>-<mo-ta-ngan>
 | Push thẳng vào `main` | Không được |
 | Force-push | Chỉ trên nhánh tính năng của mình, không bao giờ trên `dev` hoặc `main` |
 
+## Quy ước code
+
+Chi tiết ở [Cấu trúc Backend §9](./docs/architecture/02-backend-structure.md#9-quy-ước-code). Tóm tắt:
+
+- Tên trong code bằng tiếng Anh; comment và docstring bằng tiếng Việt.
+- Hàm service đặt tên `<verb>_<noun>` (`place_order`); selector dùng `get_` / `find_` / `list_`.
+- Format bằng `ruff format` (dòng tối đa 100 ký tự), lint bằng `ruff check` + `mypy` + `lint-imports`. Chạy `make fmt` trước khi commit.
+- Docstring Google style, bắt buộc cho hàm public trong `contracts.py` và `services/`.
+
 ## Khi nào cần cập nhật tài liệu
 
 - Thêm hoặc đổi thuật ngữ nghiệp vụ → `GLOSSARY.md`.

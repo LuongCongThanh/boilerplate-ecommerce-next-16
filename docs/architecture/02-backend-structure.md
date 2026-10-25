@@ -70,7 +70,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `time-machine` | — | Cố định thời gian khi test (Giữ hàng 15 phút, Hoàn tất sau 7 ngày) |
 | `django-zeal` | 2.3.0 | Phát hiện lỗi N+1 query khi chạy test |
 | `debugpy` | — | Debug từ IDE vào container |
-| `pre-commit` | 4.7.0 | Chạy ruff, mypy, import-linter trước khi commit |
+| `pre-commit` | 4.7.0 | Chạy ruff, mypy, import-linter và các hook `pre-commit-hooks` (`check-yaml`, `check-toml`, `end-of-file-fixer`, `trailing-whitespace`) trước khi commit |
 | `commitizen` | — | Kiểm tra commit message theo Conventional Commits, gắn tag phiên bản, sinh CHANGELOG ([11](./11-git-workflow.md)) |
 
 ### 3.3. Không dùng (và lý do)
@@ -246,6 +246,7 @@ modules/ordering/
 │   ├── transitions.py    # confirm, start_packing, hand_over, cancel, mark_delivered, complete
 │   └── returns.py        # record_return, receive_return_items, accept, reject
 ├── selectors/
+│   ├── __init__.py
 │   ├── cart.py           # get_cart_with_prices
 │   └── orders.py         # list_orders_for_customer, find_order_for_guest, list_orders_backoffice
 ├── handlers.py           # nghe sự kiện: payment-succeeded, shipment-delivered, customer-erased…
@@ -424,13 +425,99 @@ forbidden_modules = ["shared.events.relay", "shared.events.tasks"]
 
 ## 9. Quy ước code
 
+### 9.1. Quy ước chung
+
 | Chủ đề | Quy ước |
 |---|---|
-| Ngôn ngữ | Tên biến, hàm, bảng, field, enum, error code: **tiếng Anh**. Chuỗi hiển thị cho người dùng: bọc `gettext` để dịch vi/en |
+| Ngôn ngữ | Tên biến, hàm, bảng, field, enum, error code: **tiếng Anh**. Comment và docstring: **tiếng Việt**, giữ nguyên thuật ngữ kỹ thuật tiếng Anh. Chuỗi hiển thị cho người dùng: bọc `gettext` để dịch vi/en |
 | Tiền | `BigIntegerField` lưu số đồng VND; trong code dùng `shared.money.Money`; API trả `{"amount": 250000, "currency": "VND"}` |
 | Khoá chính | UUID v7 cho mọi bảng (sắp xếp được theo thời gian) **[Giả định]** |
 | Thời gian | Lưu UTC (`USE_TZ = True`); hiển thị theo `Asia/Ho_Chi_Minh` |
 | Thời điểm hiện tại | Luôn gọi `shared.clock.now()`, không gọi `timezone.now()` trực tiếp trong service |
 | Xoá dữ liệu | Không xoá cứng dữ liệu đã có đơn; dùng `status` / `archived` |
 | Transaction | Chỉ mở ở tầng `services`; sự kiện ghi vào outbox trong cùng transaction |
-| Kiểu dữ liệu | Mọi hàm trong `services`, `selectors`, `contracts` có type hints đầy đủ; `mypy --strict` cho `modules/*/services` và `contracts` |
+| Kiểu dữ liệu | Mọi hàm trong `services`, `selectors`, `contracts` có type hints đầy đủ; `mypy --strict` cho `modules/*/services`, `modules/*/selectors` và `contracts`. Dùng cú pháp mới: `list[X]`, `X \| None`, không dùng `List`, `Optional` |
+
+### 9.2. Đặt tên
+
+Theo PEP 8 (`snake_case` cho hàm/biến/module, `PascalCase` cho class, `UPPER_CASE` cho hằng số), cộng thêm các quy tắc sau:
+
+| Đối tượng | Quy tắc | Ví dụ |
+|---|---|---|
+| Hàm service | `<verb>_<noun>`, động từ ghi | `place_order`, `cancel_order`, `reserve_stock`, `merge_guest_cart` |
+| Hàm selector | `get_…`: trả 1 đối tượng, ném lỗi nếu không có. `find_…`: trả 1 đối tượng hoặc `None`. `list_…`: trả danh sách | `get_cart_with_prices`, `find_order_for_guest`, `list_orders_backoffice` |
+| DTO trong `contracts.py` | Class pydantic, hậu tố `DTO` | `CustomerDTO`, `ShippingQuoteDTO` |
+| Class sự kiện | Danh từ + động từ quá khứ + `V<n>` | `OrderPlacedV1`, `PaymentSucceededV1` |
+| `event_type` | `<module>.<kebab-case>` | `ordering.order-placed` |
+| Lỗi nghiệp vụ | Class `PascalCase` mô tả tình huống, `code` dạng `UPPER_SNAKE_CASE` | `OutOfStock` → `OUT_OF_STOCK` |
+| Bảng DB | `Meta.db_table = "<module>_<model>"` | `ordering_order` |
+| File service/selector | Theo chủ đề nghiệp vụ, không theo tên model | `services/checkout.py`, `selectors/orders.py` |
+| File test trong module | `test_<tầng>_<chủ đề>.py` | `test_services_checkout.py`, `test_api_store.py`, `test_handlers.py` |
+| Test xuyên module | Đặt ở `backend/tests/flows/` | `tests/flows/test_cod_checkout_flow.py` |
+
+> **Khác với HackSoft Styleguide**: HackSoft đặt tên hàm theo `<entity>_<action>` (`order_place`, `order_list`). Ta dùng `<verb>_<noun>` vì đọc tự nhiên hơn, khớp với cách đặt tên của PEP 8 và Django (`get_object_or_404`, `send_mail`). Việc gom theo entity đã do tên file (`services/checkout.py`) và tên module (`ordering.contracts.place_order`) đảm nhận. Ngoài điểm này, mọi quy tắc khác vẫn theo HackSoft.
+
+### 9.3. Format và lint
+
+| Chủ đề | Quy ước |
+|---|---|
+| Format | `ruff format` (tương thích Black): 4 space, tối đa 100 ký tự một dòng, nháy kép, magic trailing comma. Không dùng Black, isort, flake8 riêng |
+| Lint | `ruff check` với bộ rule bên dưới. Không bật rule `D` (docstring) |
+| Kiểu | `mypy` bật plugin `mypy_django_plugin.main` và `mypy_drf_plugin.main` |
+| File không phải Python | Chỉ dựa vào `.editorconfig` và hook `check-yaml`, `check-toml`, `end-of-file-fixer`, `trailing-whitespace` của `pre-commit-hooks`. Không dùng Prettier |
+| Chạy | `make fmt` để sửa tự động, `make lint` để kiểm tra; `pre-commit` chạy trước mỗi commit; CI chặn nếu lỗi |
+
+```toml
+# backend/pyproject.toml
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # sắp xếp import: stdlib → third-party → config, shared, modules
+    "N",        # pep8-naming
+    "UP",       # pyupgrade: cú pháp Python 3.13
+    "B",        # flake8-bugbear
+    "C4",       # comprehension gọn
+    "SIM",      # đơn giản hoá code
+    "DJ",       # flake8-django
+    "DTZ",      # cấm datetime không có múi giờ
+    "PT",       # style pytest
+    "RUF",      # rule riêng của ruff
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["config", "shared", "modules"]
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+```
+
+### 9.4. Comment và docstring
+
+| Chủ đề | Quy ước |
+|---|---|
+| Ngôn ngữ | Tiếng Việt, giữ nguyên thuật ngữ kỹ thuật và tên trong code bằng tiếng Anh |
+| Docstring | Google style. **Bắt buộc** cho hàm public trong `contracts.py` và `services/`; các chỗ khác chỉ viết khi cần giải thích |
+| Nội dung docstring | Giải thích nghiệp vụ, mã quy tắc `BR-xxx` liên quan và các lỗi có thể ném ra. Không lặp lại kiểu dữ liệu vì type hints đã có |
+| Comment | Giải thích **vì sao**, không diễn giải lại code làm gì |
+
+```python
+def place_order(*, cart_id: UUID, payment_method: PaymentMethod) -> Order:
+    """Tạo Đơn hàng từ Giỏ hàng, Giữ hàng hoặc trừ Tồn kho tuỳ phương thức thanh toán.
+
+    Áp dụng BR-INV-04 (đơn COD trừ Tồn kho ngay) và BR-INV-05 (đơn thanh toán online
+    tạo Giữ hàng 15 phút).
+
+    Raises:
+        OutOfStock: Một Biến thể trong Giỏ hàng không đủ tồn kho.
+        VoucherNotApplicable: Voucher hết hạn hoặc không đạt giá trị tối thiểu.
+    """
+```
