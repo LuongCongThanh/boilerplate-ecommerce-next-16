@@ -55,6 +55,14 @@ Thuật ngữ chung: **[GLOSSARY.md](./GLOSSARY.md)** — đọc trước tiên.
 | [0006](./docs/adr/0006-modular-monolith.md) | Modular monolith: một app `modules` chia module con |
 | [0007](./docs/adr/0007-events-outbox-celery-no-kafka.md) | Sự kiện qua Outbox + Celery, chưa dùng Kafka |
 
+### Cấu hình cho agent (`docs/agents/`)
+
+Quy ước để Claude Code và các skill engineering đọc repo này. Điểm vào là [CLAUDE.md](./CLAUDE.md).
+
+1. [Issue tracker](./docs/agents/issue-tracker.md): spec và ticket dạng Markdown trong `.scratch/`, cách đóng ticket
+2. [Trạng thái triage](./docs/agents/triage-labels.md)
+3. [Tài liệu domain](./docs/agents/domain.md): agent đọc GLOSSARY, ADR và quy tắc nghiệp vụ thế nào
+
 ### Tài liệu Frontend cũ
 
 Bộ tài liệu Next.js cũ (`docs/README.md`, `ARCHITECTURE.md`, `DOCS_INDEX.md`, `MIGRATION.md`, `PERFORMANCE.md`, `IMPORT_ALIAS_GUIDE.md`, `MCP_GUIDE.md`) đã được xoá vì không còn khớp với các quyết định trên. Khi làm Frontend có thể xem lại trong lịch sử git (commit `0f83e4c`).

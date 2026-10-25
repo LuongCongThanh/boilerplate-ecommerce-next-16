@@ -11,24 +11,24 @@ gitGraph
     branch dev
     checkout dev
     commit id: "chore: init"
-    branch feat/ORD-12-checkout-cod
-    checkout feat/ORD-12-checkout-cod
+    branch feat/checkout-cod
+    checkout feat/checkout-cod
     commit id: "wip"
     commit id: "add tests"
     checkout dev
-    merge feat/ORD-12-checkout-cod id: "squash: feat(ordering)…" type: HIGHLIGHT
-    branch fix/PAY-3-ipn-amount
-    checkout fix/PAY-3-ipn-amount
+    merge feat/checkout-cod id: "squash: feat(ordering)…" type: HIGHLIGHT
+    branch fix/ipn-amount
+    checkout fix/ipn-amount
     commit id: "fix"
     checkout dev
-    merge fix/PAY-3-ipn-amount id: "squash: fix(payments)…" type: HIGHLIGHT
+    merge fix/ipn-amount id: "squash: fix(payments)…" type: HIGHLIGHT
     checkout main
     merge dev id: "release v0.2.0" tag: "v0.2.0"
-    branch hotfix/PAY-9-signature
-    checkout hotfix/PAY-9-signature
+    branch hotfix/vnpay-signature
+    checkout hotfix/vnpay-signature
     commit id: "hotfix"
     checkout main
-    merge hotfix/PAY-9-signature id: "squash: fix(payments)… " tag: "v0.2.1"
+    merge hotfix/vnpay-signature id: "squash: fix(payments)… " tag: "v0.2.1"
     checkout dev
     merge main id: "back-merge v0.2.1"
 ```
@@ -45,19 +45,19 @@ gitGraph
 ## 2. Đặt tên nhánh
 
 ```
-<loại>/<mã-ticket>-<mô-tả-ngắn>
+<loại>/<mô-tả-ngắn>
 ```
 
 - `<loại>`: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `hotfix`.
-- `<mã-ticket>`: mã trên công cụ quản lý công việc nếu có; không có thì bỏ.
+- Tên nhánh không chứa mã ticket. Ticket là file trong `.scratch/` (xem [docs/agents/issue-tracker.md](../agents/issue-tracker.md)); đường dẫn ticket ghi trong mô tả PR và footer `Refs:` của commit.
 - `<mô-tả-ngắn>`: tiếng Anh, chữ thường, nối bằng dấu `-`, tối đa khoảng 5 từ.
 
 | ✅ Đúng | ❌ Sai |
 |---|---|
-| `feat/ORD-12-checkout-cod` | `feature/Checkout_COD` |
-| `fix/PAY-3-ipn-amount-mismatch` | `fix-bug` |
+| `feat/checkout-cod` | `feature/Checkout_COD` |
+| `fix/ipn-amount-mismatch` | `fix-bug` |
 | `docs/adr-0008-search` | `thanh/test` |
-| `hotfix/PAY-9-vnpay-signature` | `hotfix` |
+| `hotfix/vnpay-signature` | `hotfix` |
 
 ## 3. Commit message: Conventional Commits
 
@@ -66,7 +66,7 @@ gitGraph
 
 [thân: giải thích VÌ SAO, có thể nhiều dòng]
 
-[footer: BREAKING CHANGE: …, Refs: ORD-12]
+[footer: BREAKING CHANGE: …, Refs: .scratch/checkout-cod/issues/02-reserve-stock.md]
 ```
 
 ### 3.1. `type`
@@ -100,7 +100,7 @@ fix(payments): reject VNPay IPN when amount mismatches
 Previously the IPN handler trusted vnp_Amount. Now it compares against
 payments_payment.amount and responds RspCode 04 (BR-PAY-04).
 
-Refs: PAY-3
+Refs: .scratch/vnpay-ipn/issues/01-check-amount.md
 
 feat(ordering)!: split checkout and payment start into two endpoints
 
@@ -132,7 +132,7 @@ Không dùng **rebase merge** trên GitHub.
 
 - **Tiêu đề** theo Conventional Commits, ví dụ `feat(ordering): add COD checkout`.
 - **Nội dung** theo template `.github/pull_request_template.md`:
-  - Làm gì, vì sao; liên kết ticket, user story (`US-xxx`), quy tắc (`BR-xxx`).
+  - Làm gì, vì sao; đường dẫn ticket trong `.scratch/`, user story (`US-xxx`), quy tắc (`BR-xxx`).
   - Checklist: có test; có migration (nếu đổi model); đã chạy `make lint` và `make test`; đã cập nhật tài liệu, GLOSSARY hoặc ADR nếu cần; không lộ secret.
 - PR nên nhỏ: **dưới khoảng 400 dòng thay đổi**, không tính migration và file sinh tự động.
 
@@ -148,10 +148,10 @@ Không dùng **rebase merge** trên GitHub.
 
 ```bash
 git switch dev && git pull
-git switch -c feat/ORD-12-checkout-cod
+git switch -c feat/checkout-cod
 # … code, commit …
 git fetch origin && git rebase origin/dev    # cập nhật thường xuyên, ít nhất mỗi ngày
-git push -u origin feat/ORD-12-checkout-cod  # mở PR vào dev
+git push -u origin feat/checkout-cod  # mở PR vào dev
 ```
 
 - **Không giới hạn** thời gian sống của nhánh tính năng. Nhánh càng sống lâu thì càng phải cập nhật `dev` vào thường xuyên (như lệnh `rebase` ở trên) để tránh conflict lớn khi merge.
@@ -183,7 +183,7 @@ cz changelog   # commitizen
 
 ```bash
 git switch main && git pull
-git switch -c hotfix/PAY-9-vnpay-signature
+git switch -c hotfix/vnpay-signature
 # … sửa, commit, mở PR vào main, squash merge …
 git switch main && git pull
 git tag -a v0.2.1 -m "v0.2.1" && git push origin v0.2.1

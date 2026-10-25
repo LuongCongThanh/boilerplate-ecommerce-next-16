@@ -11,10 +11,10 @@
 
 ```bash
 git switch dev && git pull
-git switch -c feat/<ticket>-<mo-ta-ngan>
+git switch -c feat/<mo-ta-ngan>
 # code + test
 make lint && make test
-git push -u origin feat/<ticket>-<mo-ta-ngan>
+git push -u origin feat/<mo-ta-ngan>
 # mở PR vào dev, tiêu đề theo Conventional Commits
 ```
 
