@@ -21,7 +21,7 @@ Spec: [spec.md](../spec.md)
 
 ## Acceptance criteria
 
-- [ ] Workflow chạy xanh trên một PR thử vào `dev`.
+- [x] Workflow chạy xanh trên một PR thử vào `dev`.
 - [x] Không workflow nào dùng `pull_request_target`; quyền mặc định là `contents: read`.
 - [x] Mọi `uses:` của action bên thứ ba đều là SHA 40 ký tự.
 - [ ] Dependabot nhận đủ 3 hệ sinh thái (xem tab Insights → Dependency graph → Dependabot).
@@ -35,3 +35,4 @@ Spec: [spec.md](../spec.md)
 - Job `backend` và CodeQL `python` tự bỏ qua khi chưa có code Python. Mục `uv` và `docker` của Dependabot sẽ báo lỗi cho tới khi có `backend/`.
 - Chưa làm job `trivy` vì chưa có `backend/Dockerfile`. Ticket giữ `needs-info` cho tới khi có Dockerfile.
 - Ba AC còn lại (CI xanh trên PR, Dependabot nhận 3 hệ sinh thái, CodeQL hiện ở tab Security) chỉ kiểm được sau khi mở PR trên GitHub.
+- SonarCloud báo 12 issue `S8541` (thiếu `--no-build`) và `S8544` (không khoá phiên bản) ở các lệnh `uv`. Đã sửa: `uv sync --locked --no-build` một lần, sau đó gọi thẳng công cụ trong `.venv`; backend khai báo `[tool.uv] package = false`. PR #4 xanh toàn bộ, kể cả SonarCloud.
