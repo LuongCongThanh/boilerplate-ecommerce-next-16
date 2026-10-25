@@ -1,32 +1,53 @@
-<!--
-Tiêu đề PR theo Conventional Commits, ví dụ: feat(ordering): add COD checkout
-PR thường merge vào `dev` bằng squash. PR release `dev` → `main` dùng merge commit.
-Xem docs/architecture/11-git-workflow.md
--->
+## 🏷️ Type
 
-## Làm gì
+<!-- Chọn một. Tiêu đề PR theo Conventional Commits: feat(ordering): add COD checkout -->
 
-<!-- Mô tả ngắn thay đổi -->
+- [ ] ✨ Feature
+- [ ] 🐛 Bug
+- [ ] ♻️ Refactor
+- [ ] 🧹 Chore
+- [ ] 📚 Docs
 
-## Vì sao
+## 📌 Summary
 
-<!-- Bối cảnh, vấn đề cần giải quyết -->
+<!-- Làm gì và vì sao -->
 
-## Liên kết
+**Module:** <!-- identity, catalog, inventory, promotions, payments, shipping, ordering, notifications, shared -->
 
-- Ticket:
-- User story: US-
-- Quy tắc nghiệp vụ: BR-
+**🔗 Closes:** #XXX · **User story:** US-XXX · **Quy tắc:** BR-XXX
 
-## Checklist
+---
 
-- [ ] Đã có test cho thay đổi (service, handler hoặc API)
-- [ ] Đã tạo migration nếu đổi model, và migration tương thích ngược
-- [ ] Đã chạy `make lint` và `make test`
-- [ ] Không vi phạm ranh giới module (`lint-imports` xanh)
-- [ ] Đã cập nhật tài liệu, `GLOSSARY.md` hoặc ADR nếu cần
-- [ ] Không có secret, token, dữ liệu cá nhân thật trong code, log hoặc test
+## 📋 Changes
 
-## Ghi chú cho người review
+-
+-
+-
 
-<!-- Chỗ cần xem kỹ, cách test thủ công, ảnh chụp Swagger… -->
+## 🔌 API / Migration
+
+<!-- Endpoint thêm hoặc đổi, migration mới, biến môi trường mới. Ghi "Không" nếu không có -->
+
+---
+
+## ✅ Checklist
+
+- [ ] 🔨 Build pass: `make lint && make test`
+- [ ] 🧱 Ranh giới module: `lint-imports` xanh, chỉ gọi module khác qua `contracts.py`
+- [ ] 🧪 Tested: có test cho service, handler hoặc API, kể cả trường hợp biên
+- [ ] 🗄️ Migration: đã tạo nếu đổi model, tương thích ngược (hoặc N/A)
+- [ ] 🌐 i18n: chuỗi hiển thị cho người dùng bọc `gettext` (hoặc N/A)
+- [ ] 🔒 Security: không lộ secret, token, dữ liệu cá nhân thật trong code, log, test
+- [ ] ⚡ Performance: không có N+1 query (`django-zeal` không báo)
+- [ ] 📚 Docs: đã cập nhật GLOSSARY, business rules hoặc ADR nếu cần (hoặc N/A)
+- [ ] 💥 Breaking change: ghi rõ trong Notes và thêm `!` vào tiêu đề PR (hoặc N/A)
+
+---
+
+## 💬 Notes
+
+<!-- Chỗ cần review kỹ, cách test thủ công, phụ thuộc -->
+
+---
+
+📖 [Tài liệu dự án](../blob/main/README.md) · [Quy ước Git](../blob/main/docs/architecture/11-git-workflow.md)
