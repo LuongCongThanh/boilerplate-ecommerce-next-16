@@ -498,6 +498,10 @@ select = [
 [tool.ruff.lint.isort]
 known-first-party = ["config", "shared", "modules"]
 
+[tool.uv]
+# Backend là ứng dụng, không build thành package; CI cài bằng `uv sync --locked --no-build`
+package = false
+
 [tool.mypy]
 python_version = "3.13"
 plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]

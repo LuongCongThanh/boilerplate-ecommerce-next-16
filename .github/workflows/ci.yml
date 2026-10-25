@@ -71,18 +71,22 @@ jobs:
           working-directory: backend
       - name: Cài dependency
         if: steps.detect.outputs.present == 'true'
-        run: uv sync --frozen
+        # --locked: lỗi nếu uv.lock lệch pyproject.toml; --no-build: chỉ cài wheel, không chạy setup script
+        run: |
+          uv sync --locked --no-build
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      # Các bước sau gọi thẳng công cụ trong .venv, không dùng `uv run` để không resolve hay build lại
       - name: Lint
         if: steps.detect.outputs.present == 'true'
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
-          uv run mypy .
-          uv run lint-imports
+          ruff check .
+          ruff format --check .
+          mypy .
+          lint-imports
       - name: Test
         if: steps.detect.outputs.present == 'true'
-        run: uv run pytest
+        run: pytest
       - name: pip-audit
         if: steps.detect.outputs.present == 'true'
         # pip-audit nằm trong nhóm dev của uv.lock, không cài bằng uvx (phiên bản không được khoá)
-        run: uv run --frozen pip-audit --strict
+        run: pip-audit --strict
