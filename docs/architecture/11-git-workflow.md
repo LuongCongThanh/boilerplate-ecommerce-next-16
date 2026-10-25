@@ -1,0 +1,237 @@
+# 11. Quy ước Git
+
+> Trạng thái: **Bản nháp chờ review**. Sau khi duyệt, sẽ tạo `.gitignore`, `.github/pull_request_template.md` và `CONTRIBUTING.md` theo tài liệu này.
+> Ngôn ngữ: tên nhánh, commit message, tiêu đề PR viết **tiếng Anh**; mô tả PR có thể viết tiếng Việt.
+
+## 1. Mô hình nhánh
+
+```mermaid
+gitGraph
+    commit id: "v0.1.0" tag: "v0.1.0"
+    branch dev
+    checkout dev
+    commit id: "chore: init"
+    branch feat/ORD-12-checkout-cod
+    checkout feat/ORD-12-checkout-cod
+    commit id: "wip"
+    commit id: "add tests"
+    checkout dev
+    merge feat/ORD-12-checkout-cod id: "squash: feat(ordering)…" type: HIGHLIGHT
+    branch fix/PAY-3-ipn-amount
+    checkout fix/PAY-3-ipn-amount
+    commit id: "fix"
+    checkout dev
+    merge fix/PAY-3-ipn-amount id: "squash: fix(payments)…" type: HIGHLIGHT
+    checkout main
+    merge dev id: "release v0.2.0" tag: "v0.2.0"
+    branch hotfix/PAY-9-signature
+    checkout hotfix/PAY-9-signature
+    commit id: "hotfix"
+    checkout main
+    merge hotfix/PAY-9-signature id: "squash: fix(payments)… " tag: "v0.2.1"
+    checkout dev
+    merge main id: "back-merge v0.2.1"
+```
+
+> Trong sơ đồ, các merge có nhãn "squash" được vẽ như merge thường vì Mermaid không vẽ được squash. Trên thực tế, squash tạo **một commit mới** trên nhánh đích và không nối với nhánh nguồn.
+
+| Nhánh | Vai trò | Tách từ | Merge vào | Triển khai tới |
+|---|---|---|---|---|
+| `main` | Code đang chạy production. Mỗi release có một tag | — | — | production |
+| `dev` | Nơi gom các tính năng đã xong, chuẩn bị release | `main` (tạo một lần) | `main` | staging |
+| `feat/*`, `fix/*`, `refactor/*`, `docs/*`, `chore/*`, `test/*` | Một tính năng, một lỗi hoặc một việc | `dev` | `dev` | — |
+| `hotfix/*` | Sửa lỗi gấp trên production | `main` | `main`, sau đó back-merge về `dev` | production |
+
+## 2. Đặt tên nhánh
+
+```
+<loại>/<mã-ticket>-<mô-tả-ngắn>
+```
+
+- `<loại>`: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `hotfix`.
+- `<mã-ticket>`: mã trên công cụ quản lý công việc nếu có; không có thì bỏ.
+- `<mô-tả-ngắn>`: tiếng Anh, chữ thường, nối bằng dấu `-`, tối đa khoảng 5 từ.
+
+| ✅ Đúng | ❌ Sai |
+|---|---|
+| `feat/ORD-12-checkout-cod` | `feature/Checkout_COD` |
+| `fix/PAY-3-ipn-amount-mismatch` | `fix-bug` |
+| `docs/adr-0008-search` | `thanh/test` |
+| `hotfix/PAY-9-vnpay-signature` | `hotfix` |
+
+## 3. Commit message: Conventional Commits
+
+```
+<type>(<scope>)<!>: <mô tả ngắn, tiếng Anh, thì hiện tại, không viết hoa chữ đầu, không dấu chấm cuối>
+
+[thân: giải thích VÌ SAO, có thể nhiều dòng]
+
+[footer: BREAKING CHANGE: …, Refs: ORD-12]
+```
+
+### 3.1. `type`
+
+| `type` | Khi nào | Ảnh hưởng phiên bản |
+|---|---|---|
+| `feat` | Thêm tính năng | Tăng MINOR |
+| `fix` | Sửa lỗi | Tăng PATCH |
+| `perf` | Cải thiện hiệu năng | Tăng PATCH |
+| `refactor` | Sửa code, không đổi hành vi | — |
+| `test` | Thêm hoặc sửa test | — |
+| `docs` | Tài liệu, ADR, GLOSSARY | — |
+| `build` | Dependency, Dockerfile, `pyproject.toml` | — |
+| `ci` | Cấu hình CI | — |
+| `chore` | Việc lặt vặt khác | — |
+| `revert` | Hoàn tác một commit | Tuỳ commit bị hoàn tác |
+
+Thay đổi làm gãy API hoặc contract sự kiện: thêm `!` sau scope **và** dòng `BREAKING CHANGE:` trong footer.
+
+### 3.2. `scope`
+
+Tên module hoặc khu vực: `identity`, `catalog`, `inventory`, `promotions`, `payments`, `shipping`, `ordering`, `notifications`, `shared`, `config`, `adr`, `glossary`, `ci`, `deps`. Không bắt buộc nhưng **nên có**.
+
+### 3.3. Ví dụ
+
+```
+feat(ordering): add COD checkout with immediate stock decrement
+
+fix(payments): reject VNPay IPN when amount mismatches
+
+Previously the IPN handler trusted vnp_Amount. Now it compares against
+payments_payment.amount and responds RspCode 04 (BR-PAY-04).
+
+Refs: PAY-3
+
+feat(ordering)!: split checkout and payment start into two endpoints
+
+BREAKING CHANGE: POST /store/checkout no longer returns redirect_url;
+call POST /store/orders/{code}/payments instead.
+
+docs(adr): add 0007 events via outbox and celery
+```
+
+### 3.4. Kiểm tra tự động
+
+- Hook `commit-msg` trong `pre-commit` (dùng `commitizen`) chặn commit sai định dạng ở máy local.
+- CI kiểm tra **tiêu đề PR** theo cùng định dạng, vì khi squash thì tiêu đề PR trở thành commit message.
+
+## 4. Pull Request và cách merge
+
+### 4.1. Cách merge theo từng chặng
+
+| Chặng | Cách merge | Lý do |
+|---|---|---|
+| `feat/*`, `fix/*`… → `dev` | **Squash merge** | Gộp các commit lặt vặt ("wip", "fix typo") thành **một commit** có tiêu đề chuẩn. Lịch sử `dev` sạch, dễ revert và dễ `git bisect` |
+| `dev` → `main` (release) | **Merge commit**, **không squash** | Squash sẽ tạo trên `main` một commit mà `dev` không có, khiến hai nhánh **lệch nhau** và sinh conflict ở mọi lần release sau |
+| `hotfix/*` → `main` | **Squash merge** | Giống nhánh tính năng |
+| `main` → `dev` (back-merge sau hotfix) | **Merge commit** | Đưa bản sửa về `dev` mà không làm lệch lịch sử |
+
+Không dùng **rebase merge** trên GitHub.
+
+### 4.2. Tiêu đề và nội dung PR
+
+- **Tiêu đề** theo Conventional Commits, ví dụ `feat(ordering): add COD checkout`.
+- **Nội dung** theo template `.github/pull_request_template.md`:
+  - Làm gì, vì sao; liên kết ticket, user story (`US-xxx`), quy tắc (`BR-xxx`).
+  - Checklist: có test; có migration (nếu đổi model); đã chạy `make lint` và `make test`; đã cập nhật tài liệu, GLOSSARY hoặc ADR nếu cần; không lộ secret.
+- PR nên nhỏ: **dưới khoảng 400 dòng thay đổi**, không tính migration và file sinh tự động.
+
+### 4.3. PR release `dev` → `main`
+
+- Tiêu đề: `release: v0.2.0`.
+- Nội dung: danh sách thay đổi (lấy từ CHANGELOG nháp), migration cần chạy, cấu hình hoặc biến môi trường mới.
+- Chỉ mở khi staging đã được kiểm tra.
+
+## 5. Quy trình làm việc hằng ngày
+
+### 5.1. Làm một tính năng
+
+```bash
+git switch dev && git pull
+git switch -c feat/ORD-12-checkout-cod
+# … code, commit …
+git fetch origin && git rebase origin/dev    # cập nhật thường xuyên, ít nhất mỗi ngày
+git push -u origin feat/ORD-12-checkout-cod  # mở PR vào dev
+```
+
+- **Không giới hạn** thời gian sống của nhánh tính năng. Nhánh càng sống lâu thì càng phải cập nhật `dev` vào thường xuyên (như lệnh `rebase` ở trên) để tránh conflict lớn khi merge.
+- Trên nhánh tính năng của mình được phép `rebase` và `push --force-with-lease`. **Không bao giờ** force-push lên `dev` hoặc `main`.
+- Xoá nhánh sau khi merge (bật tự động xoá trên GitHub).
+
+### 5.2. Push gấp vào `dev`
+
+Được phép push thẳng vào `dev` khi **cả hai** điều kiện sau đều đúng:
+
+1. Thay đổi **nhỏ và gấp**, ví dụ sửa cấu hình làm staging không chạy, hoặc sửa một test hỏng đang chặn người khác.
+2. Đã chạy `make lint` và `make test` ở máy local.
+
+Commit vẫn phải đúng Conventional Commits. CI vẫn chạy sau khi push; nếu CI đỏ thì người push phải sửa ngay.
+
+### 5.3. Release
+
+```bash
+# 1. Mở PR dev → main, tiêu đề "release: v0.2.0", merge bằng merge commit
+# 2. Gắn tag trên main
+git switch main && git pull
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
+# 3. Sinh CHANGELOG
+cz changelog   # commitizen
+```
+
+### 5.4. Hotfix
+
+```bash
+git switch main && git pull
+git switch -c hotfix/PAY-9-vnpay-signature
+# … sửa, commit, mở PR vào main, squash merge …
+git switch main && git pull
+git tag -a v0.2.1 -m "v0.2.1" && git push origin v0.2.1
+# back-merge về dev
+git switch dev && git pull
+git merge --no-ff main -m "chore: back-merge v0.2.1 into dev"
+git push
+```
+
+## 6. Bảo vệ nhánh (GitHub)
+
+| Thiết lập | `main` | `dev` |
+|---|---|---|
+| Cấm push thẳng, bắt buộc qua PR | ✅ | — (cho phép push gấp, mục 5.2) |
+| Cần ít nhất 1 người duyệt | ✅ | — |
+| Bắt buộc CI xanh trước khi merge | ✅ | — (CI vẫn chạy sau khi push) |
+| Nhánh phải cập nhật với nhánh đích trước khi merge | ✅ | — |
+| Chỉ cho phép merge commit (cho PR release) và squash (cho hotfix) | ✅ | Chỉ squash (cho PR thường) |
+| Cấm force-push | ✅ | ✅ |
+| Cấm xoá nhánh | ✅ | ✅ |
+
+## 7. Phiên bản và CHANGELOG
+
+- **SemVer** `vMAJOR.MINOR.PATCH`. Giữ `0.x.y` cho tới khi go-live; bản go-live là `v1.0.0`.
+- Tag chỉ gắn trên `main`.
+- `CHANGELOG.md` sinh tự động từ commit trên `main` bằng `commitizen`.
+- Phiên bản ghi trong `backend/pyproject.toml` và được `commitizen` cập nhật cùng lúc với tag.
+
+## 8. Những thứ không được commit
+
+| Loại | Ví dụ |
+|---|---|
+| Secret | `.env`, `.secrets/`, khoá JWT, mật khẩu, secret VNPay/MoMo/GHN |
+| File sinh ra khi chạy | `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`, `htmlcov/`, `.coverage` |
+| Dữ liệu local | `media/`, file dump database |
+| Cấu hình cá nhân | `.idea/` (PyCharm), `.vscode/` **trừ** `launch.json` và `extensions.json`, `.DS_Store`, `Thumbs.db` |
+
+Cấu hình IDE **được** commit: `.vscode/launch.json`, `.vscode/extensions.json`, `.run/*.run.xml` (run configuration của PyCharm), `.editorconfig` (xem [08-local-development.md](./08-local-development.md) mục 6).
+
+Repo có `.gitattributes` với `* text=auto eol=lf` để mọi file dùng ký tự xuống dòng LF, tránh lỗi khi người dùng Windows và macOS cùng làm việc.
+| Môi trường ảo | `.venv/` |
+
+Hook `pre-commit` chạy thêm `detect-private-key` và kiểm tra file lớn để chặn commit nhầm.
+
+## 9. Việc cần làm một lần khi áp dụng
+
+1. Gộp nội dung `master` vào `main`, đặt `main` làm nhánh mặc định trên GitHub, rồi xoá `master` (**sẽ hỏi lại trước khi thao tác trên remote**).
+2. Tạo `dev` từ `main`.
+3. Xử lý hai nhánh cũ `feature/create-header` và `feature/setup-method-api-and-error` (thuộc Frontend cũ): giữ lại để tham khảo hay xoá.
+4. Cấu hình bảo vệ nhánh như mục 6.
+5. Tạo `.gitignore`, `.gitattributes`, `.editorconfig`, PR template, `CONTRIBUTING.md`, cấu hình IDE dùng chung (`.vscode/launch.json`, `.vscode/extensions.json`, `.run/*.run.xml`), và thêm hook `commitizen` vào `.pre-commit-config.yaml`.
