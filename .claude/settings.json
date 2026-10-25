@@ -3,5 +3,14 @@
     "commit": "",
     "pr": "",
     "sessionUrl": false
+  },
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(.secrets/**)",
+      "Read(*.pem)"
+    ]
   }
 }

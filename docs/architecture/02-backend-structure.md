@@ -487,7 +487,12 @@ select = [
     "DTZ",      # cấm datetime không có múi giờ
     "PT",       # style pytest
     "RUF",      # rule riêng của ruff
+    "S",        # flake8-bandit: code nguy hiểm (eval, pickle, shell=True, SQL ghép chuỗi…)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Test được dùng assert và mật khẩu giả viết cứng
+"tests/**" = ["S101", "S105", "S106"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["config", "shared", "modules"]

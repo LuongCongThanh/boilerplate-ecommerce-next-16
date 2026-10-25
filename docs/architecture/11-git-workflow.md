@@ -220,13 +220,19 @@ git push
 | File sinh ra khi chạy | `__pycache__/`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`, `htmlcov/`, `.coverage` |
 | Dữ liệu local | `media/`, file dump database |
 | Cấu hình cá nhân | `.idea/` (PyCharm), `.vscode/` **trừ** `launch.json` và `extensions.json`, `.DS_Store`, `Thumbs.db` |
+| Môi trường ảo | `.venv/` |
 
 Cấu hình IDE **được** commit: `.vscode/launch.json`, `.vscode/extensions.json`, `.run/*.run.xml` (run configuration của PyCharm), `.editorconfig` (xem [08-local-development.md](./08-local-development.md) mục 6).
 
 Repo có `.gitattributes` với `* text=auto eol=lf` để mọi file dùng ký tự xuống dòng LF, tránh lỗi khi người dùng Windows và macOS cùng làm việc.
-| Môi trường ảo | `.venv/` |
 
-Hook `pre-commit` chạy thêm `detect-private-key` và kiểm tra file lớn để chặn commit nhầm.
+Hook `pre-commit` (`.pre-commit-config.yaml`) chặn commit nhầm bằng:
+
+- `gitleaks`: secret dạng chuỗi (secret VNPay/MoMo/GHN, API key, token).
+- `detect-private-key`: khoá dạng PEM.
+- `check-added-large-files`: file lớn.
+
+Repo là public, nên dữ liệu mẫu trong test và fixture phải là giá trị giả rõ ràng (ví dụ `test-hash-secret`), không bao giờ là secret hay dữ liệu khách hàng thật. Không thêm allowlist rộng cho `gitleaks`; nếu bị báo nhầm thì đổi giá trị mẫu.
 
 ## 9. Việc cần làm một lần khi áp dụng
 
