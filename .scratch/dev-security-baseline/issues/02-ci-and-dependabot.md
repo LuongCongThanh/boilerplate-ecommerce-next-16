@@ -1,6 +1,6 @@
 # CI workflow, CodeQL, Dependabot và trivy
 
-Status: ready-for-agent
+Status: needs-info
 
 Spec: [spec.md](../spec.md)
 
@@ -22,10 +22,16 @@ Spec: [spec.md](../spec.md)
 ## Acceptance criteria
 
 - [ ] Workflow chạy xanh trên một PR thử vào `dev`.
-- [ ] Không workflow nào dùng `pull_request_target`; quyền mặc định là `contents: read`.
-- [ ] Mọi `uses:` của action bên thứ ba đều là SHA 40 ký tự.
+- [x] Không workflow nào dùng `pull_request_target`; quyền mặc định là `contents: read`.
+- [x] Mọi `uses:` của action bên thứ ba đều là SHA 40 ký tự.
 - [ ] Dependabot nhận đủ 3 hệ sinh thái (xem tab Insights → Dependency graph → Dependabot).
 - [ ] CodeQL hiện kết quả trong tab Security.
-- [ ] Có job trivy, hoặc có comment ghi lý do hoãn.
+- [x] Có job trivy, hoặc có comment ghi lý do hoãn.
 
 ## Comments
+
+- Đã tạo `ci.yml` (job `secrets`, `pr-title`, `backend`), `codeql.yml` (`actions`, `python`, bộ `security-extended`) và `dependabot.yml`. Kiểm tra local: `actionlint` sạch, `zizmor` không có finding, `dependabot.yml` đúng schema.
+- Chọn bản action phát hành cách đây ít nhất 2 tuần: `setup-uv` v10.3.0 (thay vì v10.3.2 mới 4 ngày), `codeql-action` v4.38.3. Dependabot có `cooldown: 7` ngày cho cùng lý do.
+- Job `backend` và CodeQL `python` tự bỏ qua khi chưa có code Python. Mục `uv` và `docker` của Dependabot sẽ báo lỗi cho tới khi có `backend/`.
+- Chưa làm job `trivy` vì chưa có `backend/Dockerfile`. Ticket giữ `needs-info` cho tới khi có Dockerfile.
+- Ba AC còn lại (CI xanh trên PR, Dependabot nhận 3 hệ sinh thái, CodeQL hiện ở tab Security) chỉ kiểm được sau khi mở PR trên GitHub.

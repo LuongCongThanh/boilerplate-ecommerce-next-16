@@ -115,6 +115,23 @@ docs(adr): add 0007 events via outbox and celery
 - Hook `commit-msg` trong `pre-commit` (dùng `commitizen`) chặn commit sai định dạng ở máy local.
 - CI kiểm tra **tiêu đề PR** theo cùng định dạng, vì khi squash thì tiêu đề PR trở thành commit message.
 
+### 3.5. CI trên GitHub Actions
+
+| Workflow | Job (tên status check) | Việc làm |
+|---|---|---|
+| `.github/workflows/ci.yml` | `secrets` | `gitleaks` quét toàn bộ lịch sử |
+| | `pr-title` | Tiêu đề PR đúng Conventional Commits (chỉ chạy trên PR) |
+| | `backend` | `ruff`, `mypy`, `lint-imports`, `pytest`, `pip-audit`. Tự bỏ qua khi chưa có `backend/pyproject.toml` |
+| `.github/workflows/codeql.yml` | `codeql (actions)`, `codeql (python)` | CodeQL bộ `security-extended`, chạy trên PR, push lên `main` và mỗi thứ Hai |
+| `.github/dependabot.yml` | — | Cập nhật `github-actions`, `uv`, `docker` hằng tuần, chỉ đề xuất bản đã phát hành ít nhất 7 ngày |
+
+Quy tắc cho mọi workflow, vì repo là public:
+
+- Chỉ dùng trigger `pull_request`, **không** dùng `pull_request_target` (trigger này chạy code từ fork với quyền của repo).
+- Khai báo `permissions: contents: read` ở cấp workflow; job nào cần thêm quyền thì tự khai báo kèm comment lý do.
+- Action bên thứ ba được pin theo commit SHA, kèm comment phiên bản (`@<sha> # v7.0.1`). Dependabot cập nhật cả SHA và comment.
+- `actions/checkout` dùng `persist-credentials: false`.
+
 ## 4. Pull Request và cách merge
 
 ### 4.1. Cách merge theo từng chặng
@@ -199,7 +216,7 @@ git push
 |---|---|---|
 | Cấm push thẳng, bắt buộc qua PR | ✅ | — (cho phép push gấp, mục 5.2) |
 | Cần ít nhất 1 người duyệt | ✅ | — |
-| Bắt buộc CI xanh trước khi merge | ✅ | — (CI vẫn chạy sau khi push) |
+| Bắt buộc CI xanh trước khi merge (các check ở mục 3.5) | ✅ | — (CI vẫn chạy sau khi push) |
 | Nhánh phải cập nhật với nhánh đích trước khi merge | ✅ | — |
 | Chỉ cho phép merge commit (cho PR release) và squash (cho hotfix) | ✅ | Chỉ squash (cho PR thường) |
 | Cấm force-push | ✅ | ✅ |

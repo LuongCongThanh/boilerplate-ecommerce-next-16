@@ -1,0 +1,85 @@
+# CI chính. Xem docs/architecture/11-git-workflow.md mục 3.4 và 6.
+# Repo là public: chỉ dùng trigger pull_request, không bao giờ dùng pull_request_target.
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Comment lên PR cần quyền ghi; kết quả đã có trong job summary
+          GITLEAKS_ENABLE_COMMENTS: false
+
+  pr-title:
+    name: pr-title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # đọc tiêu đề PR
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Kiểm tra đã có backend chưa
+        id: detect
+        working-directory: .
+        run: |
+          if [ -f backend/pyproject.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Chưa có backend/pyproject.toml, bỏ qua lint, test và pip-audit"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: steps.detect.outputs.present == 'true'
+        with:
+          working-directory: backend
+      - name: Cài dependency
+        if: steps.detect.outputs.present == 'true'
+        run: uv sync --frozen
+      - name: Lint
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy .
+          uv run lint-imports
+      - name: Test
+        if: steps.detect.outputs.present == 'true'
+        run: uv run pytest
+      - name: pip-audit
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          uv export --frozen --no-emit-project --format requirements-txt > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit --strict --disable-pip -r "$RUNNER_TEMP/requirements.txt"
