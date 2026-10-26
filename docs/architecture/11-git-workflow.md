@@ -215,12 +215,14 @@ git push
 | Thiết lập | `main` | `dev` |
 |---|---|---|
 | Cấm push thẳng, bắt buộc qua PR | ✅ | — (cho phép push gấp, mục 5.2) |
-| Cần ít nhất 1 người duyệt | ✅ | — |
+| Cần ít nhất 1 người duyệt | ⏳ Tạm để 0 vì mới có một người làm; nâng lên 1 khi có người thứ hai | — |
 | Bắt buộc CI xanh trước khi merge (các check ở mục 3.5) | ✅ | — (CI vẫn chạy sau khi push) |
 | Nhánh phải cập nhật với nhánh đích trước khi merge | ✅ | — |
 | Chỉ cho phép merge commit (cho PR release) và squash (cho hotfix) | ✅ | Chỉ squash (cho PR thường) |
 | Cấm force-push | ✅ | ✅ |
 | Cấm xoá nhánh | ✅ | ✅ |
+
+`main` được bảo vệ bằng ruleset tên `main` (Settings → Rules → Rulesets), không ai được bypass. `dev` **chưa** có ruleset.
 
 ## 7. Phiên bản và CHANGELOG
 
