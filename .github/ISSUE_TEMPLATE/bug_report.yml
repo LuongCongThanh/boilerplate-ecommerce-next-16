@@ -1,0 +1,77 @@
+name: Báo lỗi
+description: Hệ thống chạy sai so với tài liệu hoặc quy tắc nghiệp vụ
+title: "fix(<module>): <mô tả ngắn>"
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - identity
+        - catalog
+        - inventory
+        - promotions
+        - payments
+        - shipping
+        - ordering
+        - notifications
+        - shared
+        - Không rõ
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Môi trường
+      options:
+        - local
+        - staging
+        - production
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Mức độ
+      description: Nghiêm trọng = mất tiền, bán vượt kho, lộ dữ liệu, không đặt được hàng
+      options:
+        - Nghiêm trọng
+        - Cao
+        - Trung bình
+        - Thấp
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Các bước tái hiện
+      placeholder: |
+        1. Thêm Biến thể TSHIRT-BASIC-WHT-M × 2 vào giỏ
+        2. Checkout bằng VNPay
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Kết quả mong đợi
+      description: Ghi mã quy tắc nếu có, ví dụ BR-INV-05, US-306
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Kết quả thực tế
+    validations:
+      required: true
+  - type: input
+    id: refs
+    attributes:
+      label: Mã đơn / request_id / link Sentry
+      description: Không dán số điện thoại, email hay địa chỉ thật của khách
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log liên quan
+      render: text

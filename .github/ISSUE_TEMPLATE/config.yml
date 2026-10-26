@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Tài liệu dự án
+    url: https://github.com/LuongCongThanh/boilerplate-ecommerce-next-16/blob/main/README.md
+    about: Đọc tài liệu business, architecture và ADR trước khi tạo issue

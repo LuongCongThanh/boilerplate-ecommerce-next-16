@@ -1,0 +1,72 @@
+name: Tính năng / User story
+description: Tính năng mới hoặc thay đổi nghiệp vụ
+title: "feat(<module>): <mô tả ngắn>"
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Dùng thuật ngữ trong [GLOSSARY.md](../blob/main/GLOSSARY.md). Đối chiếu [quy tắc nghiệp vụ](../blob/main/docs/business/04-business-rules.md) trước khi tạo.
+  - type: input
+    id: story_id
+    attributes:
+      label: Mã user story
+      description: Nếu đã có trong docs/business/03-user-stories.md
+      placeholder: US-305
+  - type: textarea
+    id: story
+    attributes:
+      label: User story
+      value: |
+        **Là** <vai trò>,
+        **tôi muốn** <hành động>
+        **để** <lợi ích>.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Tiêu chí nghiệm thu
+      value: |
+        - AC1: Cho trước …, khi …, thì …
+        - AC2:
+    validations:
+      required: true
+  - type: dropdown
+    id: modules
+    attributes:
+      label: Module bị ảnh hưởng
+      multiple: true
+      options:
+        - identity
+        - catalog
+        - inventory
+        - promotions
+        - payments
+        - shipping
+        - ordering
+        - notifications
+        - shared
+  - type: input
+    id: rules
+    attributes:
+      label: Quy tắc nghiệp vụ liên quan
+      placeholder: BR-VCH-01, BR-SHP-03
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Độ ưu tiên
+      options:
+        - P1 - bắt buộc cho MVP
+        - P2 - nên có trong MVP
+        - Giai đoạn 2
+    validations:
+      required: true
+  - type: checkboxes
+    id: docs
+    attributes:
+      label: Cần cập nhật tài liệu
+      options:
+        - label: GLOSSARY.md (thuật ngữ mới)
+        - label: docs/business/04-business-rules.md
+        - label: ADR mới (quyết định khó đảo ngược)

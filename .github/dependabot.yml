@@ -1,0 +1,46 @@
+# Cập nhật dependency hằng tuần, gom minor và patch thành một PR cho mỗi hệ sinh thái.
+# cooldown: chỉ đề xuất bản đã phát hành ít nhất 7 ngày, giảm rủi ro dính bản bị chèn mã độc.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
+
+  # Thư mục backend/ chưa có: hai mục dưới sẽ báo lỗi trong tab Dependabot cho tới khi có code
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      docker-minor-patch:
+        update-types: [minor, patch]
