@@ -55,6 +55,7 @@ Thuật ngữ chung: **[GLOSSARY.md](./GLOSSARY.md)** — đọc trước tiên.
 | [0005](./docs/adr/0005-provider-adapters-fake-gateways.md) | Adapter cho nhà cung cấp, cổng giả lập và job đối soát |
 | [0006](./docs/adr/0006-modular-monolith.md) | Modular monolith: một app `modules` chia module con |
 | [0007](./docs/adr/0007-events-outbox-celery-no-kafka.md) | Sự kiện qua Outbox + Celery, chưa dùng Kafka |
+| [0008](./docs/adr/0008-uuid-v7-primary-keys.md) | Khoá chính UUID v7, sinh bằng `uuid-utils` |
 
 ### Cấu hình cho agent (`docs/agents/`)
 

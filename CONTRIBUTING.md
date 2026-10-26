@@ -36,6 +36,7 @@ Chi tiết ở [Cấu trúc Backend §9](./docs/architecture/02-backend-structur
 - Hàm service đặt tên `<verb>_<noun>` (`place_order`); selector dùng `get_` / `find_` / `list_`.
 - Format bằng `ruff format` (dòng tối đa 100 ký tự), lint bằng `ruff check` + `mypy` + `lint-imports`. Chạy `make fmt` trước khi commit.
 - Docstring Google style, bắt buộc cho hàm public trong `contracts.py` và `services/`.
+- Model kế thừa `shared.models.BaseModel` (khoá chính UUID v7), không tự khai báo `id`.
 
 ## Bảo mật khi dùng AI agent
 
