@@ -186,7 +186,7 @@ backend/
 │   │   └── i18n.py                 # chọn ngôn ngữ theo Accept-Language (vi mặc định)
 │   ├── health/
 │   │   └── views.py                # /healthz (sống), /readyz (DB, Redis, Celery sẵn sàng)
-│   ├── logging.py                  # cấu hình structlog
+│   ├── logging.py                  # cấu hình structlog, processor redact_pii che PII
 │   ├── management/commands/
 │   │   ├── run_outbox_relay.py     # tiến trình relay chạy liên tục
 │   │   └── load_geo.py             # nạp dữ liệu tỉnh/thành, phường/xã
@@ -545,3 +545,20 @@ Các loại test, marker, coverage và cổng chặn trong CI: xem [12-testing-s
 | Factory | Đặt ở `modules/<module>/tests/factories.py`; chỉ dùng factory của chính module và module lớp dưới ([12-testing-strategy.md](./12-testing-strategy.md) mục 4) |
 | Business rule | Test kiểm tra quy tắc `BR-xxx` gắn `@pytest.mark.br("BR-xxx")` |
 | Thời gian | Cố định bằng `time-machine`, không tự patch `shared.clock.now()` |
+
+### 9.6. Logging
+
+| Chủ đề | Quy ước |
+|---|---|
+| Logger | `logger = structlog.get_logger(__name__)` ở đầu file. Không dùng `print` hay `logging.getLogger` |
+| Message | Tên sự kiện tiếng Anh dạng `snake_case`, dữ liệu truyền bằng keyword: `logger.info("order_placed", order_code=code)`. Không dùng f-string hay `%` trong message, để lọc được theo field trên CloudWatch |
+| Context | `request_id`, `user_id`, `order_code` do `django-structlog` và middleware gắn sẵn ([10-nfr.md](./10-nfr.md)); không truyền lại thủ công |
+| PII | Không log email, SĐT, địa chỉ, token, mật khẩu, payload thanh toán thô. Processor `shared.logging.redact_pii` che các key `email`, `phone`, `address`, `token`, `password`, `card` làm lưới an toàn, không thay cho việc tự kiểm tra |
+| Mức log | Lỗi nghiệp vụ (`DomainError`) log `INFO`. `WARNING` cho tình huống bất thường nhưng đã xử lý (ví dụ dùng phí ship dự phòng). `ERROR` chỉ cho lỗi ngoài dự kiến; Sentry tự bắt exception chưa xử lý |
+
+```python
+logger = structlog.get_logger(__name__)
+
+logger.info("stock_reserved", variant_id=variant.id, quantity=quantity)
+logger.warning("shipping_fee_fallback", provider="ghn", reason="timeout")
+```
