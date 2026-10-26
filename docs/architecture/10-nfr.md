@@ -67,7 +67,8 @@ Xem [05-auth-security.md](./05-auth-security.md). Thêm:
 | `mypy` | Không lỗi (`--strict` cho `services`, `selectors`, `contracts`) |
 | `lint-imports` | Không vi phạm ranh giới module |
 | `pytest` | Toàn bộ test qua |
-| Độ phủ test | ≥ 85% cho `modules/*/services` và `modules/*/handlers`; ≥ 75% toàn bộ **[Giả định]** |
+| Độ phủ test | ≥ 80% cho `modules/*/services`, không đặt ngưỡng toàn repo ([12-testing-strategy.md](./12-testing-strategy.md) mục 8) |
+| OpenAPI | Schema sinh ra trùng với `backend/openapi.yaml` đã commit |
 | Migration | Không thiếu migration (`makemigrations --check`), không trùng số |
 | Lỗ hổng phụ thuộc | Không có lỗ hổng mức cao |
 

@@ -42,6 +42,7 @@ Thuật ngữ chung: **[GLOSSARY.md](./GLOSSARY.md)** — đọc trước tiên.
 9. [Triển khai AWS (mục tiêu)](./docs/architecture/09-deployment-aws-target.md)
 10. [Yêu cầu phi chức năng](./docs/architecture/10-nfr.md)
 11. [Quy ước Git](./docs/architecture/11-git-workflow.md)
+12. [Chiến lược test](./docs/architecture/12-testing-strategy.md)
 
 ### Quyết định kiến trúc (`docs/adr/`)
 

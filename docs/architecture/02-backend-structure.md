@@ -531,3 +531,16 @@ def place_order(*, cart_id: UUID, payment_method: PaymentMethod) -> Order:
         VoucherNotApplicable: Voucher hết hạn hoặc không đạt giá trị tối thiểu.
     """
 ```
+
+### 9.5. Test
+
+Các loại test, marker, coverage và cổng chặn trong CI: xem [12-testing-strategy.md](./12-testing-strategy.md). Mục này chỉ ghi quy ước viết code test.
+
+| Chủ đề | Quy ước |
+|---|---|
+| Dữ liệu test | Tạo bằng `factory-boy`. Không dùng fixture JSON |
+| Mock | Không mock ORM, test chạy trên PostgreSQL thật. Chỉ giả lập hệ thống bên ngoài: `respx` cho `httpx`, Fake Gateway cho thanh toán và vận chuyển ([ADR 0005](../adr/0005-provider-adapters-fake-gateways.md)) |
+| Độ phủ nghiệp vụ | Mỗi hàm service có ít nhất 1 test cho trường hợp chạy đúng và 1 test cho mỗi lỗi nghiệp vụ nó ném ra |
+| Factory | Đặt ở `modules/<module>/tests/factories.py`; chỉ dùng factory của chính module và module lớp dưới ([12-testing-strategy.md](./12-testing-strategy.md) mục 4) |
+| Business rule | Test kiểm tra quy tắc `BR-xxx` gắn `@pytest.mark.br("BR-xxx")` |
+| Thời gian | Cố định bằng `time-machine`, không tự patch `shared.clock.now()` |
