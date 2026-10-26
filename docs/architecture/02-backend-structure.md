@@ -39,7 +39,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `redis` | 8.1.0 | Client Redis | Dùng cho cache, throttling, Celery |
 | `celery` | 5.6.3 | Worker chạy job | Có retry, định tuyến queue, hệ sinh thái lớn |
 | `django-celery-beat` | 2.9.0 | Lịch job lưu trong DB | Sửa lịch không cần deploy lại |
-| `uuid-utils` | — | Sinh UUID v7 cho khoá chính | Python 3.13 chưa có `uuid.uuid7()`; bỏ khi lên Python 3.14 ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
+| `uuid-utils` | — | Sinh UUID v7 cho khoá chính, chỉ được gọi trong `shared.models.uuid7()` | Python 3.13 chưa có `uuid.uuid7()`; bỏ khi lên Python 3.14 ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
 | `pydantic` | 2.14.1 | Định nghĩa schema sự kiện, DTO của `contracts.py` | Có type, validate, sinh JSON Schema (chuẩn bị cho Schema Registry) |
 | `pydantic-settings` | 2.16.1 | Đọc biến môi trường có kiểu | Sai cấu hình thì báo lỗi ngay khi khởi động |
 | `PyJWT[crypto]` | 2.15.1 | Ký và kiểm tra JWT (Ed25519) | Thư viện chuẩn; phần mật mã không tự viết ([ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md)) |
@@ -161,7 +161,7 @@ backend/
 ├── shared/                         # Django app "shared": hạ tầng dùng chung
 │   ├── __init__.py
 │   ├── apps.py
-│   ├── models.py                   # BaseModel: id UUID v7, created_at, updated_at
+│   ├── models.py                   # uuid7(), BaseModel: id UUID v7, created_at, updated_at
 │   ├── money.py                    # value object Money(amount: int, currency="VND")
 │   ├── exceptions.py               # DomainError(code, message, details) và các lỗi chung
 │   ├── clock.py                    # now() dùng chung, để test cố định được thời gian
@@ -437,7 +437,7 @@ forbidden_modules = ["shared.events.relay", "shared.events.tasks"]
 |---|---|
 | Ngôn ngữ | Tên biến, hàm, bảng, field, enum, error code: **tiếng Anh**. Comment và docstring: **tiếng Việt**, giữ nguyên thuật ngữ kỹ thuật tiếng Anh. Chuỗi hiển thị cho người dùng: bọc `gettext` để dịch vi/en |
 | Tiền | `BigIntegerField` lưu số đồng VND; trong code dùng `shared.money.Money`; API trả `{"amount": 250000, "currency": "VND"}` |
-| Khoá chính | UUID v7 cho mọi bảng, sinh bằng `uuid_utils.compat.uuid7` trong `shared.models.BaseModel` (cùng `created_at`, `updated_at`). Model không tự khai báo `id` ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
+| Khoá chính | UUID v7 cho mọi bảng, `default` là hàm bọc `shared.models.uuid7` (không trỏ thẳng vào `uuid_utils`, để migration không phụ thuộc package ngoài), khai báo trong `shared.models.BaseModel` (cùng `created_at`, `updated_at`). Model không tự khai báo `id` ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
 | Thời gian | Lưu UTC (`USE_TZ = True`); hiển thị theo `Asia/Ho_Chi_Minh` |
 | Thời điểm hiện tại | Luôn gọi `shared.clock.now()`, không gọi `timezone.now()` trực tiếp trong service |
 | Xoá dữ liệu | Không xoá cứng dữ liệu đã có đơn; dùng `status` / `archived` |
