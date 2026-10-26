@@ -67,6 +67,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `pytest-xdist` | 3.8.0 | Chạy test song song |
 | `factory-boy` | 3.3.3 | Tạo dữ liệu test |
 | `coverage` | 7.17.0 | Đo độ phủ test |
+| `pytest-cov` | — | Đo coverage khi chạy song song bằng `pytest-xdist` |
 | `respx` | — | Giả lập API bên ngoài khi test `httpx` |
 | `time-machine` | — | Cố định thời gian khi test (Giữ hàng 15 phút, Hoàn tất sau 7 ngày) |
 | `django-zeal` | 2.3.0 | Phát hiện lỗi N+1 query khi chạy test |
@@ -288,7 +289,7 @@ modules/ordering/
 | `api/*/views.py` | `APIView` hoặc `GenericAPIView`: phân quyền, gọi serializer, gọi service/selector | `services`, `selectors`, `serializers` | `ModelViewSet` tự động CRUD; truy vấn ORM trực tiếp |
 | `api/*/urls.py` | Khai báo route | `views` | — |
 | `admin.py` | `ModelAdmin` read-only | `models` | Cho phép sửa |
-| `tests/` | Test service (nhiều nhất), handler, API | Mọi thứ của module, `shared.testing` | — |
+| `tests/` | Test service (nhiều nhất), handler, API | Mọi thứ của module, `shared.testing`; `tests.factories` và `contracts` của module lớp dưới | `models`, `services`, `selectors`, `api` của module khác ([12-testing-strategy.md](./12-testing-strategy.md) mục 4) |
 
 ### 6.2. Ví dụ luồng một request
 
@@ -413,6 +414,9 @@ layers = [
 [[tool.importlinter.contracts]]
 name = "Module khác chỉ được dùng contracts và events"
 type = "forbidden"
+# Chỉ cấm import trực tiếp. Mặc định import-linter cấm cả chuỗi gián tiếp, mà mọi lời gọi
+# hợp lệ qua contracts.py đều đi tiếp xuống models của module kia, nên CI sẽ luôn đỏ.
+allow_indirect_imports = true
 # Mỗi module có một contract cấm import vào models/services/selectors/api của module khác.
 # Danh sách đầy đủ sinh bằng script scripts/gen_importlinter.py
 

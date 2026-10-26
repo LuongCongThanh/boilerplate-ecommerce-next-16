@@ -110,7 +110,8 @@ Khai báo trong `pyproject.toml` (`--strict-markers`):
 - Mỗi module để factory ở `modules/<module>/tests/factories.py`.
 - Test trong một module chỉ dùng factory của chính module đó và của các module lớp dưới, theo đúng chiều phụ thuộc trong [02-backend-structure.md](./02-backend-structure.md) mục 4. Ví dụ test của `ordering` dùng được factory của `catalog` và `inventory`; test của `inventory` không dùng được factory của `ordering`.
 - `backend/tests/flows/` được dùng factory của mọi module.
-- `import-linter` giữ quy tắc này (mục 8).
+- Contract `layers` của `import-linter` đã giữ quy tắc này, không cần contract riêng: test của `inventory` import factory của `ordering` là import ngược lớp. `backend/tests/` không thuộc `root_packages` nên không bị kiểm tra.
+- Muốn kiểm tra dữ liệu của module khác (ví dụ Tồn kho sau khi đặt Đơn hàng), test gọi `contracts` của module đó, **không** import `models`, `services`, `selectors` của module đó. Test tuân theo cùng ranh giới như code thật ([02-backend-structure.md](./02-backend-structure.md) mục 8).
 
 ## 5. Hợp đồng API với frontend (OpenAPI)
 
@@ -136,8 +137,8 @@ Job `backend` trong `.github/workflows/ci.yml`:
 | `ruff check`, `ruff format --check` | Không lỗi |
 | `mypy` | Không lỗi (`--strict` cho `services`, `selectors`, `contracts`) |
 | `lint-imports` | Không vi phạm ranh giới module, kể cả quy tắc factory (mục 4) |
-| `pytest` | Toàn bộ test qua, kể cả `concurrency` và `flow` |
-| Coverage | ≥ 80% cho `modules/*/services` (`coverage report --include="modules/*/services/*" --fail-under=80`). **Không** đặt ngưỡng cho toàn repo, để không ai phải viết test chỉ để lấp số |
+| `pytest` | Toàn bộ test qua, kể cả `concurrency` và `flow`. Chạy `pytest -n auto --cov=modules --cov-report=` (`pytest-cov` gom coverage từ các worker của `pytest-xdist`) |
+| Coverage | ≥ 80% **branch coverage** (`[tool.coverage.run] branch = true`) cho `services/` và `handlers.py`, tính **riêng từng module**: mỗi module chạy `coverage report --include="modules/<module>/services/*,modules/<module>/handlers.py" --fail-under=80`; module chưa có cả hai thì bỏ qua. **Không** đặt ngưỡng cho toàn repo, để không ai phải viết test chỉ để lấp số |
 | Migration | `makemigrations --check`, không trùng số |
 | OpenAPI | Schema sinh ra trùng với `backend/openapi.yaml` |
 | `pip-audit` | Không có lỗ hổng |
