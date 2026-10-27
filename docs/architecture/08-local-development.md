@@ -108,14 +108,11 @@ Sau khi cài xong, mọi bước từ mục 2.2 trở đi **giống hệt macOS*
 ### 2.2. Database
 
 ```bash
-createuser --pwprompt fashion            # nhập mật khẩu, ví dụ: fashion
+createuser --createdb --pwprompt fashion   # nhập mật khẩu, ví dụ: fashion; --createdb để pytest-django tự tạo DB test
 createdb --owner=fashion fashion
-createdb --owner=fashion fashion_test
-psql -d fashion -c 'CREATE EXTENSION IF NOT EXISTS unaccent; CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS btree_gist;'
-psql -d fashion_test -c 'CREATE EXTENSION IF NOT EXISTS unaccent; CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS btree_gist;'
 ```
 
-Extension cũng được tạo bằng migration; lệnh trên giúp user không phải superuser vẫn migrate được.
+Extension `unaccent`, `pg_trgm`, `btree_gist` được tạo bằng migration. Cả ba là trusted extension (từ PostgreSQL 13), nên chủ database tự tạo được, không cần superuser. Database test (`test_fashion`, và `test_fashion_gw0`, `test_fashion_gw1`… khi chạy song song) do pytest-django tự tạo và xoá.
 
 > **Container kết nối tới PostgreSQL trên máy**: Docker Desktop chuyển `host.docker.internal` về máy thật. Nếu container báo không kết nối được, kiểm tra `listen_addresses` trong `postgresql.conf` và thêm dòng cho dải mạng của Docker vào `pg_hba.conf`, rồi `brew services restart postgresql@18`.
 
@@ -177,6 +174,9 @@ make create-admin   # tạo tài khoản Admin
 | `make logs s=worker` | Xem log của một service |
 | `make shell` | `manage.py shell` trong container api |
 | `make makemigrations` / `make migrate` | Tạo / chạy migration |
+| `make load-geo` | Nạp 34 tỉnh/thành và phường/xã |
+| `make seed` | Tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu |
+| `make create-admin` | Tạo Tài khoản Admin (`manage.py create_staff --admin`) |
 | `make test` | `pytest -n auto` |
 | `make lint` | `ruff check`, `ruff format --check`, `mypy`, `lint-imports` |
 | `make fmt` | `ruff format` + `ruff check --fix` |
@@ -190,7 +190,7 @@ make create-admin   # tạo tài khoản Admin
 
 ## 5. Chạy test
 
-- Test dùng database `fashion_test` trên PostgreSQL của máy (không dùng SQLite, để giống production: `select_for_update`, `EXCLUDE`, `unaccent`).
+- Test dùng database `test_fashion` do pytest-django tự tạo trên PostgreSQL của máy, mỗi worker `pytest-xdist` một database riêng (không dùng SQLite, để giống production: `select_for_update`, `EXCLUDE`, `unaccent`).
 - Celery chạy đồng bộ; API bên ngoài dùng Fake hoặc `respx`; thời gian cố định bằng `time-machine`.
 - Có thể chạy test ngay trên máy (hoặc trong WSL), không qua Docker: `uv run pytest` với `DATABASE_URL` trỏ `localhost`.
 
@@ -202,7 +202,7 @@ Team dùng cả **VS Code** và **PyCharm**. Repo commit sẵn cấu hình chung
 |---|---|---|
 | VS Code | `.vscode/launch.json` | "Attach Django (Docker)": attach tới `localhost:5678`, `pathMappings` `${workspaceFolder}/backend` ↔ `/app`; "Pytest (local)": chạy test bằng interpreter `.venv` |
 | VS Code | `.vscode/extensions.json` | Extension khuyến nghị: Python, Pylance, Ruff, Mypy Type Checker, Docker, WSL, EditorConfig, Mermaid preview |
-| PyCharm | `.run/*.run.xml` | Run configuration lưu dạng file dự án: "Django server (Docker Compose)", "Celery worker (Docker Compose)", "Pytest" |
+| PyCharm | `.run/*.run.xml` | Run configuration lưu dạng file dự án: "Pytest" (đã có), "Django server (Docker Compose)" và "Celery worker (Docker Compose)" (thêm khi khởi tạo backend) |
 | Cả hai | `.editorconfig` | Thụt lề 4 dấu cách cho Python, 2 cho YAML/JSON/TOML; LF; UTF-8; xoá khoảng trắng cuối dòng |
 
 ### 6.1. VS Code

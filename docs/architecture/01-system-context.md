@@ -115,6 +115,7 @@ graph TB
     ordering --> payments
     ordering --> shipping
     inventory --> catalog
+    inventory --> identity
     promotions --> identity
     identity --> shared
     catalog --> shared
@@ -161,7 +162,7 @@ sequenceDiagram
         N->>API: GET /store/orders/{code} (hỏi lại trạng thái)
     end
     R->>DB: Relay đọc outbox, worker chạy handler ordering
-    R->>DB: T3: Order → PLACED, Giữ hàng thành trừ Tồn kho, outbox(order-placed)
+    R->>DB: T3: Order → PLACED, Giữ hàng thành trừ Tồn kho và Hàng chờ xuất, outbox(order-placed)
     Note over R: handler notifications nhận order-placed và gửi email "Thanh toán thành công"
 ```
 

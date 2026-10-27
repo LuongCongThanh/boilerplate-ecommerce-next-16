@@ -154,6 +154,10 @@ _Avoid_: Delivery, đơn GHN, tracking
 Việc Staff giao một Đơn hàng đã đóng gói cho hãng vận chuyển. Vận đơn được tạo khi Bàn giao, và đơn chỉ Đang giao khi Vận đơn tạo xong.
 _Avoid_: Dispatch, xuất kho, giao hàng
 
+**Sự cố Vận đơn (Shipment Exception)**:
+Tình trạng hãng vận chuyển báo mất hàng, hư hàng, sự cố, hoặc tự huỷ một Vận đơn mà cửa hàng không yêu cầu huỷ. Đơn Đang giao chỉ được Staff huỷ khi Vận đơn gặp sự cố.
+_Avoid_: Lỗi giao hàng, failed delivery, hoàn hàng
+
 **Phí ship (Shipping Fee)**:
 Số tiền Người mua trả cho việc giao một Đơn hàng, bằng 0 khi đơn đạt Ngưỡng miễn phí ship.
 _Avoid_: Phí vận chuyển, shipping cost
