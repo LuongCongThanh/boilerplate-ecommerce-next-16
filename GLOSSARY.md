@@ -27,7 +27,7 @@ Một địa điểm vật lý nơi hàng được lưu trữ và xuất đi gia
 _Avoid_: Chi nhánh, store, location
 
 **Tồn kho (Stock)**:
-Số lượng thực có của một Biến thể trong một Kho, gồm cả phần đang bị Giữ hàng.
+Số lượng của một Biến thể trong một Kho chưa bán cho Đơn hàng nào, gồm cả phần đang bị Giữ hàng. Hàng của đơn đã đặt nhưng chưa Bàn giao vẫn nằm trên kệ nhưng không còn tính vào Tồn kho.
 _Avoid_: Inventory count, số lượng, tồn thực tế
 
 **Số lượng bán được (Available Quantity)**:
@@ -37,6 +37,14 @@ _Avoid_: Sellable stock, tồn khả dụng
 **Giữ hàng (Stock Reservation)**:
 Phần Tồn kho bị tạm khoá cho một đơn chưa thanh toán online, có thời hạn 15 phút. Hết hạn mà chưa thanh toán thì phần giữ này được giải phóng và trở lại Số lượng bán được.
 _Avoid_: Hold, lock, tạm giữ
+
+**Hàng chờ xuất (Awaiting Dispatch)**:
+Phần hàng của một Biến thể trong Kho đã bán cho Đơn hàng nhưng chưa Bàn giao. Hàng trên kệ bằng Tồn kho cộng Hàng chờ xuất.
+_Avoid_: Allocated, committed, hàng đã đặt
+
+**Kiểm kê (Stock Count)**:
+Việc Staff đếm hàng thực tế trên kệ của một Biến thể để hệ thống so với Tồn kho cộng Hàng chờ xuất, rồi điều chỉnh Tồn kho theo phần chênh lệch.
+_Avoid_: Stocktake, inventory audit, kiểm hàng
 
 ## Giá và khuyến mãi (Pricing & Promotions)
 
@@ -55,6 +63,10 @@ _Avoid_: Final price, current price, giá cuối
 **Mã giảm giá (Voucher)**:
 Mã mà Người mua nhập khi checkout để được giảm trên toàn đơn, theo % hoặc số tiền cố định, có điều kiện và giới hạn lượt dùng. Mỗi Đơn hàng dùng tối đa một Voucher, và Voucher được cộng dồn với Giá khuyến mãi.
 _Avoid_: Coupon, promo code, promotion
+
+**Lượt dùng Voucher (Voucher Redemption)**:
+Một lần một Voucher được dùng cho một Đơn hàng. Lượt được tính khi đơn được tạo và được trả lại nếu đơn bị huỷ trước khi Đang giao.
+_Avoid_: Usage, lượt áp dụng
 
 ## Đơn hàng (Ordering)
 
@@ -75,27 +87,39 @@ Một Biến thể kèm số lượng và đơn giá tại thời điểm đặt
 _Avoid_: Order item, cart item
 
 **Tạm tính (Subtotal)**:
-Tổng Giá áp dụng nhân số lượng của các Dòng đơn hàng, trước khi trừ Voucher và cộng phí ship.
+Tổng Giá áp dụng nhân số lượng của các Dòng đơn hàng, trước khi trừ Voucher và cộng Phí ship.
 _Avoid_: Items total, tổng tiền hàng
+
+**Tổng tiền đơn (Order Total)**:
+Số tiền Người mua phải trả cho một Đơn hàng: Tạm tính trừ giảm giá Voucher, cộng Phí ship.
+_Avoid_: Grand total, thành tiền
+
+**Tính thử (Quote)**:
+Bảng gồm Tạm tính, giảm giá Voucher, Phí ship và Tổng tiền đơn mà Người mua xem trước khi đặt đơn. Đơn chỉ được tạo khi tổng tính lại lúc đặt khớp với Tính thử mà Người mua đã xem.
+_Avoid_: Preview, estimate
 
 **Cờ cần xử lý (Attention Flag)**:
 Một vấn đề trên Đơn hàng mà Staff phải xử lý tay, ví dụ tiền về sai số tiền hoặc tạo Vận đơn thất bại. Cờ được gỡ khi Staff xử lý xong.
 _Avoid_: Alert, cảnh báo, ticket
 
 **Hoàn tất (Completed)**:
-Trạng thái cuối của Đơn hàng, đạt được 7 ngày sau khi Đã giao, khi không còn yêu cầu Đổi trả nào đang mở. Đây là mốc hết quyền yêu cầu Đổi trả và là lúc doanh thu của đơn được chốt.
+Trạng thái cuối của Đơn hàng, đạt được khi đã hết hạn yêu cầu Đổi trả và không còn yêu cầu Đổi trả nào đang mở. Đây là lúc Doanh thu của đơn được chốt. Đơn có Đổi trả đang mở vẫn chưa Hoàn tất dù đã hết hạn yêu cầu Đổi trả.
 _Avoid_: Closed, finished, done
+
+**Doanh thu (Revenue)**:
+Số tiền cửa hàng giữ lại từ một Đơn hàng Hoàn tất: Tổng tiền đơn trừ các Hoàn tiền của Đổi trả. Hoàn tiền cho khoản tiền về thừa không làm giảm Doanh thu.
+_Avoid_: Sales, doanh số
 
 **Hoàn hàng (Returned to Sender)**:
 Trạng thái của Đơn hàng khi giao thất bại và hãng vận chuyển trả hàng về Kho.
 _Avoid_: Return, đổi trả, failed delivery
 
 **Đổi trả (Return)**:
-Yêu cầu của Người mua gửi lại hàng đã nhận trong vòng 7 ngày kể từ khi Đã giao, với hàng còn tag và chưa qua sử dụng. Hàng có Giá khuyến mãi giảm trên 50% không được Đổi trả.
+Yêu cầu của Người mua gửi lại hàng đã nhận, trong vòng 7 ngày (đủ 7 × 24 giờ) kể từ lúc Đã giao, với hàng còn tag và chưa qua sử dụng. Hàng có Giá khuyến mãi giảm trên 50% không được Đổi trả.
 _Avoid_: Refund, hoàn hàng, RMA
 
 **Hoàn tiền (Refund)**:
-Việc trả lại tiền cho Người mua: về đúng Cổng thanh toán đã nhận khoản tiền đó với đơn online, hoặc bằng chuyển khoản ngân hàng với đơn COD. Phát sinh khi huỷ một đơn đã thanh toán online, khi Đổi trả được chấp nhận, hoặc khi tiền về cho một Đơn hàng không còn chờ thanh toán.
+Việc trả lại tiền cho Người mua: về đúng Cổng thanh toán đã nhận khoản tiền đó với đơn online, hoặc bằng chuyển khoản ngân hàng với đơn COD. Phát sinh khi một đơn đã thanh toán online bị huỷ hoặc Hoàn hàng, khi Đổi trả được chấp nhận, hoặc khi nhận được tiền mà không xác nhận được Thanh toán (sai số tiền, hoặc Đơn hàng không còn chờ thanh toán).
 _Avoid_: Chargeback, reimbursement
 
 ## Thanh toán (Payments)
@@ -112,6 +136,10 @@ _Avoid_: Provider, PSP, ví
 Một lần trả tiền cho một Đơn hàng qua một Cổng thanh toán, hoặc khoản thu tiền mặt của một đơn COD. Một Đơn hàng online có thể có nhiều Thanh toán, vì mỗi lần thử là một Thanh toán mới.
 _Avoid_: Transaction, giao dịch
 
+**Hạn mức COD (COD Limit)**:
+Tổng tiền đơn tối đa mà Người mua còn được chọn COD; vượt mức thì phải thanh toán online.
+_Avoid_: COD cap, giới hạn COD
+
 **Đối soát (Reconciliation)**:
 Việc hệ thống chủ động hỏi Cổng thanh toán hoặc hãng vận chuyển về trạng thái của các Thanh toán và Vận đơn còn treo, để không phụ thuộc hoàn toàn vào thông báo từ họ.
 _Avoid_: Sync, polling, quyết toán
@@ -121,6 +149,22 @@ _Avoid_: Sync, polling, quyết toán
 **Vận đơn (Shipment)**:
 Đơn giao hàng tạo ở hãng vận chuyển (GHN) cho một Đơn hàng, có mã để theo dõi hành trình.
 _Avoid_: Delivery, đơn GHN, tracking
+
+**Bàn giao (Hand-over)**:
+Việc Staff giao một Đơn hàng đã đóng gói cho hãng vận chuyển. Vận đơn được tạo khi Bàn giao, và đơn chỉ Đang giao khi Vận đơn tạo xong.
+_Avoid_: Dispatch, xuất kho, giao hàng
+
+**Phí ship (Shipping Fee)**:
+Số tiền Người mua trả cho việc giao một Đơn hàng, bằng 0 khi đơn đạt Ngưỡng miễn phí ship.
+_Avoid_: Phí vận chuyển, shipping cost
+
+**Cước vận chuyển (Carrier Fee)**:
+Số tiền hãng vận chuyển tính cho cửa hàng cho một Vận đơn. Có thể khác Phí ship, ví dụ khi đơn được miễn phí ship thì cửa hàng vẫn trả Cước vận chuyển.
+_Avoid_: Phí GHN, phí ship (khi nói về chi phí của cửa hàng)
+
+**Ngưỡng miễn phí ship (Free Shipping Threshold)**:
+Mức Tạm tính sau khi trừ Voucher mà từ đó Phí ship bằng 0.
+_Avoid_: Free ship minimum, mức freeship
 
 **Phí ship dự phòng (Fallback Shipping Fee)**:
 Phí ship cố định áp dụng cho Đơn hàng khi không lấy được phí từ hãng vận chuyển.
@@ -151,3 +195,9 @@ _Avoid_: Superuser, manager, owner
 **Tài khoản (Account)**:
 Danh tính đăng nhập của một Khách hàng, Staff hoặc Admin. Mỗi email thuộc tối đa một Tài khoản, nên một người vừa là Staff vừa muốn mua hàng phải dùng hai email khác nhau.
 _Avoid_: User, profile, login
+
+## Dữ liệu cá nhân (Privacy)
+
+**Yêu cầu xoá dữ liệu (Erasure Request)**:
+Yêu cầu của Người mua xoá dữ liệu cá nhân của mình. Hệ thống thực hiện bằng cách ẩn danh, vẫn giữ dữ liệu đơn cần cho kế toán và thuế.
+_Avoid_: Delete account, xoá tài khoản

@@ -11,11 +11,13 @@
 | Nhân viên vận hành | `staff` | Người của doanh nghiệp, xử lý công việc hằng ngày | Back-office |
 | Quản trị viên | `admin` | Người của doanh nghiệp, quản lý cấu hình và nhân sự | Back-office |
 
-Ba quy tắc chung:
+Các quy tắc chung:
 
 - Mỗi Tài khoản nội bộ có đúng một vai trò `staff` hoặc `admin`. `admin` có toàn bộ quyền của `staff`.
 - Mỗi email chỉ thuộc **một** Tài khoản, dù là Khách hàng, Staff hay Admin.
 - Tài khoản nội bộ **không** dùng để mua hàng. Nhân viên muốn mua hàng thì đăng ký một Tài khoản Khách hàng riêng bằng **email khác**. Đăng nhập storefront (kể cả bằng Google) với email của Tài khoản nội bộ bị từ chối với thông báo lỗi chung.
+- Tài khoản Admin chỉ được tạo bằng lệnh `manage.py create_staff --admin`. Trên back-office, Admin chỉ quản lý Tài khoản Staff.
+- Kế toán **không** phải vai trò của hệ thống ở MVP: Admin xuất danh sách đơn đã thu tiền (US-1003) rồi gửi cho kế toán.
 
 ## 2. Nhận diện Khách vãng lai
 
@@ -23,7 +25,7 @@ Ba quy tắc chung:
 - Khi đặt hàng, Khách vãng lai bắt buộc nhập **họ tên, số điện thoại, địa chỉ giao hàng**. Email là tuỳ chọn; có email thì nhận email thông báo.
 - Ngay sau khi đặt hàng, Khách vãng lai được xem, thanh toán và huỷ đơn vừa đặt trong **30 phút** mà không phải tra cứu lại.
 - Sau đó, tra cứu đơn bằng **Mã đơn + số điện thoại đặt hàng**. Hai thông tin phải khớp nhau. Mỗi lần tra cứu đúng cho phép thao tác với đơn đó trong 30 phút.
-- Nếu sau đó Khách vãng lai đăng ký Tài khoản bằng **cùng email** đã dùng khi đặt hàng, các đơn cũ có email đó được gắn vào Tài khoản mới, nhưng **chỉ sau khi email đã được xác thực**. Không gắn theo số điện thoại, vì số điện thoại không được xác thực.
+- Nếu sau đó Khách vãng lai đăng ký Tài khoản bằng **cùng email** đã dùng khi đặt hàng, các đơn cũ có email đó được gắn vào Tài khoản mới, nhưng **chỉ sau khi email đã được xác thực** (kể cả xác thực qua đăng nhập Google). Đơn đặt như Khách vãng lai bằng email của một Tài khoản đã xác thực thì được gắn ngay lúc đặt (BR-ORD-08). Không gắn theo số điện thoại, vì số điện thoại không được xác thực.
 
 ## 3. Ma trận phân quyền
 
@@ -41,12 +43,13 @@ Ký hiệu: ✅ được phép · ⚠️ được phép có điều kiện (xem 
 | Tự huỷ đơn | ⚠️ (1)(2) | ⚠️ (2) |
 | Lưu sổ địa chỉ | — | ✅ |
 | Xem lịch sử đơn | — | ✅ |
-| Đổi mật khẩu, cập nhật hồ sơ, chọn ngôn ngữ | — | ✅ |
+| Đổi mật khẩu, cập nhật hồ sơ, chọn ngôn ngữ | — | ⚠️ (4) |
 | Yêu cầu xoá hoặc ẩn danh dữ liệu cá nhân | ⚠️ (3) | ✅ |
 
 1. Ngay sau khi đặt đơn, hoặc sau khi tra cứu đúng Mã đơn và số điện thoại; có hiệu lực 30 phút (mục 2).
 2. Chỉ khi đơn còn ở trạng thái **trước Đang đóng gói** (xem [05-order-lifecycle.md](./05-order-lifecycle.md)).
 3. Gửi yêu cầu qua kênh hỗ trợ, Staff xác minh danh tính rồi xử lý.
+4. Hồ sơ gồm họ tên, số điện thoại và ngôn ngữ. MVP không cho Khách hàng tự đổi email.
 
 ### 3.2. Back-office
 
@@ -54,23 +57,26 @@ Ký hiệu: ✅ được phép · ⚠️ được phép có điều kiện (xem 
 |---|---|---|
 | Xem danh sách và chi tiết Đơn hàng | ✅ | ✅ |
 | Xác nhận đơn, chuyển Đang đóng gói, bàn giao vận chuyển | ✅ | ✅ |
-| Huỷ đơn (mọi trạng thái được phép huỷ) | ✅ | ✅ |
+| Huỷ đơn (mọi trạng thái được phép huỷ, bắt buộc nhập lý do) | ✅ | ✅ |
 | Xem và gỡ Cờ cần xử lý trên Đơn hàng | ✅ | ✅ |
 | Ghi nhận Hoàn tiền thủ công | ✅ | ✅ |
-| Ghi nhận Đổi trả | ✅ | ✅ |
+| Ghi nhận và xử lý Đổi trả (nhận hàng, Chấp nhận theo từng dòng, Từ chối) | ✅ | ✅ |
 | Nhập kho, điều chỉnh Tồn kho (có ghi lý do) | ✅ | ✅ |
+| Kiểm kê | ✅ | ✅ |
 | Xem thông tin Khách hàng | ✅ | ✅ |
 | Xử lý yêu cầu xoá hoặc ẩn danh dữ liệu | ✅ | ✅ |
 | Tạo, sửa, ẩn Sản phẩm và Biến thể | — | ✅ |
+| Quản lý danh sách size và bảng màu | — | ✅ |
 | Đặt giá bán và Giá khuyến mãi | — | ✅ |
 | Tạo, sửa, vô hiệu Voucher | — | ✅ |
 | Quản lý Tài khoản Staff | — | ✅ |
-| Cấu hình vận hành: Phí ship dự phòng, ngưỡng miễn phí ship, hạn mức COD (thời gian Giữ hàng là cố định, không cấu hình) | — | ✅ |
-| Xem báo cáo doanh thu | — | ✅ |
+| Cấu hình vận hành: Phí ship dự phòng, Ngưỡng miễn phí ship, Hạn mức COD (thời gian Giữ hàng là cố định, không cấu hình) | — | ✅ |
+| Sửa ánh xạ phường/xã sang GHN | — | ✅ |
+| Xem báo cáo Doanh thu, xuất danh sách đơn đã thu tiền cho kế toán | — | ✅ |
 
 ## 4. Quy tắc kiểm soát
 
 - Mọi thao tác ghi trên back-office được **ghi lịch sử**: ai làm, lúc nào, giá trị trước và sau.
 - Điều chỉnh Tồn kho thủ công bắt buộc nhập lý do (ví dụ: kiểm kê, hàng lỗi, hàng mẫu).
-- Huỷ đơn từ trạng thái Đang đóng gói trở đi bắt buộc nhập lý do.
+- Staff huỷ đơn ở bất kỳ trạng thái nào cũng bắt buộc nhập lý do. Người mua tự huỷ thì không cần.
 - Tài khoản Staff bị vô hiệu hoá thì mọi phiên đăng nhập của tài khoản đó mất hiệu lực ngay.

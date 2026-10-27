@@ -59,8 +59,8 @@ HTTP 409
 | 401 | Chưa đăng nhập, token hết hạn | `NOT_AUTHENTICATED`, `TOKEN_EXPIRED` |
 | 403 | Không đủ quyền | `PERMISSION_DENIED` |
 | 404 | Không tìm thấy | `NOT_FOUND`, `ORDER_NOT_FOUND` |
-| 409 | Xung đột nghiệp vụ | `OUT_OF_STOCK`, `INVALID_TRANSITION`, `IDEMPOTENCY_CONFLICT`, `PRICE_CHANGED`, `SHIPMENT_IN_PROGRESS`, `PAYMENT_WINDOW_CLOSED` |
-| 422 | Vi phạm quy tắc nghiệp vụ | `VOUCHER_EXPIRED`, `VOUCHER_MIN_ORDER_NOT_MET`, `COD_LIMIT_EXCEEDED` |
+| 409 | Xung đột nghiệp vụ | `OUT_OF_STOCK`, `INVALID_TRANSITION`, `IDEMPOTENCY_CONFLICT`, `PRICE_CHANGED`, `SHIPMENT_IN_PROGRESS`, `PAYMENT_WINDOW_CLOSED`, `INSUFFICIENT_AVAILABLE` |
+| 422 | Vi phạm quy tắc nghiệp vụ | `VOUCHER_EXPIRED`, `VOUCHER_MIN_ORDER_NOT_MET`, `COD_LIMIT_EXCEEDED`, `LIST_PRICE_BELOW_SALE_PRICE` |
 | 429 | Vượt giới hạn tần suất | `THROTTLED` |
 | 500 | Lỗi hệ thống | `INTERNAL_ERROR` (không lộ chi tiết) |
 
@@ -79,7 +79,7 @@ Ba mã cần Frontend xử lý riêng:
 | Method | Path | Quyền | Mô tả | User story |
 |---|---|---|---|---|
 | GET | `categories` | Công khai | Cây danh mục | US-101 |
-| GET | `products` | Công khai | Danh sách có lọc `category`, `size`, `color`, `price_min`, `price_max`, `in_stock`, `q`, `ordering` | US-101 → 103 |
+| GET | `products` | Công khai | Danh sách có lọc `category`, `size`, `color` (theo mã trong danh sách size và bảng màu), `price_min`, `price_max`, `in_stock`, `q`, `ordering` (`newest`, `price`, `-price`, `best_selling`) | US-101 → 103 |
 | GET | `products/{slug}` | Công khai | Chi tiết, các màu, ảnh, Biến thể kèm giá và còn hàng | US-104 |
 | GET | `geo/provinces`, `geo/provinces/{code}/wards` | Công khai | Địa giới 2 cấp | US-301 |
 | GET | `cart` | Guest / Customer | Giỏ hàng kèm giá hiện tại và cảnh báo | US-202 |
@@ -100,7 +100,7 @@ Ba mã cần Frontend xử lý riêng:
 | POST | `auth/refresh` | Có refresh token | Lấy access token mới, xoay vòng refresh token | — |
 | POST | `auth/logout` | Customer | Thu hồi refresh token | — |
 | POST | `auth/password/forgot`, `auth/password/reset` | Công khai | Quên mật khẩu | US-503 |
-| GET, PATCH | `me` | Customer | Hồ sơ, ngôn ngữ | US-505 |
+| GET, PATCH | `me` | Customer | Hồ sơ: họ tên, số điện thoại, ngôn ngữ. Không đổi được email ở MVP | US-505, 506 |
 | GET, POST, PATCH, DELETE | `me/addresses` | Customer | Sổ địa chỉ | US-504 |
 | POST | `me/erasure-request` | Customer | Yêu cầu xoá dữ liệu | US-1101 |
 
@@ -111,26 +111,29 @@ Ba mã cần Frontend xử lý riêng:
 | Method | Path | Quyền | Mô tả |
 |---|---|---|---|
 | POST | `auth/login`, `auth/refresh`, `auth/logout` | — | Đăng nhập của Staff/Admin (tách khỏi storefront) |
-| GET | `orders` | Staff | Lọc theo trạng thái, Phương thức thanh toán, ngày, Cờ cần xử lý (`flag=<kind>`); tìm theo Mã đơn, số điện thoại |
-| GET | `orders/{id}` | Staff | Chi tiết đơn, lịch sử trạng thái, Cờ cần xử lý |
+| GET | `orders` | Staff | Lọc theo trạng thái, Phương thức thanh toán, ngày, Cờ cần xử lý (`flag=<kind>`); tìm theo Mã đơn, số điện thoại (tìm theo số điện thoại thì ghi log truy cập, CMP-07) |
+| GET | `orders/{id}` | Staff | Chi tiết đơn, lịch sử trạng thái, Cờ cần xử lý (ghi log truy cập, CMP-07) |
 | POST | `orders/{id}/flags/{flag_id}/resolve` | Staff | Gỡ Cờ cần xử lý sau khi xử lý xong (ghi lịch sử) |
 | POST | `orders/{id}/confirm`, `start-packing`, `cancel` | Staff | Chuyển trạng thái (T6, T8, T7/T9). `cancel` trả `409 SHIPMENT_IN_PROGRESS` khi Vận đơn đang được tạo |
-| POST | `orders/{id}/hand-over` | Staff | Bàn giao GHN (T10), chạy nền: trả `202`, đơn sang `SHIPPING` khi GHN tạo Vận đơn xong; lỗi thì gắn cờ `shipment_failed` |
+| POST | `orders/{id}/hand-over` | Staff | Bàn giao GHN (T10), chạy nền: trả `202`, đơn sang `SHIPPING` khi GHN tạo Vận đơn xong; lỗi thì gắn cờ `shipment_failed`. Gọi lại sau `shipment_failed` thì dùng lại Vận đơn cũ |
 | POST | `orders/bulk/confirm` | Staff | Xác nhận hàng loạt |
 | POST | `orders/{id}/returned-to-warehouse` | Staff | Xác nhận đơn Hoàn hàng đã về Kho |
 | GET, POST | `refunds`, `refunds/{id}/complete` | Staff | Danh sách Hoàn tiền, ghi nhận đã hoàn |
-| GET, POST | `returns`, `returns/{id}/receive`, `accept`, `reject` | Staff | Đổi trả |
-| GET | `stock` | Staff | Tồn kho, Giữ hàng và Số lượng bán được theo Biến thể. Lọc tồn thấp bằng `available_lt=<n>` (mặc định 5, US-702) |
-| POST | `stock/inbound`, `stock/adjust` | Staff | Nhập kho, điều chỉnh (bắt buộc lý do) |
+| GET, POST | `returns`, `returns/{id}/receive`, `accept`, `reject` | Staff | Đổi trả. `accept` nhận `{lines: [{return_line_id, accepted_quantity, restock}]}` (BR-RET-08) |
+| GET | `stock` | Staff | Tồn kho, Giữ hàng, Hàng chờ xuất và Số lượng bán được theo Biến thể. Lọc tồn thấp bằng `available_lt=<n>` (mặc định 5, US-702) |
+| POST | `stock/inbound`, `stock/adjust` | Staff | Nhập kho, điều chỉnh (bắt buộc lý do). Giảm quá Số lượng bán được thì `409 INSUFFICIENT_AVAILABLE` (BR-INV-11) |
+| POST | `stock/count` | Staff | Kiểm kê: gửi số đếm theo Biến thể, hệ thống điều chỉnh theo chênh lệch với Tồn kho + Hàng chờ xuất (US-703) |
 | GET | `customers`, `customers/{id}` | Staff | Xem khách (ghi log truy cập) |
-| GET, POST | `erasure-requests`, `erasure-requests/{id}/complete` | Staff | Xử lý yêu cầu xoá dữ liệu |
-| CRUD | `categories`, `products`, `products/{id}/variants`, `products/{id}/images` | Admin | Quản lý danh mục hàng hoá |
+| GET, POST | `erasure-requests`, `erasure-requests/{id}/complete` | Staff | Xử lý Yêu cầu xoá dữ liệu. `complete` chỉ thành công khi mọi đơn liên quan ở trạng thái cuối và không còn Hoàn tiền chờ xử lý (CMP-05) |
+| CRUD | `categories`, `products`, `products/{id}/variants`, `products/{id}/images` | Admin | Quản lý danh mục hàng hoá. Hạ Giá bán xuống ≤ Giá khuyến mãi đang hoặc sắp hiệu lực thì `422 LIST_PRICE_BELOW_SALE_PRICE` (BR-PRC-05) |
+| GET, POST, PATCH | `sizes`, `colors` | Admin | Danh sách size và bảng màu; không xoá, chỉ ẩn bằng `is_active = false` (US-805) |
 | POST | `products/{id}/publish`, `archive` | Admin | Đăng bán, ngừng bán |
 | CRUD | `sale-prices` | Admin | Giá khuyến mãi |
 | CRUD | `vouchers` | Admin | Voucher |
 | CRUD | `staff` | Admin | Tài khoản Staff |
 | GET, PATCH | `settings/ordering` | Admin | Ngưỡng miễn phí ship, hạn mức COD |
 | GET, PATCH | `settings/shipping` | Admin | Phí ship dự phòng |
+| GET, PATCH | `settings/ghn-locations` | Admin | Ánh xạ phường/xã sang GHN cho các phường/xã chưa có ánh xạ (US-1004) |
 | GET | `reports/revenue`, `reports/paid-orders.csv` | Admin | Báo cáo doanh thu, danh sách cho kế toán |
 
 ### 4.3. Webhook: `/api/v1/webhooks/`

@@ -15,7 +15,7 @@ Hệ thống phục vụ thị trường **Việt Nam**: thanh toán bằng VND 
 
 ## 2. Tầm nhìn
 
-> Một cửa hàng thời trang online nơi khách tìm được đúng size, đúng màu và đặt hàng trong vài phút, có hoặc không có tài khoản. Phía doanh nghiệp xử lý đơn nhanh, không bán vượt tồn kho.
+> Một cửa hàng thời trang online nơi Người mua tìm được đúng size, đúng màu và đặt hàng trong vài phút, có hoặc không có tài khoản. Phía doanh nghiệp xử lý đơn nhanh, không bán vượt tồn kho.
 
 ## 3. Mục tiêu kinh doanh
 
@@ -52,14 +52,14 @@ Chi tiết xem [02-actors-permissions.md](./02-actors-permissions.md).
 | Tài khoản | Đăng ký và đăng nhập bằng email + mật khẩu hoặc Google, quên mật khẩu, sổ địa chỉ, lịch sử đơn, chọn ngôn ngữ vi/en |
 | Khuyến mãi | Voucher cơ bản (theo % hoặc số tiền cố định) |
 | Thông báo | Email xác nhận đơn và cập nhật trạng thái |
-| Back-office | Quản lý Sản phẩm, Tồn kho, Đơn hàng, Voucher, Giá khuyến mãi, Staff; ghi nhận Đổi trả và Hoàn tiền thủ công |
+| Back-office | Quản lý Sản phẩm, danh sách size và bảng màu, Tồn kho (gồm Kiểm kê), Đơn hàng, Voucher, Giá khuyến mãi, Staff; ghi nhận Đổi trả và Hoàn tiền thủ công |
 | Pháp lý | Xin đồng ý xử lý dữ liệu cá nhân, yêu cầu xoá hoặc ẩn danh dữ liệu |
 
 ### 5.2. Giai đoạn 2
 
 - Đánh giá Sản phẩm, wishlist.
 - Flash sale, điểm thành viên.
-- Đổi trả online (khách tự tạo yêu cầu), Hoàn tiền tự động qua API cổng thanh toán.
+- Đổi trả online (Người mua tự tạo yêu cầu), Hoàn tiền tự động qua API cổng thanh toán.
 - Hoá đơn điện tử tích hợp tự động.
 - Thông báo qua SMS và Zalo ZNS, đăng nhập bằng OTP số điện thoại.
 - Nhiều Kho.
