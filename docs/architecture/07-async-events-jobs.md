@@ -43,28 +43,34 @@ sequenceDiagram
 ### 1.3. Retry và lỗi
 
 - Handler lỗi: Celery retry tối đa **5 lần**, giãn cách tăng dần (10 giây → khoảng 30 phút).
-- Hết số lần retry: ghi trạng thái lỗi, gửi cảnh báo Sentry. Staff kỹ thuật chạy lại bằng `manage.py retry_failed_events`.
+- Hết số lần retry: ghi một dòng vào `shared_failed_event` (`event_id`, `handler`, `error`, `failed_at`), gửi cảnh báo Sentry. Staff kỹ thuật chạy lại bằng `manage.py retry_failed_events`: lệnh đọc bảng này, đẩy lại `dispatch_event` cho từng cặp và ghi `retried_at`.
 - Relay lỗi kết nối Redis: sự kiện vẫn nằm trong outbox, relay tự thử lại.
 
 ## 2. Danh mục sự kiện
 
 Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `events.py` của module phát.
 
+**Payload không chứa secret hay PII.** Payload chỉ mang ID, Mã đơn, số tiền và mã trạng thái. Handler cần dữ liệu nhạy cảm thì hỏi `contracts` của module sở hữu ngay lúc xử lý, ví dụ `identity.contracts.issue_password_reset_link(account_id)`. Lý do: outbox giữ sự kiện 90 ngày, có thể bị phát lại, và nằm trong mọi bản backup; token hay số điện thoại để ở đây sẽ sống lâu hơn và lộ rộng hơn bản gốc.
+
 | Sự kiện | Phát bởi | Dữ liệu chính | Handler |
 |---|---|---|---|
-| `identity.customer-registered` v1 | identity | `user_id`, `language` | notifications: email xác thực |
-| `identity.password-reset-requested` v1 | identity | `user_id`, `reset_url` | notifications: email đặt lại mật khẩu |
-| `identity.customer-erased` v1 | identity | `user_id` hoặc `phone` | ordering: ẩn danh đơn hàng, xoá giỏ |
-| `ordering.order-placed` v1 | ordering | `order_code`, `payment_method`, `total` | notifications: email "Đặt đơn thành công" |
-| `ordering.order-paid` v1 | ordering | `order_code` | notifications: email "Thanh toán thành công" |
+| `identity.customer-registered` v1 | identity | `account_id`, `language` | notifications: gọi `identity.contracts.issue_email_verification_link` rồi gửi email xác thực |
+| `identity.email-verified` v1 | identity | `account_id` | ordering: gắn các Đơn hàng có `contact_email` khớp (không phân biệt hoa thường) và `customer_id` null vào Tài khoản |
+| `identity.password-reset-requested` v1 | identity | `account_id` | notifications: gọi `identity.contracts.issue_password_reset_link` rồi gửi email đặt lại mật khẩu |
+| `identity.customer-erased` v1 | identity | `erasure_request_id` | ordering: ẩn danh Đơn hàng, xoá Giỏ hàng, gọi `shipping.contracts.redact_provider_payloads` và `payments.contracts.redact_provider_payloads` theo `reference`; promotions: ẩn danh `phone` trong lượt dùng Voucher; notifications: ẩn danh `to_address`. Mọi handler lấy đối tượng cần ẩn danh qua `identity.contracts.get_erasure_subject` |
+| `ordering.order-placed` v1 | ordering | `order_code`, `payment_method`, `total` | Phát khi đơn **vào** `PLACED` (T2, T3). notifications: COD gửi "Đặt đơn thành công", online gửi "Thanh toán thành công" |
 | `ordering.order-cancelled` v1 | ordering | `order_code`, `reason`, `refund_required` | notifications: email "Đơn đã huỷ" |
 | `ordering.order-shipped` v1 | ordering | `order_code`, `tracking_code` | notifications: email "Đang giao" |
 | `ordering.order-delivered` v1 | ordering | `order_code` | notifications: email "Đã giao" |
-| `payments.payment-succeeded` v1 | payments | `reference`, `amount`, `method` | ordering: T3, hoặc tạo Hoàn tiền nếu đơn đã huỷ (BR-PAY-05) |
-| `payments.payment-failed` v1 | payments | `reference`, `reason` | ordering: ghi nhận, cho phép thử lại |
-| `payments.refund-recorded` v1 | payments | `reference`, `amount` | notifications: email "Đã hoàn tiền" |
+| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | ordering: T3. Nếu đơn không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi lần khác): gọi `payments.contracts.request_refund` và gắn cờ `unexpected_payment` (BR-PAY-05) |
+| `payments.payment-failed` v1 | payments | `reference`, `payment_id`, `reason` | ordering: ghi nhận, cho phép thử lại; `reason = amount_mismatch` thì gắn cờ `payment_amount_mismatch` |
+| `payments.refund-recorded` v1 | payments | `reference`, `refund_id`, `amount` | notifications: email "Đã hoàn tiền"; ordering: chuyển Đổi trả liên quan sang `refunded` |
+| `shipping.shipment-created` v1 | shipping | `reference`, `provider_order_code` | ordering: T10. Nếu đơn đã `CANCELLED`: gọi `shipping.contracts.cancel_shipment` và gắn cờ `shipment_after_cancel` |
+| `shipping.shipment-creation-failed` v1 | shipping | `reference`, `reason` | ordering: gắn cờ `shipment_failed`, đơn giữ `PACKING` |
 | `shipping.shipment-delivered` v1 | shipping | `reference`, `delivered_at` | ordering: T11 |
 | `shipping.shipment-returned` v1 | shipping | `reference` | ordering: T12 |
+
+T1 (đơn online vào `PENDING_PAYMENT`) không phát sự kiện nào; Người mua chỉ nhận email khi thanh toán thành công. Không còn sự kiện `ordering.order-paid`: `order-placed` của đơn online đã mang ý nghĩa này.
 
 ## 3. Celery
 
@@ -75,18 +81,19 @@ Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `ev
 | `default` | Job theo lịch | Chung |
 | `events` | `dispatch_event` | Chung |
 | `emails` | Gửi email | Chung; tách riêng khi tải lớn |
-| `integrations` | Gọi API VNPay, MoMo, GHN (đối soát, tạo vận đơn) | Chung; giới hạn số chạy đồng thời để không vượt rate limit của nhà cung cấp |
+| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Chung; giới hạn số chạy đồng thời để không vượt rate limit của nhà cung cấp |
 
 ### 3.2. Lịch job (Celery Beat, lưu bằng `django-celery-beat`)
 
 | Job | Tần suất | Module | Liên quan |
 |---|---|---|---|
 | `ordering.cancel_expired_pending_orders` | Mỗi phút | ordering | T4 |
-| `payments.reconcile_pending_payments` | Mỗi 5 phút | payments | T3, ADR 0005 |
+| `payments.reconcile_pending_payments` | Mỗi 5 phút | payments | T3, ADR 0005; Payment quá hạn link mà chưa thanh toán thì chuyển `expired` |
 | `shipping.reconcile_shipments` | Mỗi 15 phút | shipping | T11, T12 |
 | `ordering.complete_delivered_orders` | Mỗi giờ | ordering | T13 |
 | `ordering.purge_expired_guest_carts` | Mỗi ngày 03:00 | ordering | BR-CRT-02 |
 | `shared.purge_old_outbox_events` | Mỗi ngày 03:30 | shared | Giữ 90 ngày |
+| `shared.purge_idempotency_keys` | Mỗi ngày 03:45 | shared | Xoá `Idempotency-Key` quá 24 giờ |
 | `identity.purge_expired_tokens` | Mỗi ngày 04:00 | identity | Refresh token, reset token hết hạn |
 
 Mọi job đều **idempotent** và xử lý theo lô (ví dụ 200 đơn mỗi lần) để chạy lại an toàn.
@@ -101,3 +108,4 @@ Mọi job đều **idempotent** và xử lý theo lô (ví dụ 200 đơn mỗi 
 | `task_time_limit` | 120 giây | Chặn task treo |
 | `CELERY_TASK_ALWAYS_EAGER` | `True` chỉ trong `settings/test.py` | Test chạy đồng bộ |
 | Kết quả task | Không lưu (`task_ignore_result = True`) | Không cần result backend |
+| Redis `maxmemory-policy` | `noeviction` | Redis vừa là broker vừa là cache; nếu Redis tự đẩy key ra khi đầy thì có thể mất task. Vì vậy mọi key cache phải có TTL |

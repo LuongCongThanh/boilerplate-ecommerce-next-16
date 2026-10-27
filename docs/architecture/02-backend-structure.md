@@ -46,8 +46,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `google-auth` | 2.62.0 | Xác minh `id_token` của Google | Thư viện chính thức của Google |
 | `argon2-cffi` | 25.1.0 | Hash mật khẩu Argon2 | Thuật toán được OWASP khuyến nghị |
 | `django-fsm-2` | 4.2.4 | Máy trạng thái Đơn hàng | `django-fsm` gốc đã chuyển sang viewflow; bản này giữ API cũ, do django-commons duy trì |
-| `django-pghistory` | 3.9.2 | Lịch sử thay đổi (Đơn hàng, thanh toán, Tồn kho) | Dùng trigger PostgreSQL nên bắt được cả `bulk_update` |
-| `django-cors-headers` | 4.9.0 | CORS cho storefront và back-office | Chuẩn |
+| `django-pghistory` | 3.9.2 | Lịch sử thay đổi (Đơn hàng, Thanh toán, Tồn kho, cấu hình vận hành). Với Đơn hàng chỉ theo dõi field không phải PII | Dùng trigger PostgreSQL nên bắt được cả `bulk_update` |
 | `httpx` | — | Gọi API VNPay, MoMo, GHN | Hỗ trợ timeout và retry rõ ràng; test bằng `respx` |
 | `Pillow` | 13.0.0 | Xử lý ảnh Sản phẩm | Bắt buộc cho `ImageField` |
 | `django-storages[s3]` + `boto3` | 1.14.6 / — | Lưu ảnh trên S3 (chỉ ở AWS) | Ở local lưu ra ổ đĩa (`FileSystemStorage`) |
@@ -81,6 +80,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | Package | Lý do |
 |---|---|
 | `djangorestframework-simplejwt` | Tổ chức Jazzband đang giải thể ([ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md)) |
+| `django-cors-headers` | Mọi request đi qua Next.js BFF, trình duyệt không gọi thẳng Django nên không cần CORS ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)) |
 | `django-money`, `py-moneyed` | VND không có số lẻ, lưu số nguyên là đủ |
 | `django-ratelimit` | Không cập nhật từ 2023; dùng throttling của DRF |
 | `django-health-check` 4.x | Yêu cầu Python 3.14 và Django 6; tự viết `/healthz`, `/readyz` |
@@ -91,13 +91,13 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 
 | Module | Sở hữu |
 |---|---|
-| `identity` | Khách hàng, Staff, Admin, xác thực JWT, sổ địa chỉ, đồng ý xử lý dữ liệu, yêu cầu xoá dữ liệu |
-| `catalog` | Danh mục, Sản phẩm, Biến thể, ảnh, giá bán, **Giá khuyến mãi**, trạng thái còn hàng (bản sao để lọc nhanh) |
+| `identity` | Tài khoản (Khách hàng, Staff, Admin), xác thực JWT, xác thực email, sổ địa chỉ, đồng ý xử lý dữ liệu, yêu cầu xoá dữ liệu |
+| `catalog` | Danh mục, Sản phẩm, Biến thể, ảnh, Giá bán, **Giá khuyến mãi**, trạng thái còn hàng (bản sao để lọc nhanh) |
 | `inventory` | Kho, Tồn kho, Giữ hàng, lịch sử thay đổi Tồn kho |
 | `promotions` | Voucher, lượt dùng Voucher |
-| `payments` | Thanh toán VNPay / MoMo / COD, IPN, Hoàn tiền, đối soát |
-| `shipping` | Báo giá phí ship, vận đơn GHN, webhook, đối soát |
-| `ordering` | Giỏ hàng, checkout, Đơn hàng, máy trạng thái, Đổi trả |
+| `payments` | Thanh toán online (VNPay / MoMo) và COD, IPN, Hoàn tiền, Đối soát |
+| `shipping` | Báo giá phí ship, Vận đơn GHN, webhook, Đối soát, cấu hình Phí ship dự phòng |
+| `ordering` | Giỏ hàng, checkout, Đơn hàng, máy trạng thái, Đổi trả, Cờ cần xử lý, cấu hình ngưỡng miễn phí ship và hạn mức COD |
 | `notifications` | Email theo sự kiện |
 
 ```mermaid
@@ -128,7 +128,7 @@ graph BT
 4. `ordering`
 5. `notifications`
 
-**Module ở lớp dưới báo cho lớp trên bằng sự kiện.** Ví dụ `payments` không biết gì về Đơn hàng. Nó nhận một mã tham chiếu (`reference`, chính là mã đơn) và phát sự kiện `payments.payment-succeeded`. `ordering` lắng nghe sự kiện này để chuyển trạng thái đơn.
+**Module ở lớp dưới báo cho lớp trên bằng sự kiện.** Ví dụ `payments` không biết gì về Đơn hàng. Nó nhận một mã tham chiếu (`reference`, chính là Mã đơn) và phát sự kiện `payments.payment-succeeded`. `ordering` lắng nghe sự kiện này để chuyển trạng thái đơn.
 
 ## 5. Cây thư mục
 
@@ -143,6 +143,7 @@ backend/
 ├── Dockerfile                      # 1 image dùng chung cho api, worker, beat, relay
 ├── docker-compose.yml              # api, worker, beat, relay, redis, mailpit
 ├── Makefile                        # lệnh tắt: make up, make test, make lint, make migrate…
+├── conftest.py                     # fixture cần Tài khoản: customer_client, staff_client, admin_client (dùng factory của identity)
 │
 ├── config/                         # cấu hình project, KHÔNG chứa nghiệp vụ
 │   ├── __init__.py                 # nạp Celery app khi Django khởi động
@@ -150,8 +151,8 @@ backend/
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường
-│   │   ├── local.py                # DEBUG, Django Admin read-only, Fake Gateway, Mailpit
-│   │   ├── test.py                 # DB test, Celery chạy đồng bộ, hash mật khẩu nhanh
+│   │   ├── local.py                # DEBUG, Django Admin read-only, FAKE_PROVIDERS_ENABLED, Mailpit
+│   │   ├── test.py                 # DB test, Celery chạy đồng bộ, hash mật khẩu nhanh, FAKE_PROVIDERS_ENABLED
 │   │   └── production.py           # bảo mật, S3, SES, Sentry, log JSON
 │   ├── urls.py                     # gốc URL: /api/v1/store, /api/v1/backoffice, /api/v1/webhooks, /api/docs, /healthz
 │   ├── celery.py                   # khởi tạo Celery, định nghĩa queue
@@ -161,18 +162,19 @@ backend/
 ├── shared/                         # Django app "shared": hạ tầng dùng chung
 │   ├── __init__.py
 │   ├── apps.py
-│   ├── models.py                   # uuid7(), BaseModel: id UUID v7, created_at, updated_at
+│   ├── models.py                   # uuid7(), BaseModel: id UUID v7, created_at, updated_at; IdempotencyKey
 │   ├── money.py                    # value object Money(amount: int, currency="VND")
 │   ├── exceptions.py               # DomainError(code, message, details) và các lỗi chung
 │   ├── clock.py                    # now() dùng chung, để test cố định được thời gian
+│   ├── tasks.py                    # purge_old_outbox_events, purge_idempotency_keys
 │   ├── events/
 │   │   ├── __init__.py             # API công khai: publish(), handles()
-│   │   ├── base.py                 # DomainEvent (pydantic): event_id, event_type, schema_version, occurred_at
-│   │   ├── models.py               # OutboxEvent, ProcessedEvent
+│   │   ├── base.py                 # DomainEvent (pydantic): event_id, event_type, schema_version, occurred_at. Payload không chứa secret hay PII
+│   │   ├── models.py               # OutboxEvent, ProcessedEvent, FailedEvent
 │   │   ├── publisher.py            # EventPublisher: ghi sự kiện vào outbox trong transaction hiện tại
 │   │   ├── registry.py             # decorator @handles(...) đăng ký handler cho từng loại sự kiện
 │   │   ├── relay.py                # đọc outbox chưa gửi, đẩy thành Celery task, đánh dấu đã gửi
-│   │   ├── consumer.py             # chạy handler, chống xử lý trùng bằng ProcessedEvent
+│   │   ├── consumer.py             # chạy handler, chống xử lý trùng bằng ProcessedEvent; hết retry thì ghi FailedEvent
 │   │   └── tasks.py                # Celery task dispatch_event(event_id, handler_name)
 │   ├── geo/
 │   │   ├── models.py               # Province, Ward (2 cấp, theo vietnam-provinces)
@@ -181,20 +183,22 @@ backend/
 │   ├── api/
 │   │   ├── exception_handler.py    # chuyển mọi lỗi sang định dạng lỗi chuẩn (xem 04-api-contract)
 │   │   ├── pagination.py           # phân trang chuẩn
-│   │   ├── permissions.py          # IsCustomer, IsStaff, IsAdmin
-│   │   ├── throttling.py           # các mức throttle dùng chung
-│   │   ├── idempotency.py          # xử lý header Idempotency-Key cho các POST quan trọng
+│   │   ├── permissions.py          # IsCustomer, IsStaff, IsAdmin (chỉ dựa vào kind và aud, không chứa nghiệp vụ)
+│   │   ├── client_ip.py            # middleware: lấy IP người dùng từ X-Client-IP khi X-BFF-Secret đúng (ADR 0009)
+│   │   ├── throttling.py           # các mức throttle dùng chung, theo IP từ client_ip; fail-open khi Redis lỗi
+│   │   ├── idempotency.py          # xử lý header Idempotency-Key cho các POST quan trọng, lưu trong IdempotencyKey (PostgreSQL)
 │   │   └── i18n.py                 # chọn ngôn ngữ theo Accept-Language (vi mặc định)
 │   ├── health/
-│   │   └── views.py                # /healthz (sống), /readyz (DB, Redis, Celery sẵn sàng)
+│   │   └── views.py                # /healthz (sống), /readyz (kết nối được PostgreSQL)
 │   ├── logging.py                  # cấu hình structlog, processor redact_pii che PII
 │   ├── management/commands/
 │   │   ├── run_outbox_relay.py     # tiến trình relay chạy liên tục
+│   │   ├── retry_failed_events.py  # chạy lại các cặp (sự kiện, handler) trong FailedEvent
 │   │   └── load_geo.py             # nạp dữ liệu tỉnh/thành, phường/xã
 │   ├── migrations/
 │   └── testing/
 │       ├── factories.py            # factory gốc
-│       └── fixtures.py             # fixture pytest dùng chung (api_client, staff_client…)
+│       └── fixtures.py             # fixture pytest không cần nghiệp vụ (api_client…); fixture cần Tài khoản nằm ở backend/conftest.py
 │
 ├── modules/                        # Django app "modules": toàn bộ nghiệp vụ
 │   ├── __init__.py
@@ -204,7 +208,7 @@ backend/
 │   ├── migrations/                 # MỘT chuỗi migrations cho mọi module con
 │   ├── management/commands/
 │   │   ├── seed_catalog.py         # tạo dữ liệu mẫu cho local
-│   │   └── create_staff.py         # tạo tài khoản Staff/Admin
+│   │   └── create_staff.py         # tạo Tài khoản Staff/Admin
 │   ├── templates/
 │   │   └── emails/                 # template email theo ngôn ngữ (vi, en)
 │   ├── identity/
@@ -235,27 +239,32 @@ modules/ordering/
 ├── __init__.py
 ├── contracts.py          # ⭐ public API của module: hàm + DTO mà module khác được gọi
 ├── events.py             # sự kiện module này phát ra (class pydantic, có version)
-├── constants.py          # enum: OrderStatus, CancelReason…
-├── exceptions.py         # lỗi nghiệp vụ: OutOfStock, InvalidTransition, VoucherNotApplicable…
+├── constants.py          # enum: OrderStatus, PaymentMethod, OrderFlagKind, CancelReason…; RESERVATION_TTL, PAYMENT_LINK_TTL
+├── exceptions.py         # lỗi nghiệp vụ: OutOfStock, InvalidTransition, VoucherNotApplicable, PriceChanged, ShipmentInProgress…
 ├── models/
 │   ├── __init__.py       # export các model
 │   ├── cart.py           # Cart, CartItem
-│   ├── order.py          # Order (có máy trạng thái), OrderLine, OrderCodeSequence
+│   ├── order.py          # Order (có máy trạng thái), OrderLine
+│   ├── flags.py          # OrderFlag (Cờ cần xử lý)
+│   ├── settings.py       # OrderingSettings (singleton: ngưỡng miễn phí ship, hạn mức COD)
 │   └── returns.py        # ReturnRequest, ReturnLine
 ├── services/
 │   ├── __init__.py
 │   ├── cart.py           # add_item, update_quantity, merge_guest_cart
-│   ├── checkout.py       # place_order: kiểm tra hàng, Voucher, phí ship, tạo đơn, Giữ hàng hoặc trừ kho
+│   ├── checkout.py       # place_order: tính tổng và so expected_total ngoài transaction; trong transaction Giữ hàng hoặc trừ Tồn kho, dùng Voucher, tạo đơn
 │   ├── transitions.py    # confirm, start_packing, hand_over, cancel, mark_delivered, complete
-│   └── returns.py        # record_return, receive_return_items, accept, reject
+│   ├── flags.py          # raise_flag, resolve_flag
+│   ├── accounts.py       # attach_guest_orders (khi email đã xác thực), anonymize_orders (khi xoá dữ liệu)
+│   └── returns.py        # record_return, receive_return_items, accept, reject, mark_refunded
 ├── selectors/
 │   ├── __init__.py
 │   ├── cart.py           # get_cart_with_prices
-│   └── orders.py         # list_orders_for_customer, find_order_for_guest, list_orders_backoffice
-├── handlers.py           # nghe sự kiện: payment-succeeded, shipment-delivered, customer-erased…
-├── tasks.py              # cancel_expired_pending_orders, complete_delivered_orders
+│   └── orders.py         # list_orders_for_customer, find_order_for_guest, list_orders_backoffice (lọc theo Cờ cần xử lý)
+├── handlers.py           # nghe sự kiện: payment-succeeded, payment-failed, refund-recorded, shipment-created, shipment-creation-failed, shipment-delivered, shipment-returned, email-verified, customer-erased
+├── tasks.py              # cancel_expired_pending_orders, complete_delivered_orders, purge_expired_guest_carts
 ├── admin.py              # đăng ký Django Admin read-only (được modules/admin.py nạp)
 ├── api/
+│   ├── permissions.py    # IsOrderOwner: JWT của Khách hàng chủ đơn, hoặc X-Lookup-Token hợp lệ cho đúng đơn
 │   ├── store/
 │   │   ├── serializers.py    # dữ liệu vào/ra cho storefront
 │   │   ├── views.py          # view mỏng: validate → gọi service/selector → trả kết quả
@@ -281,13 +290,14 @@ modules/ordering/
 | `constants.py` | `TextChoices` và hằng số | — | Import model |
 | `exceptions.py` | Lỗi nghiệp vụ, kế thừa `shared.exceptions.DomainError`, mỗi lỗi có `code` tiếng Anh, ví dụ `OUT_OF_STOCK` | `shared.exceptions` | — |
 | `models/` | Field, ràng buộc DB (`UniqueConstraint`, `CheckConstraint`), index, `Meta.db_table` có tiền tố module (ví dụ `ordering_order`), property đơn giản | `shared.models`, model của module lớp dưới (chỉ để làm FK) | Logic nghiệp vụ, gọi API ngoài, gửi email, override `save()` để làm việc phụ, tự khai báo `id` (phải kế thừa `shared.models.BaseModel`) |
-| `services/` | Mỗi nghiệp vụ ghi là một hàm có tham số keyword, chạy trong `transaction.atomic`, phát sự kiện qua `shared.events.publish` | Model của chính module, `contracts` của module lớp dưới | Nhận `request`; import `api/` |
+| `services/` | Mỗi nghiệp vụ ghi là một hàm có tham số keyword, chạy trong `transaction.atomic`, phát sự kiện qua `shared.events.publish` | Model của chính module, `contracts` của module lớp dưới | Nhận `request`; import `api/`; gọi HTTP ra ngoài bên trong `transaction.atomic` |
 | `selectors/` | Hàm truy vấn đọc, tối ưu bằng `select_related`, `prefetch_related` | Model của chính module | Ghi dữ liệu |
 | `handlers.py` | Hàm `@handles("payments.payment-succeeded", version=1)`, nhận sự kiện rồi gọi service. Phải idempotent | `services`, `events` của module lớp dưới | Logic nghiệp vụ dài (phải đưa vào service) |
 | `tasks.py` | Celery task mỏng, chỉ gọi service | `services` | Logic nghiệp vụ |
 | `api/*/serializers.py` | Validate dữ liệu vào, định dạng dữ liệu ra | — | Gọi `.save()` lên model, logic nghiệp vụ |
 | `api/*/views.py` | `APIView` hoặc `GenericAPIView`: phân quyền, gọi serializer, gọi service/selector | `services`, `selectors`, `serializers` | `ModelViewSet` tự động CRUD; truy vấn ORM trực tiếp |
 | `api/*/urls.py` | Khai báo route | `views` | — |
+| `api/permissions.py` | Permission class gắn với nghiệp vụ của module, ví dụ `IsOrderOwner` (permission chung chỉ dựa vào `kind`/`aud` nằm ở `shared/api/permissions.py`) | `selectors` của chính module | Ghi dữ liệu |
 | `admin.py` | `ModelAdmin` read-only | `models` | Cho phép sửa |
 | `tests/` | Test service (nhiều nhất), handler, API | Mọi thứ của module, `shared.testing`; `tests.factories` và `contracts` của module lớp dưới | `models`, `services`, `selectors`, `api` của module khác ([12-testing-strategy.md](./12-testing-strategy.md) mục 4) |
 
@@ -297,19 +307,26 @@ modules/ordering/
 
 ```
 views.CheckoutView
-  → serializers.CheckoutInput.validate()           # kiểm tra dữ liệu vào
-  → services.checkout.place_order(...)             # trong transaction.atomic:
-       → catalog.contracts.get_variants_for_sale()   # giá áp dụng, snapshot
-       → promotions.contracts.redeem_voucher()       # nếu có Voucher
-       → shipping.contracts.quote_fee()              # GHN, hoặc phí dự phòng
-       → inventory.contracts.reserve_stock()         # online: Giữ hàng 15 phút
-         hoặc inventory.contracts.decrement_stock()  # COD
-       → Order.objects.create(...) + OrderLine(...)
-       → shared.events.publish(OrderPlacedV1(...))   # ghi vào outbox, cùng transaction
-  → serializers.OrderOutput(order).data
+  → serializers.CheckoutInput.validate()                 # kiểm tra dữ liệu vào, có payment_method và expected_total
+  → services.checkout.place_order(...)
+       # 1. Ngoài transaction: chưa giữ khoá nào khi gọi ra ngoài
+       → catalog.contracts.get_variants_for_sale()         # Giá áp dụng, snapshot
+       → promotions.contracts.evaluate_voucher()           # nếu có Voucher
+       → shipping.contracts.quote_fee()                    # cache báo giá, GHN, hoặc Phí ship dự phòng
+       → tính tổng, áp ngưỡng miễn phí ship (OrderingSettings), so với expected_total
+                                                           # lệch → PriceChanged (409 PRICE_CHANGED)
+       # 2. Trong transaction.atomic, khoá theo thứ tự cố định: Tồn kho → Voucher
+       → inventory.contracts.reserve_stock(expires_at=…)   # online: Giữ hàng 15 phút
+         hoặc inventory.contracts.decrement_stock()        # COD
+       → promotions.contracts.redeem_voucher()             # khoá dòng Voucher
+       → Order.objects.create(...) + OrderLine(..., voucher_discount=…)
+       → COD: payments.contracts.start_cod_payment()
+              + shared.events.publish(OrderPlacedV1(...))  # ghi vào outbox, cùng transaction
+         online: không phát sự kiện
+  → serializers.OrderOutput(order).data                  # Khách vãng lai nhận thêm lookup_token
 ```
 
-Sau khi commit, relay đẩy `ordering.order-placed` sang Celery, `notifications.handlers` gửi email.
+Sau khi commit, với đơn COD relay đẩy `ordering.order-placed` sang Celery và `notifications.handlers` gửi email "Đặt đơn thành công". Với đơn online, Người mua gọi tiếp `POST /store/orders/{code}/payments`; `ordering.order-placed` chỉ phát khi Thanh toán thành công và đơn vào `PLACED` (T3).
 
 ## 7. Nội dung chính của từng module con
 
@@ -319,76 +336,86 @@ Các module con đều theo khuôn ở mục 6. Bảng dưới chỉ liệt kê 
 
 | File | Nội dung |
 |---|---|
-| `models/user.py` | `User` (custom user, `AUTH_USER_MODEL = "modules.User"`): email, `kind` (`customer` / `staff` / `admin`), `language`, `token_version`, `is_active`, `anonymized_at` |
+| `models/account.py` | `Account` (custom user, `AUTH_USER_MODEL = "modules.Account"`): email (duy nhất cho mọi `kind`: một email = một Tài khoản), `kind` (`customer` / `staff` / `admin`), `language`, `token_version`, `is_active`, `email_verified`, `anonymized_at` |
 | `models/address.py` | `Address`: sổ địa chỉ của Khách hàng, FK tới `shared.geo.Ward` |
-| `models/auth.py` | `RefreshToken`: `jti`, `family_id`, `token_hash`, `expires_at`, `used_at`, `revoked_at`; `PasswordResetToken` |
+| `models/auth.py` | `RefreshToken`: `jti`, `family_id`, `token_hash`, `expires_at`, `used_at`, `revoked_at`; `PasswordResetToken`, `EmailVerificationToken` (chỉ lưu hash) |
 | `models/privacy.py` | `Consent` (phiên bản chính sách, kênh, thời điểm), `ErasureRequest`, `CustomerDataAccessLog` |
 | `auth/tokens.py` | Phát hành và kiểm tra access/refresh JWT bằng PyJWT (Ed25519, `kid`) |
 | `auth/authentication.py` | `JWTAuthentication`, class xác thực của DRF |
-| `auth/google.py` | Xác minh `id_token` Google bằng `google-auth` |
-| `services/` | `register`, `login`, `refresh`, `logout`, `request_password_reset`, `reset_password`, `login_with_google`, `record_consent`, `erase_customer` |
-| `events.py` | `CustomerRegisteredV1`, `CustomerErasedV1`, `PasswordResetRequestedV1` |
-| `contracts.py` | `get_customer(id)`, `CustomerDTO` |
+| `auth/google.py` | Xác minh `id_token` Google bằng `google-auth`. Khớp Tài khoản có `email_verified = false` thì đánh dấu đã xác thực, `set_unusable_password`, tăng `token_version`, thu hồi mọi refresh token |
+| `services/` | `register`, `verify_email`, `login`, `refresh`, `logout`, `request_password_reset`, `reset_password`, `login_with_google`, `record_consent`, `erase_customer` |
+| `events.py` | `CustomerRegisteredV1`, `EmailVerifiedV1`, `CustomerErasedV1`, `PasswordResetRequestedV1`. Payload chỉ mang `account_id` hoặc `erasure_request_id`, không mang token hay PII |
+| `contracts.py` | `get_customer(id)`, `CustomerDTO`, `record_consent(...)`, `issue_email_verification_link(account_id) -> str`, `issue_password_reset_link(account_id) -> str` (sinh token lúc gửi email), `get_erasure_subject(erasure_request_id) -> ErasureSubjectDTO` |
 
 ### 7.2. `catalog`
 
 | File | Nội dung |
 |---|---|
-| `models/` | `Category` (cây danh mục), `Product` (`status`, `weight_grams`), `ProductColor` + `ProductImage` (ảnh theo màu), `Variant` (`sku`, `size`, `color`, `price`, `is_available`), `SalePrice` (`variant`, `price`, `starts_at`, `ends_at`) |
-| `selectors/` | Danh sách và chi tiết Sản phẩm có lọc, tìm kiếm (`unaccent` + `pg_trgm`), tính giá áp dụng |
-| `contracts.py` | `get_variants_for_sale(ids) -> list[VariantForSaleDTO]` (giá áp dụng, mức giảm, snapshot tên/SKU, cân nặng), `set_variant_availability(variant_id, available)` (do `inventory` gọi) |
+| `models/` | `Category` (cây Danh mục), `Product` (`status`, `weight_grams`), `ProductColor` + `ProductImage` (ảnh theo màu), `Variant` (`sku`, `size`, `product_color`, `price`, `is_available`, `status`), `SalePrice` (`variant`, `price`, `starts_at`, `ends_at`) |
+| `selectors/` | Danh sách và chi tiết Sản phẩm có lọc, tìm kiếm (`unaccent` + `pg_trgm`), tính Giá áp dụng |
+| `contracts.py` | `get_variants_for_sale(ids) -> list[VariantForSaleDTO]` (Giá áp dụng, mức giảm, snapshot tên/SKU, cân nặng), `set_variant_availability(variant_id, available)` (do `inventory` gọi, chỉ khi trạng thái còn/hết hàng thực sự đổi, để không khoá thêm dòng `catalog_variant` ở mỗi lần Giữ hàng) |
 
 ### 7.3. `inventory`
 
 | File | Nội dung |
 |---|---|
-| `models/` | `Warehouse`, `StockItem` (`variant`, `warehouse`, `on_hand`), `StockReservation` (`reference`, `variant`, `quantity`, `expires_at`, `status`), `StockMovement` (lịch sử) |
-| `services/` | `reserve`, `commit_reservation`, `release_reservation`, `decrement`, `restock`, `adjust`. Đều khoá dòng `StockItem` bằng `select_for_update` và sắp xếp khoá theo `variant_id` để tránh deadlock |
-| `contracts.py` | `reserve_stock`, `commit_reservation`, `release_reservation`, `decrement_stock`, `restock`, `get_available(variant_ids)` |
+| `models/` | `Warehouse`, `StockItem` (`variant`, `warehouse`, `on_hand`, `reserved`), `StockReservation` (`reference`, `stock_item`, `quantity`, `expires_at`, `status`), `StockMovement` (lịch sử) |
+| `services/` | `reserve`, `commit_reservation`, `release_reservation`, `decrement`, `restock`, `adjust`. Đều khoá dòng `StockItem` bằng `select_for_update` và sắp xếp khoá theo `variant_id` để tránh deadlock. Khi Số lượng bán được chuyển giữa 0 và lớn hơn 0 thì gọi `catalog.contracts.set_variant_availability` |
+| `contracts.py` | `reserve_stock(reference, items, expires_at)` (`expires_at` lấy từ Đơn hàng), `commit_reservation`, `release_reservation`, `decrement_stock`, `restock`, `get_available(variant_ids)` |
 
 ### 7.4. `promotions`
 
 | File | Nội dung |
 |---|---|
-| `models/` | `Voucher` (`code`, `kind`, `value`, `max_discount`, `min_order_value`, `usage_limit`, `per_customer_limit`, `starts_at`, `ends_at`, `is_active`), `VoucherRedemption` (`voucher`, `reference`, `customer_id` hoặc `phone`, `status`) |
-| `contracts.py` | `evaluate_voucher(code, subtotal, customer) -> VoucherQuoteDTO`, `redeem_voucher(...)`, `release_voucher(reference)` |
+| `models/` | `Voucher` (`code`, `kind`, `value`, `max_discount`, `min_order_value`, `usage_limit`, `per_customer_limit`, `starts_at`, `ends_at`, `is_active`), `VoucherRedemption` (`voucher`, `reference`, `customer_id`, `phone`, `discount`, `status`) |
+| `services/` | `per_customer_limit` đếm các lượt trùng `customer_id` **hoặc** trùng số điện thoại liên hệ của đơn đang đặt (BR-VCH-07) |
+| `handlers.py` | `identity.customer-erased`: ẩn danh `phone` trong `VoucherRedemption` |
+| `contracts.py` | `evaluate_voucher(code, subtotal, customer_id, phone) -> VoucherQuoteDTO`, `redeem_voucher(...)`, `release_voucher(reference)` |
 
 ### 7.5. `payments`
 
 | File | Nội dung |
 |---|---|
-| `models/` | `Payment` (`reference`, `method`, `amount`, `status`, `provider_txn_ref`), `PaymentEvent` (dữ liệu IPN gốc, `UNIQUE(provider, provider_event_id)`), `Refund` (`payment`, `amount`, `status`, `provider_refund_ref`, `recorded_by`) |
+| `models/` | `Payment` (`reference`, `method` = `cod`/`online`, `gateway` = `vnpay`/`momo` hoặc null với COD, `amount`, `status`, `provider_txn_ref`, `expires_at`), `PaymentEvent` (dữ liệu IPN gốc, `UNIQUE(provider, provider_event_id)`), `Refund` (`payment`, `amount`, `channel` = `gateway`/`bank_transfer`, `status`, `provider_refund_ref`, `recorded_by`) |
 | `providers/base.py` | Interface `PaymentGateway`: `create_payment_url`, `verify_ipn`, `query_transaction` |
-| `providers/vnpay.py`, `momo.py` | Adapter thật: ký HMAC-SHA512 (VNPay), HMAC-SHA256 (MoMo) |
+| `providers/vnpay.py`, `momo.py` | Adapter thật: ký HMAC-SHA512 (VNPay), HMAC-SHA256 (MoMo). Link hết hạn theo `expires_at` do `ordering` truyền vào (phút thứ 10 kể từ khi đặt đơn, `PAYMENT_LINK_TTL`) |
 | `providers/fake.py` | Fake Gateway cho local và test ([ADR 0005](../adr/0005-provider-adapters-fake-gateways.md)) |
-| `api/webhooks/` | `POST /api/v1/webhooks/vnpay/ipn`, `/momo/ipn` |
-| `api/dev/` | Trang Fake Gateway, **chỉ đăng ký URL khi `settings.local`** |
-| `tasks.py` | `reconcile_pending_payments` (mỗi 5 phút) |
-| `events.py` | `PaymentSucceededV1`, `PaymentFailedV1`, `RefundRecordedV1` |
-| `contracts.py` | `start_payment(reference, amount, method, return_url) -> PaymentStartDTO`, `request_refund(reference, amount, reason)` |
+| `api/webhooks/` | `GET /api/v1/webhooks/vnpay/ipn`, `POST /momo/ipn` |
+| `api/dev/` | Trang Fake Gateway, **chỉ đăng ký URL khi `FAKE_PROVIDERS_ENABLED`** (bật ở local và test) |
+| `tasks.py` | `reconcile_pending_payments` (mỗi 5 phút; Thanh toán online quá `expires_at` mà cổng báo chưa trả thì chuyển `expired`) |
+| `events.py` | `PaymentSucceededV1` (`reference`, `payment_id`, `amount`, `gateway`), `PaymentFailedV1` (`reference`, `payment_id`, `reason`), `RefundRecordedV1` (`reference`, `refund_id`, `amount`) |
+| `contracts.py` | `start_payment(reference, amount, gateway, return_url, expires_at) -> PaymentStartDTO`, `start_cod_payment(reference, amount)`, `record_cod_collected(reference)`, `cancel_cod_payment(reference)`, `request_refund(reference, amount, reason, channel)`, `redact_provider_payloads(reference)` |
 
 ### 7.6. `shipping`
 
 | File | Nội dung |
 |---|---|
-| `models/` | `Shipment` (`reference`, `provider_order_code`, `status`, `fee`, `cod_amount`), `ShipmentEvent` (webhook gốc), `GhnLocationMapping` (`shared.geo.Ward` → ID của GHN) |
-| `providers/base.py` | Interface `ShippingProvider`: `quote`, `create_shipment`, `get_status` |
-| `providers/ghn.py`, `fake.py` | Adapter GHN và Fake |
+| `models/` | `Shipment` (`reference`, `provider_order_code`, `status`, `fee`, `cod_amount`), `ShipmentEvent` (webhook gốc), `GhnLocationMapping` (`shared.geo.Ward` → ID của GHN), `ShippingSettings` (singleton: Phí ship dự phòng) |
+| `providers/base.py` | Interface `ShippingProvider`: `quote`, `create_shipment`, `get_status`, `cancel_shipment` |
+| `providers/ghn.py`, `fake.py` | Adapter GHN và Fake (Fake chỉ dùng được khi `FAKE_PROVIDERS_ENABLED`) |
 | `api/webhooks/` | `POST /api/v1/webhooks/ghn` |
-| `tasks.py` | `reconcile_shipments` (mỗi 15 phút) |
-| `events.py` | `ShipmentCreatedV1`, `ShipmentDeliveredV1`, `ShipmentReturnedV1` |
-| `contracts.py` | `quote_fee(ward_id, weight_grams, value) -> ShippingQuoteDTO` (tự dùng phí dự phòng khi GHN lỗi), `create_shipment(ShipmentRequestDTO)` |
+| `tasks.py` | `create_shipment` (queue `integrations`, có retry; thành công phát `ShipmentCreatedV1`, hết retry thì Vận đơn `failed` và phát `ShipmentCreationFailedV1`), `reconcile_shipments` (mỗi 15 phút) |
+| `events.py` | `ShipmentCreatedV1`, `ShipmentCreationFailedV1`, `ShipmentDeliveredV1`, `ShipmentReturnedV1` |
+| `contracts.py` | `quote_fee(ward_code, weight_grams, value) -> ShippingQuoteDTO` (phí GHN thật, hoặc Phí ship dự phòng khi GHN lỗi; `ordering` tự áp ngưỡng miễn phí ship), `request_shipment(ShipmentRequestDTO)` (tạo Vận đơn `requested` và đẩy task), `cancel_shipment(reference)`, `get_shipment_status(reference) -> ShipmentStatusDTO \| None`, `redact_provider_payloads(reference)` |
 
 ### 7.7. `ordering`
 
 Xem ví dụ đầy đủ ở mục 6. Máy trạng thái của `Order.status` dùng `django-fsm-2`, mỗi transition ứng với một dòng T1–T13 trong [05-order-lifecycle.md](../business/05-order-lifecycle.md). Transition chỉ được gọi từ `services/transitions.py`.
 
+| Chủ đề | Nội dung |
+|---|---|
+| Mã đơn | `FS<YYMM>-` + 6 ký tự Crockford Base32 ngẫu nhiên, `UNIQUE`, trùng thì sinh lại. Không dùng sequence |
+| Hạn thanh toán | `Order.expires_at` = lúc đặt + `RESERVATION_TTL` (15 phút), là nguồn duy nhất, truyền xuống `reserve_stock`. Link thanh toán của mọi lần thử hết hạn ở lúc đặt + `PAYMENT_LINK_TTL` (phút thứ 10), sớm hơn Giữ hàng 5 phút; quá mốc này không bắt đầu Thanh toán mới được (`PaymentWindowClosed` → `PAYMENT_WINDOW_CLOSED`) |
+| Cờ cần xử lý | `OrderFlag` được bật từ handler hoặc service (`raise_flag`), Staff gỡ qua back-office (`resolve_flag`, có ghi lịch sử) |
+| Cấu hình | `OrderingSettings`: ngưỡng miễn phí ship, hạn mức COD |
+| `handlers.py` | `payment-succeeded`: T3, hoặc Hoàn tiền + cờ `unexpected_payment` nếu đơn không ở `PENDING_PAYMENT`. `payment-failed` với `amount_mismatch`: cờ `payment_amount_mismatch`. `refund-recorded`: Đổi trả → `refunded`. `shipment-created`: T10, hoặc `cancel_shipment` + cờ `shipment_after_cancel` nếu đơn đã huỷ. `shipment-creation-failed`: cờ `shipment_failed`. `shipment-delivered`: T11. `shipment-returned`: T12. `email-verified`: `attach_guest_orders`. `customer-erased`: `anonymize_orders` và gọi `redact_provider_payloads` của `shipping`, `payments` |
+
 ### 7.8. `notifications`
 
 | File | Nội dung |
 |---|---|
-| `models/` | `EmailLog` (`event_id`, `to`, `template`, `language`, `status`, `sent_at`) |
-| `handlers.py` | Mỗi sự kiện cần gửi email (BR-NTF-01) có một handler; lấy dữ liệu đơn qua `ordering.contracts` |
+| `models/` | `EmailLog` (`event_id`, `to_address`, `template`, `language`, `status`, `sent_at`) |
+| `handlers.py` | Mỗi sự kiện cần gửi email (BR-NTF-01) có một handler; lấy dữ liệu đơn qua `ordering.contracts`. Email xác thực và đặt lại mật khẩu gọi `identity.contracts.issue_email_verification_link` / `issue_password_reset_link` ngay lúc gửi. `identity.customer-erased`: ẩn danh `to_address` |
 | `services/email.py` | Render template theo ngôn ngữ, gửi qua Django email backend (Mailpit ở local, SES trên AWS) |
 | `tasks.py` | `send_email` có retry |
 
@@ -441,7 +468,7 @@ forbidden_modules = ["shared.events.relay", "shared.events.tasks"]
 | Thời gian | Lưu UTC (`USE_TZ = True`); hiển thị theo `Asia/Ho_Chi_Minh` |
 | Thời điểm hiện tại | Luôn gọi `shared.clock.now()`, không gọi `timezone.now()` trực tiếp trong service |
 | Xoá dữ liệu | Không xoá cứng dữ liệu đã có đơn; dùng `status` / `archived` |
-| Transaction | Chỉ mở ở tầng `services`; sự kiện ghi vào outbox trong cùng transaction |
+| Transaction | Chỉ mở ở tầng `services`; sự kiện ghi vào outbox trong cùng transaction. **Không gọi HTTP ra ngoài** (GHN, VNPay, MoMo, gửi email) bên trong `transaction.atomic`. Khoá dòng theo thứ tự cố định: dòng Tồn kho (theo `variant_id`) rồi tới dòng Voucher |
 | Kiểu dữ liệu | Mọi hàm trong `services`, `selectors`, `contracts` có type hints đầy đủ; `mypy --strict` cho `modules/*/services`, `modules/*/selectors` và `contracts`. Dùng cú pháp mới: `list[X]`, `X \| None`, không dùng `List`, `Optional` |
 
 ### 9.2. Đặt tên
@@ -525,14 +552,15 @@ django_settings_module = "config.settings.test"
 | Comment | Giải thích **vì sao**, không diễn giải lại code làm gì |
 
 ```python
-def place_order(*, cart_id: UUID, payment_method: PaymentMethod) -> Order:
-    """Tạo Đơn hàng từ Giỏ hàng, Giữ hàng hoặc trừ Tồn kho tuỳ phương thức thanh toán.
+def place_order(*, cart_id: UUID, payment_method: PaymentMethod, expected_total: Money) -> Order:
+    """Tạo Đơn hàng từ Giỏ hàng, Giữ hàng hoặc trừ Tồn kho tuỳ Phương thức thanh toán.
 
-    Áp dụng BR-INV-04 (đơn COD trừ Tồn kho ngay) và BR-INV-05 (đơn thanh toán online
-    tạo Giữ hàng 15 phút).
+    Áp dụng BR-INV-04 (đơn COD trừ Tồn kho ngay), BR-INV-05 (đơn thanh toán online
+    tạo Giữ hàng 15 phút) và BR-ORD-07 (tổng tiền phải khớp tổng Người mua đã xem).
 
     Raises:
-        OutOfStock: Một Biến thể trong Giỏ hàng không đủ tồn kho.
+        PriceChanged: Tổng tính lại khác expected_total.
+        OutOfStock: Một Biến thể trong Giỏ hàng không đủ Số lượng bán được.
         VoucherNotApplicable: Voucher hết hạn hoặc không đạt giá trị tối thiểu.
     """
 ```

@@ -14,7 +14,7 @@ Website bán lẻ thời trang B2C cho thị trường Việt Nam. Backend là *
 | Backend | Python 3.13, Django 5.2 LTS, DRF, PostgreSQL 18, Redis, Celery |
 | Kiến trúc | Modular monolith: app `modules` với 8 module con, app `shared` hạ tầng |
 | Local | PostgreSQL cài trên máy; API, Celery, Redis, Mailpit chạy bằng Docker Compose |
-| Production (mục tiêu) | AWS Singapore: ECS Fargate, RDS, ElastiCache, S3, SES |
+| Production (mục tiêu) | AWS Singapore: ECS Fargate (Django và Next.js BFF, cùng VPC), RDS, ElastiCache, S3, SES |
 
 ## Tài liệu
 
@@ -55,7 +55,8 @@ Thuật ngữ chung: **[GLOSSARY.md](./GLOSSARY.md)** — đọc trước tiên.
 | [0005](./docs/adr/0005-provider-adapters-fake-gateways.md) | Adapter cho nhà cung cấp, cổng giả lập và job đối soát |
 | [0006](./docs/adr/0006-modular-monolith.md) | Modular monolith: một app `modules` chia module con |
 | [0007](./docs/adr/0007-events-outbox-celery-no-kafka.md) | Sự kiện qua Outbox + Celery, chưa dùng Kafka |
-| [0008](./docs/adr/0008-uuid-v7-primary-keys.md) | Khoá chính UUID v7, sinh bằng `uuid-utils` |
+| [0008](./docs/adr/0008-uuid-v7-primary-keys.md) | Khoá chính UUID v7, sinh qua hàm bọc `shared.models.uuid7` |
+| [0009](./docs/adr/0009-nextjs-bff-django-private.md) | Next.js là BFF cho mọi request, Django chỉ mở webhook ra internet |
 
 ### Cấu hình cho agent (`docs/agents/`)
 

@@ -4,7 +4,7 @@ Backend là một Django project duy nhất, deploy một lần. Toàn bộ nghi
 
 Ranh giới giữa các module được giữ bằng ba quy tắc:
 
-1. Module chỉ gọi nhau qua `contracts.py` của module kia. `import-linter` kiểm tra quy tắc này trong CI.
+1. Module chỉ gọi nhau qua `contracts.py` của module kia, và chỉ được import thêm `events.py` của module lớp dưới để nghe sự kiện. `import-linter` kiểm tra quy tắc này trong CI.
 2. Việc phụ, và mọi thông báo từ lớp dưới lên lớp trên, đi qua sự kiện phát sau khi transaction commit.
 3. Phụ thuộc chỉ đi một chiều, từ trên xuống:
    `notifications` → `ordering` → `inventory`, `promotions` → `identity`, `catalog`, `payments`, `shipping` → `shared`.
@@ -26,5 +26,7 @@ Lý do chọn một app thay vì mỗi module một app: team muốn chỉ có m
 - Toàn bộ model dùng chung một thư mục `modules/migrations/`. Khi hai nhánh code cùng tạo migration sẽ phải merge (`makemigrations --merge`). CI cần chặn trường hợp migration bị trùng số.
 - `modules/models.py` phải import model của mọi module con thì Django mới nhận ra. Tương tự, `management/commands/`, `templates/` và `admin.py` phải nằm ở gốc `modules/`.
 - Mỗi model phải khai báo `Meta.db_table` có tiền tố theo module con (ví dụ `catalog_product`), để nhìn tên bảng là biết thuộc module nào.
+- Django đăng ký model theo `app_label.ModelName`, mà mọi module con dùng chung `app_label = "modules"`. Vì vậy tên class model phải duy nhất trong toàn app `modules`, kể cả khi nằm ở hai module con khác nhau.
 - Ranh giới giữa các module chỉ được kiểm tra ở mức import trong code, nên `import-linter` là bắt buộc trong CI, không phải tuỳ chọn.
+- FK khai báo bằng chuỗi (ví dụ `settings.AUTH_USER_MODEL`) không tạo import nên `import-linter` không thấy. Chiều của các FK này phải được kiểm tra khi review.
 - Dòng đơn hàng lưu bản chụp (snapshot) tên, SKU và đơn giá tại thời điểm đặt, nên vẫn đúng dù Sản phẩm thay đổi sau này.

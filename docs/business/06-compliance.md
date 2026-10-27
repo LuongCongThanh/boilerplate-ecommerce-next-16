@@ -53,8 +53,12 @@ Hệ thống **không** lưu thông tin thẻ hoặc tài khoản thanh toán; p
 
 ## 4. Thông tin bắt buộc công khai trên website
 
-Đây là phần nội dung của Frontend, nhưng Backend phải cho phép Admin cấu hình:
+Website phải công khai:
 
 - Thông tin doanh nghiệp: tên, địa chỉ, mã số thuế, số điện thoại, email.
 - Chính sách: bảo mật, đổi trả, vận chuyển, thanh toán, giải quyết khiếu nại.
 - Logo "Đã thông báo Bộ Công Thương" sau khi hoàn thành thủ tục.
+
+**MVP**: các nội dung này là nội dung tĩnh trong repo Frontend, sửa qua Pull Request và deploy lại. Backend **không** lưu và Admin không sửa được trên back-office, vì các nội dung này hiếm khi đổi. Khi cần Admin tự sửa thì đưa vào giai đoạn sau.
+
+Riêng phiên bản chính sách bảo mật mà Người mua đồng ý vẫn được Backend lưu cùng bằng chứng đồng ý (CMP-02).
