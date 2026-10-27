@@ -101,7 +101,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `notifications` | Email theo sự kiện |
 
 ```mermaid
-graph BT
+graph TB
     shared[shared]
     identity[identity] --> shared
     catalog[catalog] --> shared
