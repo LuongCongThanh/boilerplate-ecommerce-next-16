@@ -69,10 +69,10 @@ Mọi adapter thật đều có: timeout (kết nối 3 giây, đọc 10 giây),
 |---|---|
 | Báo giá | API tính phí theo địa chỉ giao, cân nặng, kích thước mặc định, giá trị hàng. Timeout **3 giây**; lỗi hoặc quá thời gian thì trả Phí ship dự phòng (BR-SHP-02). `quote_fee` luôn trả phí GHN thật (hoặc Phí ship dự phòng); việc miễn phí ship theo ngưỡng do `ordering` áp khi tính tổng đơn |
 | Cache báo giá | Cache trong Redis 10 phút theo `(ward_code, weight_bucket)` để giảm số lần gọi khi Người mua sửa giỏ. Checkout dùng cache này và gọi GHN **trước** khi mở transaction |
-| Tạo vận đơn | Chạy nền. Khi Staff bàn giao (T10), `ordering` gọi `shipping.contracts.request_shipment`: tạo Vận đơn `requested` rồi đẩy task lên queue `integrations`. Task gửi GHN thông tin người nhận, các Biến thể, `cod_amount` (đơn COD). Thành công: Vận đơn `created`, phát `shipping.shipment-created`. Lỗi sau khi hết retry: Vận đơn `failed`, phát `shipping.shipment-creation-failed` |
-| Huỷ vận đơn | `cancel_shipment` gọi API huỷ đơn của GHN. Dùng khi Vận đơn được tạo xong cho một đơn đã bị huỷ (cờ `shipment_after_cancel`) **[Cần xác minh API huỷ của GHN và trạng thái nào còn huỷ được]** |
+| Tạo vận đơn | Chạy nền. Khi Staff bàn giao (T10), `ordering` gọi `shipping.contracts.request_shipment`: tạo Vận đơn `requested` rồi đẩy task lên queue `integrations` sau khi transaction commit. Task gửi GHN thông tin người nhận, các Biến thể, `cod_amount` (đơn COD), và gửi `reference` làm mã đơn phía cửa hàng để GHN không tạo trùng khi task bị đẩy lại **[Cần xác minh GHN có chặn trùng mã đơn phía cửa hàng không]**. Thành công: Vận đơn `created`, phát `shipping.shipment-created`. Lỗi sau khi hết retry: Vận đơn `failed`, phát `shipping.shipment-creation-failed` |
+| Huỷ vận đơn | Dùng khi Vận đơn được tạo xong cho một đơn đã bị huỷ (cờ `shipment_after_cancel`). `ordering` gọi `shipping.contracts.request_shipment_cancellation`: ghi Vận đơn `cancel_requested` rồi đẩy task lên queue `integrations` sau khi transaction commit. Task gọi `cancel_shipment` của adapter (API huỷ đơn của GHN). Thành công: Vận đơn `cancelled`. Lỗi sau khi hết retry: giữ `cancel_requested`, báo Sentry; Staff xử lý tay theo Cờ cần xử lý đã gắn **[Cần xác minh API huỷ của GHN và trạng thái nào còn huỷ được]** |
 | Webhook | `POST /api/v1/webhooks/ghn`: lưu `shipping_shipment_event`, đổi trạng thái GHN sang trạng thái nội bộ, phát sự kiện |
-| Đối soát | Mỗi 15 phút truy vấn các Vận đơn chưa ở trạng thái cuối |
+| Đối soát | Mỗi 15 phút truy vấn các Vận đơn chưa ở trạng thái cuối. Vận đơn kẹt ở `requested` hoặc `cancel_requested` quá 15 phút thì đẩy lại task, vì task đẩy sau commit có thể mất nếu process dừng ngay sau commit |
 
 ### 4.1. Ánh xạ trạng thái GHN
 
@@ -81,6 +81,7 @@ Mọi adapter thật đều có: timeout (kết nối 3 giây, đọc 10 giây),
 | (nội bộ: đã nhận yêu cầu, task chưa gọi GHN xong) | `requested` | — |
 | (nội bộ: GHN tạo vận đơn thành công) | `created` | `ShipmentCreatedV1` |
 | (nội bộ: tạo vận đơn lỗi sau khi hết retry) | `failed` | `ShipmentCreationFailedV1` |
+| (nội bộ: đã nhận yêu cầu huỷ, task chưa gọi GHN xong) | `cancel_requested` | — |
 | `ready_to_pick`, `picking` | `picking` | — |
 | `delivering`, `transporting` | `in_transit` | — |
 | `delivered` | `delivered` | `ShipmentDeliveredV1` |

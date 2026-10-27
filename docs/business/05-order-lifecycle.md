@@ -84,7 +84,11 @@ Cách xử lý chung (BR-PAY-05):
 
 ### 4.2. Thông báo tới không theo thứ tự
 
-Các thông báo từ Cổng thanh toán và GHN có thể tới trễ hoặc lặp lại. Hệ thống **không dựa vào thứ tự tới**: mỗi thông báo được đối chiếu với trạng thái hiện tại của đơn, và chỉ áp dụng nếu chuyển trạng thái đó hợp lệ theo bảng ở mục 3. Thông báo trùng chỉ được xử lý một lần.
+Các thông báo từ Cổng thanh toán và GHN có thể tới trễ hoặc lặp lại. Hệ thống **không dựa vào thứ tự tới**: mỗi thông báo được đối chiếu với trạng thái hiện tại của đơn, và chỉ áp dụng nếu chuyển trạng thái đó hợp lệ theo bảng ở mục 3. Cụ thể:
+
+- Thông báo trùng, hoặc báo một bước đơn đã qua: bỏ qua.
+- Thông báo tới sớm hơn bước trước nó, ví dụ GHN báo đã giao khi hệ thống chưa ghi nhận Vận đơn tạo xong: hệ thống giữ lại và thử áp dụng lại sau. Thử lại nhiều lần mà vẫn chưa áp dụng được thì báo cho đội kỹ thuật ([07-async-events-jobs.md](../architecture/07-async-events-jobs.md) mục 1.3).
+- Thông báo mâu thuẫn với trạng thái đơn, ví dụ GHN báo đã giao khi đơn đã Hoàn hàng: không áp dụng, chỉ ghi log.
 
 ### 4.3. Huỷ khi đơn Đang giao
 

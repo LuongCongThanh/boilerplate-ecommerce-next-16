@@ -9,6 +9,7 @@ Quy ước viết code test (factory, mock, thời gian) nằm ở [02-backend-s
 - Test chạy trên **PostgreSQL thật** (`fashion_test`), không dùng SQLite và không mock ORM. Lý do: nghiệp vụ dựa vào `select_for_update`, `EXCLUDE`, `unaccent`.
 - Chỉ giả lập **hệ thống bên ngoài**: Fake Gateway cho thanh toán và vận chuyển ([ADR 0005](../adr/0005-provider-adapters-fake-gateways.md)), `respx` cho `httpx`. Fake Gateway và `FakeShippingProvider` được bật bằng `FAKE_PROVIDERS_ENABLED=true` trong `settings/test.py` (cùng cờ với local), nên flow test gọi được trang và endpoint IPN của Fake Gateway. CI không gọi sandbox thật của VNPay, MoMo, GHN (mục 7).
 - Celery chạy đồng bộ (`CELERY_TASK_ALWAYS_EAGER=True` trong `settings/test.py`); thời gian cố định bằng `time-machine`.
+- Test chạy trong transaction không bao giờ commit, nên task đẩy bằng `shared.tasks.enqueue_on_commit` không tự chạy, và relay (một tiến trình riêng) không tự gửi sự kiện. Test service cần task chạy thì dùng `django_capture_on_commit_callbacks(execute=True)`; flow test dùng `drain_events()` (mục 2.7).
 - Nghiệp vụ được test ở tầng **service**. Tầng API chỉ test những gì thuộc về HTTP, không test lại nghiệp vụ.
 - Repo là public: dữ liệu mẫu phải là giá trị giả rõ ràng ([11-git-workflow.md](./11-git-workflow.md) mục 8).
 
@@ -20,7 +21,7 @@ Xếp theo số lượng, từ nhiều đến ít. Hàm thuần không cần DB 
 |---|---|---|---|
 | 1 | Service | `modules/<module>/tests/test_services_<chủ đề>.py` | Business rule, chuyển trạng thái, sự kiện ghi vào outbox |
 | 2 | Concurrency | `modules/<module>/tests/test_concurrency_<chủ đề>.py` | Không bán vượt Tồn kho, không vượt lượt Voucher, không deadlock |
-| 3 | Handler và outbox | `modules/<module>/tests/test_handlers.py`, `shared/events/tests/` | Handler idempotent, relay gửi đúng và gửi lại được |
+| 3 | Handler và outbox | `modules/<module>/tests/test_handlers.py`, `shared/events/tests/` | Mỗi sự kiện chỉ xử lý một lần, sự kiện tới sai thứ tự, consumer xử lý đúng từng loại lỗi, relay gửi đúng và gửi lại được |
 | 4 | API | `modules/<module>/tests/test_api_<store\|backoffice\|webhooks>.py` | Phân quyền, `X-Lookup-Token`, định dạng lỗi, `Idempotency-Key`, throttle theo `X-Client-IP`, N+1 query |
 | 5 | Bảo mật auth/JWT | `modules/identity/tests/test_services_tokens.py` | Theo OWASP JWT Cheat Sheet |
 | 6 | Adapter nhà cung cấp | `modules/<payments\|shipping>/tests/test_providers_<tên>.py` | Chữ ký VNPay/MoMo, gọi HTTP lỗi, IPN bất thường |
@@ -62,11 +63,12 @@ Bắt buộc có 3 test:
 |---|---|
 | N khách cùng Giữ hàng hoặc trừ Tồn kho cho K cái cuối cùng của một Biến thể (N > K) | Đúng K lần thành công, N − K lần ném `OUT_OF_STOCK`, Tồn kho không âm |
 | N khách cùng dùng một Voucher còn K lượt | Đúng K lượt được dùng, không vượt `usage_limit` |
-| Hai Đơn hàng cùng chứa 2 Biến thể nhưng thứ tự Dòng đơn hàng ngược nhau, cùng dùng một Voucher | Cả hai hoàn tất, không deadlock (khoá dòng Tồn kho theo thứ tự `variant_id`, rồi mới khoá Voucher) |
+| Hai Đơn hàng cùng chứa 2 Biến thể nhưng thứ tự Dòng đơn hàng ngược nhau, cùng dùng một Voucher | Cả hai hoàn tất, không deadlock (khoá dòng Tồn kho theo thứ tự `variant_id`, rồi dòng Biến thể nếu trạng thái còn hàng đổi, rồi mới khoá Voucher) |
 
 ### 2.3. Handler và outbox
 
 - Mỗi handler: gọi 2 lần với cùng một sự kiện thì chỉ xử lý 1 lần (`ProcessedEvent`).
+- Consumer ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 1.3), test trong `shared/events/tests/` bằng handler giả: ném `RetryLater` thì retry và không ghi `ProcessedEvent`; ném `DomainError` khác thì tác động của handler bị rollback, `ProcessedEvent` vẫn được ghi, không retry; ném exception khác thì retry.
 - Relay: chỉ đọc sự kiện chưa gửi, đánh dấu `dispatched_at` sau khi gửi, gửi lại được khi lần trước lỗi.
 - Handler hết retry: ghi một dòng vào `shared_failed_event`; `manage.py retry_failed_events` chạy lại được và ghi `retried_at`.
 - Job Celery Beat ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 3.2): chạy 2 lần liên tiếp cho ra cùng kết quả.
@@ -76,7 +78,10 @@ Bắt buộc có các test handler sau:
 | Kịch bản | Kỳ vọng |
 |---|---|
 | `payments.payment-succeeded` tới khi đơn đã `PLACED` (trả hai lần) hoặc đã `CANCELLED` (BR-PAY-05) | Đơn giữ nguyên trạng thái; tạo yêu cầu Hoàn tiền cho đúng Thanh toán đó; gắn Cờ cần xử lý `unexpected_payment` |
-| `shipping.shipment-created` tới khi đơn đã `CANCELLED` | Gọi `shipping.contracts.cancel_shipment`; gắn Cờ cần xử lý `shipment_after_cancel` |
+| `shipping.shipment-created` tới khi đơn đã `CANCELLED` | Gọi `shipping.contracts.request_shipment_cancellation` (Vận đơn `cancel_requested`); gắn Cờ cần xử lý `shipment_after_cancel` |
+| `shipping.shipment-delivered` tới khi đơn còn `PACKING` (T10 chưa chạy) | Ném `TransitionNotYetValid`; đơn giữ nguyên |
+| `shipping.shipment-delivered` tới khi đơn đã `DELIVERED` hoặc `COMPLETED` | Không làm gì, không ném lỗi |
+| `shipping.shipment-delivered` tới khi đơn đã `RETURNED_TO_SENDER` | Ném `InvalidTransition`; đơn giữ nguyên |
 | `identity.email-verified` | Chỉ gắn các đơn có `contact_email` khớp (không phân biệt hoa thường) và chưa có `customer_id`; đơn đã thuộc Tài khoản khác không bị đổi |
 | Đặt đơn online (T1) rồi IPN thành công (T3) | T1 không ghi sự kiện nào vào outbox; T3 ghi đúng một `ordering.order-placed` |
 
@@ -109,7 +114,9 @@ Thêm hai kịch bản về Tài khoản:
 
 ### 2.7. Flow xuyên module
 
-Flow test gọi qua **HTTP** (`api_client`, `staff_client`, endpoint IPN của Fake Gateway), để đi qua đúng auth, `X-Lookup-Token`, `Idempotency-Key` và serializer như thực tế. Các bước do Celery Beat kích hoạt thì dùng `time-machine` để vượt mốc thời gian, rồi gọi thẳng task (ví dụ `ordering.cancel_expired_pending_orders`, `ordering.complete_delivered_orders`). Việc tạo Vận đơn chạy nền nhưng Celery chạy đồng bộ trong test, nên bàn giao xong là có Vận đơn. Đánh dấu bằng `@pytest.mark.flow`.
+Flow test gọi qua **HTTP** (`api_client`, `staff_client`, endpoint IPN của Fake Gateway), để đi qua đúng auth, `X-Lookup-Token`, `Idempotency-Key` và serializer như thực tế. Các bước do Celery Beat kích hoạt thì dùng `time-machine` để vượt mốc thời gian, rồi gọi thẳng task (ví dụ `ordering.cancel_expired_pending_orders`, `ordering.complete_delivered_orders`). Đánh dấu bằng `@pytest.mark.flow`.
+
+Sau mỗi bước HTTP, flow test gọi `drain_events()` trong `shared/testing/events.py`. Hàm này chạy các callback `on_commit` đang chờ, chạy relay rồi handler (Celery chạy đồng bộ), và lặp lại cho tới khi outbox hết sự kiện chưa gửi. Ví dụ sau IPN thành công, `drain_events()` đưa `payments.payment-succeeded` tới handler của `ordering` để chạy T3; sau khi bàn giao, nó chạy task tạo Vận đơn và đưa `shipping.shipment-created` tới T10.
 
 Bắt buộc có 6 flow:
 

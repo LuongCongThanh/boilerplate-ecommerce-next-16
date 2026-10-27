@@ -315,7 +315,7 @@ erDiagram
         string reference UK "Mã đơn"
         string provider "ghn | fake"
         string provider_order_code UK "null khi requested"
-        string status "requested | created | picking | in_transit | delivered | returning | returned | failed | cancelled"
+        string status "requested | created | picking | in_transit | delivered | returning | returned | failed | cancel_requested | cancelled"
         bigint fee
         bigint cod_amount
     }
@@ -341,7 +341,7 @@ erDiagram
 
 - `shipping_ghn_location_mapping` dùng để đổi mã địa chỉ 2 cấp của hệ thống sang ID của GHN, phòng trường hợp GHN vẫn dùng 3 cấp (xem [06-integrations.md](./06-integrations.md)).
 - `shipping_shipment.fee` là phí GHN thực tính cho cửa hàng, khác `ordering_order.shipping_fee` là phí Người mua trả (bằng 0 khi được miễn phí ship).
-- Vận đơn được tạo ở trạng thái `requested`, task nền gọi GHN rồi chuyển sang `created` hoặc `failed`.
+- Vận đơn được tạo ở trạng thái `requested`, task nền gọi GHN rồi chuyển sang `created` hoặc `failed`. Huỷ cũng chạy nền: `cancel_requested`, rồi `cancelled` khi GHN huỷ xong.
 - `shipping_settings` là singleton (một dòng duy nhất), Admin sửa qua back-office, lịch sử thay đổi ghi bằng `django-pghistory`.
 
 ## 8. `ordering`

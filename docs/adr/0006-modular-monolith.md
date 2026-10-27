@@ -28,5 +28,6 @@ Lý do chọn một app thay vì mỗi module một app: team muốn chỉ có m
 - Mỗi model phải khai báo `Meta.db_table` có tiền tố theo module con (ví dụ `catalog_product`), để nhìn tên bảng là biết thuộc module nào.
 - Django đăng ký model theo `app_label.ModelName`, mà mọi module con dùng chung `app_label = "modules"`. Vì vậy tên class model phải duy nhất trong toàn app `modules`, kể cả khi nằm ở hai module con khác nhau.
 - Ranh giới giữa các module chỉ được kiểm tra ở mức import trong code, nên `import-linter` là bắt buộc trong CI, không phải tuỳ chọn.
-- FK khai báo bằng chuỗi (ví dụ `settings.AUTH_USER_MODEL`) không tạo import nên `import-linter` không thấy. Chiều của các FK này phải được kiểm tra khi review.
+- FK sang module khác khai báo bằng class được import, kể cả FK tới `Account`, không khai báo bằng chuỗi (`settings.AUTH_USER_MODEL`, `"modules.Variant"`). FK khai báo bằng chuỗi không tạo import nên `import-linter` không kiểm tra được chiều của nó.
+- FK chỉ để database giữ toàn vẹn dữ liệu, không để truy vấn xuyên module: không dùng lookup `__`, `select_related`, `prefetch_related` đi vào model của module khác, mà lấy dữ liệu qua `contracts.py`. Nếu không, schema của module kia sẽ ngầm thành một phần interface của nó. ORM đi qua FK mà không cần import, nên quy tắc này chỉ kiểm tra được khi review.
 - Dòng đơn hàng lưu bản chụp (snapshot) tên, SKU và đơn giá tại thời điểm đặt, nên vẫn đúng dù Sản phẩm thay đổi sau này.

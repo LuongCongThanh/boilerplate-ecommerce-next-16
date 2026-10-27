@@ -24,7 +24,7 @@ sequenceDiagram
     end
     RD->>W: dispatch_event
     W->>DB: INSERT shared_processed_event (event_id, handler) — trùng thì bỏ qua
-    W->>H: Gọi handler trong cùng transaction
+    W->>H: Gọi handler trong savepoint của cùng transaction
 ```
 
 ### 1.1. Bảo đảm
@@ -38,12 +38,21 @@ sequenceDiagram
 
 ### 1.2. Không bảo đảm
 
-**Thứ tự.** Handler phải tự kiểm tra trạng thái hiện tại, và máy trạng thái của Đơn hàng từ chối mọi chuyển trạng thái không hợp lệ ([05-order-lifecycle.md](../business/05-order-lifecycle.md) mục 4.2).
+**Thứ tự.** Handler không tự kiểm tra thứ tự. Với Đơn hàng, các transition do sự kiện kích hoạt tự đối chiếu trạng thái hiện tại ([02-backend-structure.md](./02-backend-structure.md) mục 7.7, [05-order-lifecycle.md](../business/05-order-lifecycle.md) mục 4.2): sự kiện cho bước đơn đã qua thì không làm gì, sự kiện tới sớm thì báo consumer thử lại sau, sự kiện mâu thuẫn với trạng thái đơn thì bị từ chối.
 
 ### 1.3. Retry và lỗi
 
-- Handler lỗi: Celery retry tối đa **5 lần**, giãn cách tăng dần (10 giây → khoảng 30 phút).
-- Hết số lần retry: ghi một dòng vào `shared_failed_event` (`event_id`, `handler`, `error`, `failed_at`), gửi cảnh báo Sentry. Staff kỹ thuật chạy lại bằng `manage.py retry_failed_events`: lệnh đọc bảng này, đẩy lại `dispatch_event` cho từng cặp và ghi `retried_at`.
+Handler báo kết quả cho consumer bằng cách kết thúc bình thường hoặc ném exception. Consumer quyết định theo bảng sau, nên tác giả handler không phải tự bắt lỗi:
+
+| Handler kết thúc bằng | Consumer làm gì |
+|---|---|
+| Chạy xong | Commit tác động của handler cùng dòng `shared_processed_event` |
+| `RetryLater`, ví dụ `TransitionNotYetValid` (sự kiện tới trước một sự kiện khác mà nó phụ thuộc) | Rollback, retry theo lịch bên dưới |
+| `DomainError` khác, ví dụ `InvalidTransition` | Rollback savepoint của handler nhưng vẫn ghi `shared_processed_event`, không retry. Log `WARNING` `event_rejected` kèm `event_type`, `handler`, `code` |
+| Exception khác | Rollback, retry theo lịch bên dưới |
+
+- Lịch retry: Celery retry tối đa **5 lần**, giãn cách tăng dần (10 giây → khoảng 30 phút).
+- Hết số lần retry: ghi một dòng vào `shared_failed_event` (`event_id`, `handler`, `error`, `failed_at`), gửi cảnh báo Sentry. Áp dụng cả cho `RetryLater`: chờ hết retry mà vẫn chưa áp dụng được nghĩa là sự kiện đứng trước đã mất hoặc đang lỗi. Staff kỹ thuật chạy lại bằng `manage.py retry_failed_events`: lệnh đọc bảng này, đẩy lại `dispatch_event` cho từng cặp và ghi `retried_at`.
 - Relay lỗi kết nối Redis: sự kiện vẫn nằm trong outbox, relay tự thử lại.
 
 ## 2. Danh mục sự kiện
@@ -65,7 +74,7 @@ Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `ev
 | `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | ordering: T3. Nếu đơn không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi lần khác): gọi `payments.contracts.request_refund` và gắn cờ `unexpected_payment` (BR-PAY-05) |
 | `payments.payment-failed` v1 | payments | `reference`, `payment_id`, `reason` | ordering: ghi nhận, cho phép thử lại; `reason = amount_mismatch` thì gắn cờ `payment_amount_mismatch` |
 | `payments.refund-recorded` v1 | payments | `reference`, `refund_id`, `amount` | notifications: email "Đã hoàn tiền"; ordering: chuyển Đổi trả liên quan sang `refunded` |
-| `shipping.shipment-created` v1 | shipping | `reference`, `provider_order_code` | ordering: T10. Nếu đơn đã `CANCELLED`: gọi `shipping.contracts.cancel_shipment` và gắn cờ `shipment_after_cancel` |
+| `shipping.shipment-created` v1 | shipping | `reference`, `provider_order_code` | ordering: T10. Nếu đơn đã `CANCELLED`: gọi `shipping.contracts.request_shipment_cancellation` và gắn cờ `shipment_after_cancel` |
 | `shipping.shipment-creation-failed` v1 | shipping | `reference`, `reason` | ordering: gắn cờ `shipment_failed`, đơn giữ `PACKING` |
 | `shipping.shipment-delivered` v1 | shipping | `reference`, `delivered_at` | ordering: T11 |
 | `shipping.shipment-returned` v1 | shipping | `reference` | ordering: T12 |
@@ -81,7 +90,9 @@ T1 (đơn online vào `PENDING_PAYMENT`) không phát sự kiện nào; Người
 | `default` | Job theo lịch | Chung |
 | `events` | `dispatch_event` | Chung |
 | `emails` | Gửi email | Chung; tách riêng khi tải lớn |
-| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Chung; giới hạn số chạy đồng thời để không vượt rate limit của nhà cung cấp |
+| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo và huỷ Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Chung; giới hạn số chạy đồng thời để không vượt rate limit của nhà cung cấp |
+
+Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không gọi `.delay()` trực tiếp ([02-backend-structure.md](./02-backend-structure.md) mục 9.1).
 
 ### 3.2. Lịch job (Celery Beat, lưu bằng `django-celery-beat`)
 
@@ -89,7 +100,7 @@ T1 (đơn online vào `PENDING_PAYMENT`) không phát sự kiện nào; Người
 |---|---|---|---|
 | `ordering.cancel_expired_pending_orders` | Mỗi phút | ordering | T4 |
 | `payments.reconcile_pending_payments` | Mỗi 5 phút | payments | T3, ADR 0005; Payment quá hạn link mà chưa thanh toán thì chuyển `expired` |
-| `shipping.reconcile_shipments` | Mỗi 15 phút | shipping | T11, T12 |
+| `shipping.reconcile_shipments` | Mỗi 15 phút | shipping | T11, T12; đẩy lại task cho Vận đơn kẹt ở `requested` hoặc `cancel_requested` quá 15 phút |
 | `ordering.complete_delivered_orders` | Mỗi giờ | ordering | T13 |
 | `ordering.purge_expired_guest_carts` | Mỗi ngày 03:00 | ordering | BR-CRT-02 |
 | `shared.purge_old_outbox_events` | Mỗi ngày 03:30 | shared | Giữ 90 ngày |
