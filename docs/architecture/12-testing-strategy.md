@@ -51,7 +51,14 @@ Ngoài quy tắc chung, bắt buộc có các test service sau, vì đây là nh
 | Hoàn tiền khi Đổi trả một phần có Voucher (BR-RET-07) | Đơn 3 × 200.000đ, Voucher giảm 60.000đ, được miễn phí ship; trả 1 áo → hoàn 180.000đ, không truy thu phí ship |
 | Giới hạn lượt dùng Voucher mỗi người (BR-VCH-07) | Khách hàng đã dùng hết lượt rồi đặt tiếp như Khách vãng lai bằng cùng số điện thoại → Voucher bị từ chối |
 | Staff huỷ đơn `PACKING` khi Vận đơn đang `requested` (T9) | Ném lỗi `SHIPMENT_IN_PROGRESS`, đơn giữ nguyên `PACKING` |
-| Thanh toán của đơn COD | T2 tạo Thanh toán COD `pending`; T11 chuyển `succeeded`; huỷ đơn hoặc Hoàn hàng chuyển `cancelled` |
+| Thanh toán của đơn COD | T2 tạo Thanh toán COD `pending`; T11 chuyển `succeeded`; huỷ đơn hoặc Hoàn hàng chuyển `cancelled`. Không thao tác nào ghi `payments.payment-succeeded` vào outbox, nên đơn COD giao xong không bị tạo Hoàn tiền |
+| Hàng chờ xuất (BR-INV-10) | Đặt đơn COD: Tồn kho giảm, Hàng chờ xuất tăng đúng số lượng; T10 xoá Hàng chờ xuất; huỷ trước Bàn giao (T7, T9) trả Hàng chờ xuất về Tồn kho |
+| Kiểm kê (BR-INV-12) | Tồn kho 7, Hàng chờ xuất 3, số đếm 10 → không điều chỉnh; số đếm 9 → điều chỉnh −1 loại `stock_count` |
+| Điều chỉnh giảm vượt Số lượng bán được (BR-INV-11) | Ném `INSUFFICIENT_AVAILABLE`; Tồn kho không đổi |
+| Chấp nhận Đổi trả một phần (BR-RET-08) | Chỉ phần `accepted_quantity` của dòng `restock = true` được cộng lại Tồn kho; Hoàn tiền tính trên số lượng được chấp nhận; không dòng nào được chấp nhận thì yêu cầu `rejected` |
+| Doanh thu khi Người mua trả tiền hai lần (BR-REV-01) | Hoàn tiền theo BR-PAY-05 không bị trừ; Doanh thu của đơn bằng Tổng tiền đơn |
+| Đặt đơn vãng lai bằng email của Tài khoản đã xác thực (BR-ORD-08) | Đơn có `customer_id` ngay khi tạo |
+| Hạ Giá bán xuống ≤ Giá khuyến mãi đang hoặc sắp hiệu lực (BR-PRC-05) | Ném `LIST_PRICE_BELOW_SALE_PRICE`; Giá bán không đổi |
 
 ### 2.2. Concurrency
 
@@ -77,7 +84,10 @@ Bắt buộc có các test handler sau:
 
 | Kịch bản | Kỳ vọng |
 |---|---|
-| `payments.payment-succeeded` tới khi đơn đã `PLACED` (trả hai lần) hoặc đã `CANCELLED` (BR-PAY-05) | Đơn giữ nguyên trạng thái; tạo yêu cầu Hoàn tiền cho đúng Thanh toán đó; gắn Cờ cần xử lý `unexpected_payment` |
+| `payments.payment-succeeded` tới khi đơn đã `PLACED` (trả hai lần) hoặc đã `CANCELLED` (BR-PAY-05) | Đơn giữ nguyên trạng thái; tạo yêu cầu Hoàn tiền cho đúng Thanh toán đó; gắn Cờ cần xử lý `unexpected_payment`; ghi `ordering.unexpected-payment-received` vào outbox |
+| `payments.payment-failed` với `reason = amount_mismatch` (BR-PAY-04) | Tạo yêu cầu Hoàn tiền đúng `amount_received`; gắn cờ `payment_amount_mismatch`; đơn giữ `PENDING_PAYMENT` |
+| `payments.refund-recorded` cho Hoàn tiền không gắn Đổi trả nào | Không Đổi trả nào đổi trạng thái |
+| `ordering.order-cancelled` với `previous_status = PENDING_PAYMENT` (T4, T5) | notifications không gửi email (BR-NTF-01) |
 | `shipping.shipment-created` tới khi đơn đã `CANCELLED` | Gọi `shipping.contracts.request_shipment_cancellation` (Vận đơn `cancel_requested`); gắn Cờ cần xử lý `shipment_after_cancel` |
 | `shipping.shipment-delivered` tới khi đơn còn `PACKING` (T10 chưa chạy) | Ném `TransitionNotYetValid`; đơn giữ nguyên |
 | `shipping.shipment-delivered` tới khi đơn đã `DELIVERED` hoặc `COMPLETED` | Không làm gì, không ném lỗi |
@@ -127,7 +137,7 @@ Bắt buộc có 6 flow:
 | `test_online_payment_failure_flow.py` | IPN thất bại, hoặc không ai trả tiền và Giữ hàng hết hạn sau 15 phút → đơn huỷ, Số lượng bán được và lượt Voucher được trả lại |
 | `test_cancel_paid_order_flow.py` | Huỷ Đơn hàng đã thanh toán online → Hoàn tiền về đúng Cổng thanh toán đã nhận tiền |
 | `test_returned_to_sender_flow.py` | Giao thất bại → Hoàn hàng → Staff xác nhận hàng về Kho → nhập lại Tồn kho; với đơn COD, Thanh toán COD chuyển `cancelled` |
-| `test_return_refund_flow.py` | Đổi trả một phần được chấp nhận → Hoàn tiền đúng số tiền theo BR-RET-07 → Đổi trả chuyển `refunded` khi có `payments.refund-recorded`; Đơn hàng chỉ Hoàn tất khi không còn Đổi trả nào mở |
+| `test_return_refund_flow.py` | Đổi trả một phần được chấp nhận theo từng dòng (BR-RET-08) → Hoàn tiền đúng số tiền theo BR-RET-07 → Đổi trả chuyển `refunded` khi có `payments.refund-recorded`; Đơn hàng chỉ Hoàn tất khi không còn Đổi trả nào mở |
 
 ## 3. Marker của pytest
 

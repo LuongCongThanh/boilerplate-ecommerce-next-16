@@ -47,7 +47,7 @@ Mọi adapter thật đều có: timeout (kết nối 3 giây, đọc 10 giây),
 |---|---|
 | Tạo thanh toán | Dựng URL có các tham số `vnp_*`, ký **HMAC-SHA512** bằng `vnp_HashSecret`; `vnp_TxnRef` = `payments_payment.provider_txn_ref` (mỗi lần thử sinh mã mới); `vnp_Amount` = số tiền × 100 theo đặc tả VNPay |
 | Hết hạn | `vnp_ExpireDate` = `payments_payment.expires_at` do `ordering` truyền vào: lúc đặt đơn + `PAYMENT_LINK_TTL` (phút thứ 10), giống nhau cho mọi lần thử. Link hết hạn sớm hơn Giữ hàng (phút thứ 15) 5 phút, để IPN đến muộn và một vòng Đối soát vẫn kịp trước khi Giữ hàng hết hạn |
-| IPN | `GET /api/v1/webhooks/vnpay/ipn`: kiểm tra chữ ký → tìm Payment → so số tiền → chống trùng → cập nhật → trả `RspCode` theo đặc tả (`00` thành công, `01` không tìm thấy, `02` đã xử lý, `04` sai số tiền, `97` sai chữ ký). Sai số tiền thì Payment `failed` và phát `payments.payment-failed` với `reason = amount_mismatch` (`ordering` gắn cờ `payment_amount_mismatch`) |
+| IPN | `GET /api/v1/webhooks/vnpay/ipn`: kiểm tra chữ ký → tìm Payment → so số tiền → chống trùng → cập nhật → trả `RspCode` theo đặc tả (`00` thành công, `01` không tìm thấy, `02` đã xử lý, `04` sai số tiền, `97` sai chữ ký). Sai số tiền thì Payment `failed` và phát `payments.payment-failed` với `reason = amount_mismatch` và `amount_received` (`ordering` tự tạo Hoàn tiền cho số tiền đã nhận và gắn cờ `payment_amount_mismatch`, BR-PAY-04) |
 | Đối soát | API truy vấn giao dịch (`querydr`) cho Payment `pending` quá 2 phút. Payment đã quá `expires_at` mà cổng báo chưa thanh toán thì chuyển `expired` |
 | Hoàn tiền | MVP: Staff thao tác thủ công trên trang quản trị VNPay (BR-REF-03) |
 
@@ -69,7 +69,7 @@ Mọi adapter thật đều có: timeout (kết nối 3 giây, đọc 10 giây),
 |---|---|
 | Báo giá | API tính phí theo địa chỉ giao, cân nặng, kích thước mặc định, giá trị hàng. Timeout **3 giây**; lỗi hoặc quá thời gian thì trả Phí ship dự phòng (BR-SHP-02). `quote_fee` luôn trả phí GHN thật (hoặc Phí ship dự phòng); việc miễn phí ship theo ngưỡng do `ordering` áp khi tính tổng đơn |
 | Cache báo giá | Cache trong Redis 10 phút theo `(ward_code, weight_bucket)` để giảm số lần gọi khi Người mua sửa giỏ. Checkout dùng cache này và gọi GHN **trước** khi mở transaction |
-| Tạo vận đơn | Chạy nền. Khi Staff bàn giao (T10), `ordering` gọi `shipping.contracts.request_shipment`: tạo Vận đơn `requested` rồi đẩy task lên queue `integrations` sau khi transaction commit. Task gửi GHN thông tin người nhận, các Biến thể, `cod_amount` (đơn COD), và gửi `reference` làm mã đơn phía cửa hàng để GHN không tạo trùng khi task bị đẩy lại **[Cần xác minh GHN có chặn trùng mã đơn phía cửa hàng không]**. Thành công: Vận đơn `created`, phát `shipping.shipment-created`. Lỗi sau khi hết retry: Vận đơn `failed`, phát `shipping.shipment-creation-failed` |
+| Tạo vận đơn | Chạy nền. Khi Staff bàn giao (T10), `ordering` gọi `shipping.contracts.request_shipment`: tạo Vận đơn `requested` rồi đẩy task lên queue `integrations` sau khi transaction commit. Task gửi GHN thông tin người nhận, các Biến thể, `cod_amount` (đơn COD), và gửi `reference` làm mã đơn phía cửa hàng để GHN không tạo trùng khi task bị đẩy lại **[Cần xác minh GHN có chặn trùng mã đơn phía cửa hàng không]**. Thành công: Vận đơn `created`, phát `shipping.shipment-created`. Lỗi sau khi hết retry: Vận đơn `failed`, phát `shipping.shipment-creation-failed`. Staff bàn giao lại thì `request_shipment` dùng lại chính dòng Vận đơn đó (`failed` → `requested`) rồi đẩy lại task, nên `reference` vẫn `UNIQUE` |
 | Huỷ vận đơn | Dùng khi Vận đơn được tạo xong cho một đơn đã bị huỷ (cờ `shipment_after_cancel`). `ordering` gọi `shipping.contracts.request_shipment_cancellation`: ghi Vận đơn `cancel_requested` rồi đẩy task lên queue `integrations` sau khi transaction commit. Task gọi `cancel_shipment` của adapter (API huỷ đơn của GHN). Thành công: Vận đơn `cancelled`. Lỗi sau khi hết retry: giữ `cancel_requested`, báo Sentry; Staff xử lý tay theo Cờ cần xử lý đã gắn **[Cần xác minh API huỷ của GHN và trạng thái nào còn huỷ được]** |
 | Webhook | `POST /api/v1/webhooks/ghn`: lưu `shipping_shipment_event`, đổi trạng thái GHN sang trạng thái nội bộ, phát sự kiện |
 | Đối soát | Mỗi 15 phút truy vấn các Vận đơn chưa ở trạng thái cuối. Vận đơn kẹt ở `requested` hoặc `cancel_requested` quá 15 phút thì đẩy lại task, vì task đẩy sau commit có thể mất nếu process dừng ngay sau commit |
@@ -97,7 +97,7 @@ Hệ thống dùng địa chỉ **2 cấp** (tỉnh/thành → phường/xã) th
 
 - Bảng `shipping_ghn_location_mapping` ánh xạ `ward_code` của hệ thống sang ID của GHN.
 - Dữ liệu ánh xạ được nạp bằng một management command từ API danh mục địa chỉ của GHN.
-- Phường/xã chưa có ánh xạ: dùng Phí ship dự phòng và gắn Cờ cần xử lý `ghn_ward_unmapped` để Staff xử lý thủ công trước khi bàn giao.
+- Phường/xã chưa có ánh xạ: dùng Phí ship dự phòng và gắn Cờ cần xử lý `ghn_ward_unmapped`. Admin chọn ID tỉnh, quận, phường của GHN cho phường/xã đó trên back-office (`settings/ghn-locations`, US-1004), rồi Staff bàn giao như bình thường và gỡ cờ. Màn này có thể bỏ nếu kiểm tra cho thấy GHN đã dùng địa chỉ 2 cấp.
 - **Việc cần làm đầu tiên khi bắt đầu tích hợp GHN**: kiểm tra tài liệu GHN hiện hành và cập nhật mục này.
 
 ## 5. Google OAuth

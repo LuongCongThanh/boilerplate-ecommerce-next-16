@@ -64,22 +64,25 @@ Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `ev
 | Sự kiện | Phát bởi | Dữ liệu chính | Handler |
 |---|---|---|---|
 | `identity.customer-registered` v1 | identity | `account_id`, `language` | notifications: gọi `identity.contracts.issue_email_verification_link` rồi gửi email xác thực |
-| `identity.email-verified` v1 | identity | `account_id` | ordering: gắn các Đơn hàng có `contact_email` khớp (không phân biệt hoa thường) và `customer_id` null vào Tài khoản |
+| `identity.email-verified` v1 | identity | `account_id` | Phát mỗi khi email chuyển sang đã xác thực, kể cả qua đăng nhập Google. ordering: gắn các Đơn hàng có `contact_email` khớp (không phân biệt hoa thường) và `customer_id` null vào Tài khoản (BR-ORD-08) |
 | `identity.password-reset-requested` v1 | identity | `account_id` | notifications: gọi `identity.contracts.issue_password_reset_link` rồi gửi email đặt lại mật khẩu |
 | `identity.customer-erased` v1 | identity | `erasure_request_id` | ordering: ẩn danh Đơn hàng, xoá Giỏ hàng, gọi `shipping.contracts.redact_provider_payloads` và `payments.contracts.redact_provider_payloads` theo `reference`; promotions: ẩn danh `phone` trong lượt dùng Voucher; notifications: ẩn danh `to_address`. Mọi handler lấy đối tượng cần ẩn danh qua `identity.contracts.get_erasure_subject` |
 | `ordering.order-placed` v1 | ordering | `order_code`, `payment_method`, `total` | Phát khi đơn **vào** `PLACED` (T2, T3). notifications: COD gửi "Đặt đơn thành công", online gửi "Thanh toán thành công" |
-| `ordering.order-cancelled` v1 | ordering | `order_code`, `reason`, `refund_required` | notifications: email "Đơn đã huỷ" |
+| `ordering.order-cancelled` v1 | ordering | `order_code`, `reason`, `refund_required`, `previous_status` | notifications: email "Đơn đã huỷ", trừ khi `previous_status = PENDING_PAYMENT` (T4, T5: BR-NTF-01) |
+| `ordering.unexpected-payment-received` v1 | ordering | `order_code`, `amount` | Phát cùng lúc gắn cờ `unexpected_payment` (BR-PAY-05). notifications: email báo tiền sẽ được hoàn; với đơn đã huỷ thì báo thêm đơn đã hết hạn ([05](../business/05-order-lifecycle.md) mục 4.1) |
 | `ordering.order-shipped` v1 | ordering | `order_code`, `tracking_code` | notifications: email "Đang giao" |
 | `ordering.order-delivered` v1 | ordering | `order_code` | notifications: email "Đã giao" |
-| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | ordering: T3. Nếu đơn không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi lần khác): gọi `payments.contracts.request_refund` và gắn cờ `unexpected_payment` (BR-PAY-05) |
-| `payments.payment-failed` v1 | payments | `reference`, `payment_id`, `reason` | ordering: ghi nhận, cho phép thử lại; `reason = amount_mismatch` thì gắn cờ `payment_amount_mismatch` |
-| `payments.refund-recorded` v1 | payments | `reference`, `refund_id`, `amount` | notifications: email "Đã hoàn tiền"; ordering: chuyển Đổi trả liên quan sang `refunded` |
-| `shipping.shipment-created` v1 | shipping | `reference`, `provider_order_code` | ordering: T10. Nếu đơn đã `CANCELLED`: gọi `shipping.contracts.request_shipment_cancellation` và gắn cờ `shipment_after_cancel` |
+| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | Chỉ phát cho Thanh toán online. ordering: T3. Nếu đơn không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi lần khác): gọi `payments.contracts.request_refund`, gắn cờ `unexpected_payment` và phát `ordering.unexpected-payment-received` (BR-PAY-05) |
+| `payments.payment-failed` v1 | payments | `reference`, `payment_id`, `reason`, `amount_received` | ordering: ghi nhận, cho phép thử lại; `reason = amount_mismatch` thì gọi `payments.contracts.request_refund` cho `amount_received` và gắn cờ `payment_amount_mismatch` (BR-PAY-04) |
+| `payments.refund-recorded` v1 | payments | `reference`, `refund_id`, `amount` | notifications: email "Đã hoàn tiền"; ordering: chuyển Đổi trả có `refund_id` khớp sang `refunded`, không khớp thì bỏ qua |
+| `shipping.shipment-created` v1 | shipping | `reference`, `provider_order_code` | ordering: T10, gọi `inventory.contracts.dispatch_stock` để xoá Hàng chờ xuất. Nếu đơn đã `CANCELLED`: gọi `shipping.contracts.request_shipment_cancellation` và gắn cờ `shipment_after_cancel` |
 | `shipping.shipment-creation-failed` v1 | shipping | `reference`, `reason` | ordering: gắn cờ `shipment_failed`, đơn giữ `PACKING` |
 | `shipping.shipment-delivered` v1 | shipping | `reference`, `delivered_at` | ordering: T11 |
 | `shipping.shipment-returned` v1 | shipping | `reference` | ordering: T12 |
 
 T1 (đơn online vào `PENDING_PAYMENT`) không phát sự kiện nào; Người mua chỉ nhận email khi thanh toán thành công. Không còn sự kiện `ordering.order-paid`: `order-placed` của đơn online đã mang ý nghĩa này.
+
+Thanh toán COD (`start_cod_payment`, `record_cod_collected`, `cancel_cod_payment`) **không** phát sự kiện, vì `ordering` là bên gọi nên đã biết kết quả. Nếu `record_cod_collected` phát `payments.payment-succeeded`, handler của `ordering` sẽ thấy đơn `DELIVERED` không ở `PENDING_PAYMENT` và tạo Hoàn tiền nhầm theo BR-PAY-05.
 
 ## 3. Celery
 
@@ -102,8 +105,9 @@ Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không g
 | `payments.reconcile_pending_payments` | Mỗi 5 phút | payments | T3, ADR 0005; Payment quá hạn link mà chưa thanh toán thì chuyển `expired` |
 | `shipping.reconcile_shipments` | Mỗi 15 phút | shipping | T11, T12; đẩy lại task cho Vận đơn kẹt ở `requested` hoặc `cancel_requested` quá 15 phút |
 | `ordering.complete_delivered_orders` | Mỗi giờ | ordering | T13 |
+| `ordering.compute_best_sellers` | Mỗi ngày 02:00 | ordering | BR-CAT-12; ghi kết quả vào `catalog` qua `catalog.contracts.set_best_seller_counts` |
 | `ordering.purge_expired_guest_carts` | Mỗi ngày 03:00 | ordering | BR-CRT-02 |
-| `shared.purge_old_outbox_events` | Mỗi ngày 03:30 | shared | Giữ 90 ngày |
+| `shared.purge_old_outbox_events` | Mỗi ngày 03:30 | shared | Giữ 90 ngày; xoá cả `shared_processed_event` cùng tuổi |
 | `shared.purge_idempotency_keys` | Mỗi ngày 03:45 | shared | Xoá `Idempotency-Key` quá 24 giờ |
 | `identity.purge_expired_tokens` | Mỗi ngày 04:00 | identity | Refresh token, reset token hết hạn |
 

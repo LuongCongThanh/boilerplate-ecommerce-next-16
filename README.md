@@ -57,6 +57,7 @@ Thuật ngữ chung: **[GLOSSARY.md](./GLOSSARY.md)** — đọc trước tiên.
 | [0007](./docs/adr/0007-events-outbox-celery-no-kafka.md) | Sự kiện qua Outbox + Celery, chưa dùng Kafka |
 | [0008](./docs/adr/0008-uuid-v7-primary-keys.md) | Khoá chính UUID v7, sinh qua hàm bọc `shared.models.uuid7` |
 | [0009](./docs/adr/0009-nextjs-bff-django-private.md) | Next.js là BFF cho mọi request, Django chỉ mở webhook ra internet |
+| [0010](./docs/adr/0010-stock-decremented-at-order-awaiting-dispatch.md) | Trừ Tồn kho khi bán, theo dõi Hàng chờ xuất tới lúc Bàn giao |
 
 ### Cấu hình cho agent (`docs/agents/`)
 

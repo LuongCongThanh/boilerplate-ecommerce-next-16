@@ -106,6 +106,8 @@ Cách đọc sơ đồ:
 ```mermaid
 graph TB
     notifications --> ordering
+    notifications --> identity
+    notifications --> payments
     ordering --> inventory
     ordering --> promotions
     ordering --> identity
