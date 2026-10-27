@@ -22,7 +22,13 @@ graph TB
     mail[Dịch vụ email<br/>Mailpit ở local / SES trên AWS]
     sentry[Sentry]
 
+    cdn[CDN ảnh<br/>CloudFront trên AWS]
+
     guest --> sf
+    guest -.->|trang thanh toán| vnpay
+    guest -.->|trang thanh toán| momo
+    guest -.->|trang đăng nhập| google
+    guest -.->|tải ảnh Sản phẩm| cdn
     staff --> bo
     sf -->|mạng nội bộ| be
     bo -->|mạng nội bộ| be
@@ -43,9 +49,9 @@ graph TB
 | Email | Gửi email (SMTP / SES) | — |
 | Sentry | Gửi lỗi và thông tin hiệu năng | — |
 
-Giai đoạn này **chỉ làm Backend**. Storefront và back-office được thể hiện để rõ ai sẽ gọi API.
+Giai đoạn này **chỉ làm Backend**. Storefront và back-office được thể hiện để rõ ai sẽ gọi API. Mũi tên đứt từ Người mua là các trang trình duyệt mở thẳng, không qua Next.js.
 
-Trình duyệt không bao giờ gọi thẳng Django. Next.js là BFF cho **mọi** request tới Django và chạy cùng mạng nội bộ với Django (VPC trên AWS, [ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Ngoài Next.js, trình duyệt chỉ tới trang thanh toán của VNPay / MoMo, trang đăng nhập Google, và tải ảnh Sản phẩm qua CloudFront trên AWS. Từ internet, chỉ IPN và webhook của VNPay, MoMo, GHN gọi thẳng vào Django (`/api/v1/webhooks/*`).
+Trình duyệt không bao giờ gọi thẳng Django. Next.js là BFF cho **mọi** request tới Django và chạy cùng mạng nội bộ với Django (VPC trên AWS, [ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Ngoài Next.js, trình duyệt chỉ tới trang thanh toán của VNPay / MoMo, trang đăng nhập Google, và tải ảnh Sản phẩm qua CloudFront trên AWS. Từ internet, chỉ IPN và webhook của VNPay, MoMo, GHN vào được Django mà không qua Next.js (`/api/v1/webhooks/*`). Trên AWS, các request này vẫn đi qua CloudFront, WAF và ALB public ([09](./09-deployment-aws-target.md)).
 
 ## 2. Mức 2: các container của Backend
 
@@ -91,7 +97,9 @@ graph TB
 | Celery Beat | Đẩy job theo lịch (huỷ đơn hết hạn, Đối soát, chuyển đơn sang Hoàn tất). Lịch lưu trong PostgreSQL (`DatabaseScheduler`) | **Đúng 1** |
 | Outbox relay | Đọc bảng `shared_outbox_event` rồi đẩy sự kiện sang Celery | 1. Lúc deploy có thể chồng 2 bản, vẫn an toàn nhờ `FOR UPDATE SKIP LOCKED` |
 | PostgreSQL | Dữ liệu nghiệp vụ, outbox, `Idempotency-Key`, lịch job | 1 (Multi-AZ trên AWS) |
-| Redis | Broker Celery, cache, throttling, cache `token_version`. Đặt `noeviction`, mọi key cache có TTL | 1 |
+| Redis | Broker Celery, cache, throttling, cache `token_version`. Đặt `noeviction`, mọi key cache có TTL. Redis lỗi thì API vẫn chạy, kể cả checkout (fail-open, xem [10](./10-nfr.md) mục 2) | 1 |
+
+API, Celery worker, Celery Beat và Outbox relay đều gửi lỗi về Sentry; sơ đồ không vẽ các mũi tên này cho gọn.
 
 ## 3. Mức 3: module bên trong Backend
 
@@ -99,8 +107,8 @@ Chi tiết xem [02-backend-structure.md](./02-backend-structure.md).
 
 Cách đọc sơ đồ:
 
-- Mũi tên liền `A --> B`: A được phép gọi B qua `B/contracts.py` và có FK tới model của B. Chiều ngược lại bị cấm.
-- Mũi tên đứt: module lớp dưới báo lên lớp trên bằng sự kiện. Tên sự kiện ghi tắt, bỏ tiền tố module. Sơ đồ chỉ nêu ví dụ, danh sách đầy đủ ở [07-async-events-jobs.md](./07-async-events-jobs.md) mục 2.
+- Mũi tên liền `A --> B`: A phụ thuộc trực tiếp vào B, tức là gọi `B/contracts.py`, nghe sự kiện trong `B/events.py` hoặc có FK tới model của B. Sơ đồ chỉ vẽ các phụ thuộc đang có. Phụ thuộc nào hợp lệ do luật theo lớp quyết định, xem [02-backend-structure.md](./02-backend-structure.md) mục 4.
+- Mũi tên đứt: chỉ minh hoạ hướng đi của sự kiện, từ module phát ở lớp dưới tới module nghe ở lớp trên. Đây không phải một loại phụ thuộc riêng: bên nghe đã có mũi tên liền tới bên phát. Tên sự kiện ghi tắt, bỏ tiền tố module. Sơ đồ chỉ nêu ví dụ, danh sách đầy đủ ở [07-async-events-jobs.md](./07-async-events-jobs.md) mục 2.
 - `shared` là app hạ tầng dùng chung, không phải module nghiệp vụ ([ADR 0006](../adr/0006-modular-monolith.md)).
 
 ```mermaid
@@ -161,7 +169,7 @@ sequenceDiagram
         N->>API: GET /store/orders/{code} (hỏi lại trạng thái)
     end
     R->>DB: Relay đọc outbox, worker chạy handler ordering
-    R->>DB: T3: Order → PLACED, Giữ hàng thành trừ Tồn kho, outbox(order-placed)
+    R->>DB: T3: Order → PLACED, chuyển Giữ hàng thành trừ Tồn kho và Hàng chờ xuất, outbox(order-placed)
     Note over R: handler notifications nhận order-placed và gửi email "Thanh toán thành công"
 ```
 
@@ -169,4 +177,6 @@ IPN và Return URL tới theo thứ tự bất kỳ. Người mua có thể về
 
 Nếu IPN không tới, job Đối soát `payments.reconcile_pending_payments` (mỗi 5 phút) truy vấn VNPay và xử lý giống hệt như khi nhận IPN.
 
-Tính từ lúc đặt đơn, link thanh toán hết hạn ở phút thứ 10, Giữ hàng hết hạn ở phút thứ 15. Khoảng đệm 5 phút dành cho IPN đến muộn và một vòng Đối soát. Nếu tiền vẫn về khi Đơn hàng không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi một lần Thanh toán khác), hệ thống tự tạo Hoàn tiền và gắn Cờ cần xử lý `unexpected_payment` (BR-PAY-05).
+Tính từ lúc đặt đơn, link thanh toán hết hạn ở phút thứ 10, Giữ hàng hết hạn ở phút thứ 15. Khoảng đệm 5 phút dành cho IPN đến muộn. Đối soát chỉ là lưới an toàn: job chạy theo lịch cố định chứ không canh theo từng đơn, nên không bảo đảm kịp trước phút 15.
+
+Điều kiện của T3 (Giữ hàng còn hiệu lực) và T4 (đơn vẫn ở `PENDING_PAYMENT`) được xét **lúc handler hoặc job chạy**, không phải lúc tiền về. Vì vậy nếu tiền về sát phút 15 và job `ordering.cancel_expired_pending_orders` chạy trước handler T3, đơn vẫn bị huỷ (T4) dù Người mua đã trả trong hạn. Đây là đánh đổi có chủ ý: Giữ hàng quá `expires_at` luôn vô hiệu ([03](./03-data-model.md)), và cửa sổ rủi ro chỉ vài giây trễ của relay. Nếu tiền vẫn về khi Đơn hàng không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi một lần Thanh toán khác), hệ thống tự tạo Hoàn tiền và gắn Cờ cần xử lý `unexpected_payment` (BR-PAY-05).
