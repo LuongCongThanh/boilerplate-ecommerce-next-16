@@ -18,7 +18,7 @@ Cách đạt được:
 - Danh sách Sản phẩm dùng `catalog_variant.is_available` (bản sao) để lọc "còn hàng" mà không phải join sang `inventory`.
 - Cache trong Redis: cây danh mục (5 phút), báo giá GHN (10 phút), dữ liệu địa giới (1 ngày).
 - Checkout không gọi HTTP ra ngoài bên trong transaction. Phí ship lấy từ cache báo giá (thường đã có từ bước `checkout/quote`) trước khi mở transaction, nên khoá dòng chỉ được giữ trong lúc ghi DB.
-- Trong transaction, checkout khoá dòng `inventory_stock_item` theo thứ tự `variant_id` rồi mới khoá dòng Voucher, để tránh deadlock khi nhiều người mua cùng lúc.
+- Mọi transaction khoá dòng theo cùng một thứ tự: Đơn hàng → Tồn kho (theo `variant_id`) → Biến thể (chỉ khi trạng thái còn hàng đổi) → Voucher ([02-backend-structure.md](./02-backend-structure.md) mục 9.1), để tránh deadlock khi nhiều người mua cùng lúc.
 
 ## 2. Độ sẵn sàng và phục hồi
 
@@ -29,14 +29,15 @@ Cách đạt được:
 | RTO (thời gian khôi phục) | ≤ 1 giờ |
 | Khi GHN lỗi | Vẫn checkout được (phí ship dự phòng) |
 | Khi VNPay/MoMo lỗi | Vẫn đặt được đơn COD |
-| Khi Redis lỗi | API vẫn chạy, kể cả checkout: cache và throttle fail-open (chỉ còn rate limit thô của WAF), kiểm tra `token_version` đọc thẳng PostgreSQL, `Idempotency-Key` lưu ở PostgreSQL. Sự kiện nằm chờ trong outbox. `/readyz` chỉ kiểm tra PostgreSQL, nên ALB không rút task API khi Redis lỗi |
+| Khi Redis lỗi | API vẫn chạy, kể cả checkout: cache và throttle fail-open (chỉ còn rate limit thô của WAF), kiểm tra `token_version` đọc thẳng PostgreSQL, `Idempotency-Key` lưu ở PostgreSQL. Sự kiện nằm chờ trong outbox. Task đẩy sau commit (`enqueue_on_commit`) bị bỏ qua và ghi log, không làm request lỗi; các job quét lại xử lý sau khi Redis chạy lại. `/readyz` chỉ kiểm tra PostgreSQL, nên ALB không rút task API khi Redis lỗi |
 
 ## 3. Bảo mật
 
 Xem [05-auth-security.md](./05-auth-security.md). Thêm:
 
 - Không lưu dữ liệu thẻ (thuộc phạm vi của VNPay, MoMo).
-- Mã hoá khi truyền (TLS 1.2+) và khi lưu (RDS, S3, ElastiCache bật encryption at rest).
+- Mã hoá khi truyền (TLS 1.2+) từ trình duyệt và nhà cung cấp tới CloudFront và ALB public. Trong VPC, Next.js gọi Django qua ALB nội bộ bằng HTTP; security group của ALB nội bộ chỉ nhận từ task Next.js. HTTPS nội bộ cần chứng chỉ riêng (ví dụ ACM Private CA) nên chưa dùng.
+- Mã hoá khi lưu: RDS, S3, ElastiCache bật encryption at rest.
 - Django API chỉ nhận request từ Next.js (BFF) qua ALB nội bộ; từ internet chỉ vào được `/api/v1/webhooks/*` ([ADR 0009](../adr/0009-nextjs-bff-django-private.md), [09](./09-deployment-aws-target.md)).
 - Rà soát lỗ hổng phụ thuộc trong mỗi lần chạy CI.
 

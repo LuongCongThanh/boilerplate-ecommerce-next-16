@@ -36,6 +36,8 @@ sequenceDiagram
 | Một handler lỗi không ảnh hưởng handler khác | Mỗi cặp (sự kiện, handler) là một Celery task riêng |
 | Có thể phát lại | Bảng outbox giữ sự kiện **90 ngày** **[Giả định]**; lệnh `manage.py replay_events --type … --since …` |
 
+Thêm handler mới cho một loại sự kiện đã có: sau deploy chạy `replay_events --type <sự kiện> --since <lúc bắt đầu deploy>`. Lý do: trong lúc deploy, relay bản cũ có thể đã gửi sự kiện mà không biết handler mới. Handler cũ không bị chạy lại nhờ `shared_processed_event`.
+
 ### 1.2. Không bảo đảm
 
 **Thứ tự.** Handler không tự kiểm tra thứ tự. Với Đơn hàng, các transition do sự kiện kích hoạt tự đối chiếu trạng thái hiện tại ([02-backend-structure.md](./02-backend-structure.md) mục 7.7, [05-order-lifecycle.md](../business/05-order-lifecycle.md) mục 4.2): sự kiện cho bước đơn đã qua thì không làm gì, sự kiện tới sớm thì báo consumer thử lại sau, sự kiện mâu thuẫn với trạng thái đơn thì bị từ chối.
@@ -59,6 +61,8 @@ Handler báo kết quả cho consumer bằng cách kết thúc bình thường h
 
 Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `events.py` của module phát.
 
+**Nâng version.** Thêm field tuỳ chọn thì giữ version. Đổi tên, bỏ field hoặc đổi nghĩa một field thì tạo class `V2`, và publisher chỉ phát V2. Handler giữ cả `@handles(..., version=1)` và `version=2` cho tới khi outbox không còn sự kiện V1 (sau 90 ngày), rồi mới bỏ handler V1.
+
 **Payload không chứa secret hay PII.** Payload chỉ mang ID, Mã đơn, số tiền và mã trạng thái. Handler cần dữ liệu nhạy cảm thì hỏi `contracts` của module sở hữu ngay lúc xử lý, ví dụ `identity.contracts.issue_password_reset_link(account_id)`. Lý do: outbox giữ sự kiện 90 ngày, có thể bị phát lại, và nằm trong mọi bản backup; token hay số điện thoại để ở đây sẽ sống lâu hơn và lộ rộng hơn bản gốc.
 
 | Sự kiện | Phát bởi | Dữ liệu chính | Handler |
@@ -72,13 +76,14 @@ Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `ev
 | `ordering.unexpected-payment-received` v1 | ordering | `order_code`, `amount` | Phát cùng lúc gắn cờ `unexpected_payment` (BR-PAY-05). notifications: email báo tiền sẽ được hoàn; với đơn đã huỷ thì báo thêm đơn đã hết hạn ([05](../business/05-order-lifecycle.md) mục 4.1) |
 | `ordering.order-shipped` v1 | ordering | `order_code`, `tracking_code` | notifications: email "Đang giao" |
 | `ordering.order-delivered` v1 | ordering | `order_code` | notifications: email "Đã giao" |
-| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | Chỉ phát cho Thanh toán online. ordering: T3. Nếu đơn không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi lần khác): gọi `payments.contracts.request_refund`, gắn cờ `unexpected_payment` và phát `ordering.unexpected-payment-received` (BR-PAY-05) |
+| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | Chỉ phát cho Thanh toán online. ordering: T3. Đơn còn `PENDING_PAYMENT` nhưng đã quá `expires_at` (job chưa kịp huỷ): chạy T4 trước rồi xử lý như đơn đã huỷ. Nếu đơn không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi lần khác): gọi `payments.contracts.request_refund`, gắn cờ `unexpected_payment` và phát `ordering.unexpected-payment-received` (BR-PAY-05) |
 | `payments.payment-failed` v1 | payments | `reference`, `payment_id`, `reason`, `amount_received` | ordering: ghi nhận, cho phép thử lại; `reason = amount_mismatch` thì gọi `payments.contracts.request_refund` cho `amount_received` và gắn cờ `payment_amount_mismatch` (BR-PAY-04) |
 | `payments.refund-recorded` v1 | payments | `reference`, `refund_id`, `amount` | notifications: email "Đã hoàn tiền"; ordering: chuyển Đổi trả có `refund_id` khớp sang `refunded`, không khớp thì bỏ qua |
 | `shipping.shipment-created` v1 | shipping | `reference`, `provider_order_code` | ordering: T10, gọi `inventory.contracts.dispatch_stock` để xoá Hàng chờ xuất. Nếu đơn đã `CANCELLED`: gọi `shipping.contracts.request_shipment_cancellation` và gắn cờ `shipment_after_cancel` |
 | `shipping.shipment-creation-failed` v1 | shipping | `reference`, `reason` | ordering: gắn cờ `shipment_failed`, đơn giữ `PACKING` |
 | `shipping.shipment-delivered` v1 | shipping | `reference`, `delivered_at` | ordering: T11 |
 | `shipping.shipment-returned` v1 | shipping | `reference` | ordering: T12 |
+| `shipping.shipment-exception` v1 | shipping | `reference`, `provider_status` | ordering: gắn cờ `shipment_exception`, đơn giữ `SHIPPING` cho tới khi Staff xử lý (T14) |
 
 T1 (đơn online vào `PENDING_PAYMENT`) không phát sự kiện nào; Người mua chỉ nhận email khi thanh toán thành công. Không còn sự kiện `ordering.order-paid`: `order-placed` của đơn online đã mang ý nghĩa này.
 
@@ -93,7 +98,7 @@ Thanh toán COD (`start_cod_payment`, `record_cod_collected`, `cancel_cod_paymen
 | `default` | Job theo lịch | Chung |
 | `events` | `dispatch_event` | Chung |
 | `emails` | Gửi email | Chung; tách riêng khi tải lớn |
-| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo và huỷ Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Chung; giới hạn số chạy đồng thời để không vượt rate limit của nhà cung cấp |
+| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo và huỷ Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Chung; giới hạn tần suất bằng `rate_limit` của từng task để không vượt rate limit của nhà cung cấp (một worker nghe cả 4 queue nên không giới hạn được theo queue) |
 
 Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không gọi `.delay()` trực tiếp ([02-backend-structure.md](./02-backend-structure.md) mục 9.1).
 
@@ -112,6 +117,8 @@ Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không g
 | `identity.purge_expired_tokens` | Mỗi ngày 04:00 | identity | Refresh token, reset token hết hạn |
 
 Mọi job đều **idempotent** và xử lý theo lô (ví dụ 200 đơn mỗi lần) để chạy lại an toàn.
+
+Job Đối soát (`reconcile_pending_payments`, `reconcile_shipments`) chỉ quét rồi đẩy mỗi Thanh toán hoặc Vận đơn một task con lên queue `integrations`, không tự gọi nhà cung cấp trong task của job. Một lô 200 lần gọi, mỗi lần tới 13 giây (06 mục 1), sẽ vượt `task_time_limit` 120 giây.
 
 ### 3.3. Cấu hình quan trọng
 
