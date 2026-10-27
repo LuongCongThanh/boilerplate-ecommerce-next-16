@@ -139,9 +139,12 @@ JWT_KEY_ID=local-1
 PAYMENT_PROVIDER_VNPAY=fake
 PAYMENT_PROVIDER_MOMO=fake
 SHIPPING_PROVIDER=fake
+FAKE_PROVIDERS_ENABLED=true
 GOOGLE_OAUTH_CLIENT_ID=
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+BFF_SHARED_SECRET=local-bff-secret
 ```
+
+`BFF_SHARED_SECRET` phải trùng với giá trị cấu hình ở Next.js local. Next.js gửi secret này trong header `X-BFF-Secret` kèm `X-Client-IP`, và Django chỉ tin `X-Client-IP` khi secret đúng ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Gọi thẳng `localhost:8000` từ Swagger UI hay `curl` vẫn chạy được, chỉ là throttle tính theo IP của máy gọi.
 
 Sinh khoá JWT cho local:
 

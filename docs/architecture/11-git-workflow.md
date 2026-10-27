@@ -22,11 +22,13 @@ gitGraph
     commit id: "fix"
     checkout dev
     merge fix/ipn-amount id: "squash: fix(payments)…" type: HIGHLIGHT
+    commit id: "chore(release): v0.2.0"
     checkout main
     merge dev id: "release v0.2.0" tag: "v0.2.0"
     branch hotfix/vnpay-signature
     checkout hotfix/vnpay-signature
     commit id: "hotfix"
+    commit id: "chore(release): v0.2.1"
     checkout main
     merge hotfix/vnpay-signature id: "squash: fix(payments)… " tag: "v0.2.1"
     checkout dev
@@ -121,7 +123,7 @@ docs(adr): add 0007 events via outbox and celery
 |---|---|---|
 | `.github/workflows/ci.yml` | `secrets` | `gitleaks` quét toàn bộ lịch sử |
 | | `pr-title` | Tiêu đề PR đúng Conventional Commits (chỉ chạy trên PR) |
-| | `backend` | `ruff`, `mypy`, `lint-imports`, `pytest`, `pip-audit`. Tự bỏ qua khi chưa có `backend/pyproject.toml` |
+| | `backend` | `ruff`, `mypy`, `lint-imports`, `pytest`, coverage, kiểm tra OpenAPI lệch, `pip-audit` ([12-testing-strategy.md](./12-testing-strategy.md) mục 8). Tự bỏ qua khi chưa có `backend/pyproject.toml` |
 | `.github/workflows/codeql.yml` | `codeql (actions)`, `codeql (python)` | CodeQL bộ `security-extended`, chạy trên PR, push lên `main` và mỗi thứ Hai |
 | `.github/dependabot.yml` | — | Cập nhật `github-actions`, `uv`, `docker` hằng tuần, chỉ đề xuất bản đã phát hành ít nhất 7 ngày |
 
@@ -155,8 +157,8 @@ Không dùng **rebase merge** trên GitHub.
 
 ### 4.3. PR release `dev` → `main`
 
-- Tiêu đề: `release: v0.2.0`.
-- Nội dung: danh sách thay đổi (lấy từ CHANGELOG nháp), migration cần chạy, cấu hình hoặc biến môi trường mới.
+- Tiêu đề: `chore(release): v0.2.0`. Không dùng `release: …` vì `release` không phải `type` hợp lệ (mục 3.1), job `pr-title` sẽ chặn.
+- Nội dung: danh sách thay đổi (lấy từ phần mới của `CHANGELOG.md` vừa cập nhật trên `dev`, mục 5.3), migration cần chạy, cấu hình hoặc biến môi trường mới.
 - Chỉ mở khi staging đã được kiểm tra.
 
 ## 5. Quy trình làm việc hằng ngày
@@ -184,24 +186,43 @@ git push -u origin feat/checkout-cod  # mở PR vào dev
 
 Commit vẫn phải đúng Conventional Commits. CI vẫn chạy sau khi push; nếu CI đỏ thì người push phải sửa ngay.
 
+Commit `chore(release): vX.Y.Z` ở mục 5.3 cũng được push thẳng vào `dev`, vì chỉ đổi version và CHANGELOG.
+
 ### 5.3. Release
 
+`main` cấm push thẳng, nên version và CHANGELOG được cập nhật trên `dev` **trước** khi mở PR release. Tag chỉ gắn sau khi merge, trên commit merge của `main`.
+
 ```bash
-# 1. Mở PR dev → main, tiêu đề "release: v0.2.0", merge bằng merge commit
-# 2. Gắn tag trên main
+# 1. Trên dev: cập nhật version và CHANGELOG, KHÔNG tạo tag
+git switch dev && git pull
+cd backend
+cz bump --files-only     # tính version mới từ commit kể từ tag trước, ghi vào pyproject.toml
+cz changelog --incremental --unreleased-version "v$(cz version --project)"
+git add pyproject.toml CHANGELOG.md
+git commit -m "chore(release): v0.2.0"
+git push
+# 2. Mở PR dev → main, tiêu đề "chore(release): v0.2.0", merge bằng merge commit
+# 3. Gắn tag trên commit merge của main
 git switch main && git pull
 git tag -a v0.2.0 -m "v0.2.0"
 git push origin v0.2.0
-# 3. Sinh CHANGELOG
-cz changelog   # commitizen
 ```
+
+Cờ của `cz` ở trên cần kiểm tra lại theo phiên bản `commitizen` được pin khi khởi tạo dự án **[Cần xác minh]**.
 
 ### 5.4. Hotfix
 
 ```bash
 git switch main && git pull
 git switch -c hotfix/vnpay-signature
-# … sửa, commit, mở PR vào main, squash merge …
+# … sửa, commit …
+# cập nhật version và CHANGELOG ngay trong nhánh hotfix, như bước 1 của mục 5.3
+cd backend
+cz bump --files-only
+cz changelog --incremental --unreleased-version "v$(cz version --project)"
+git add pyproject.toml CHANGELOG.md
+git commit -m "chore(release): v0.2.1"
+# mở PR vào main, squash merge
 git switch main && git pull
 git tag -a v0.2.1 -m "v0.2.1" && git push origin v0.2.1
 # back-merge về dev
@@ -227,9 +248,10 @@ git push
 ## 7. Phiên bản và CHANGELOG
 
 - **SemVer** `vMAJOR.MINOR.PATCH`. Giữ `0.x.y` cho tới khi go-live; bản go-live là `v1.0.0`.
-- Tag chỉ gắn trên `main`.
-- `CHANGELOG.md` sinh tự động từ commit trên `main` bằng `commitizen`.
-- Phiên bản ghi trong `backend/pyproject.toml` và được `commitizen` cập nhật cùng lúc với tag.
+- Tag chỉ gắn trên `main`, trên commit merge của PR release (hoặc commit squash của PR hotfix), và chỉ gắn **sau** khi merge.
+- `backend/CHANGELOG.md` sinh bằng `commitizen` từ các commit Conventional Commits, cập nhật trên `dev` (release) hoặc trong nhánh `hotfix/*` (hotfix), rồi đi vào `main` qua PR.
+- Phiên bản ghi trong `backend/pyproject.toml`, được `commitizen` cập nhật trong commit `chore(release): vX.Y.Z`. `commitizen` cấu hình đọc version từ `[project].version` và dùng tag dạng `v$version`.
+- Không chạy `cz bump` ở chế độ mặc định (tự commit và tự gắn tag), vì tag sẽ nằm trên `dev` chứ không phải `main`.
 
 ## 8. Những thứ không được commit
 

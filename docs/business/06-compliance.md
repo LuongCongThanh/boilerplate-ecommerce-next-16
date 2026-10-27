@@ -37,24 +37,28 @@ Hệ thống **không** lưu thông tin thẻ hoặc tài khoản thanh toán; p
 | CMP-02 | Lưu **bằng chứng đồng ý**: phiên bản chính sách, thời điểm, kênh (đăng ký / checkout), và người đồng ý. |
 | CMP-03 | Đồng ý nhận **email marketing** là một lựa chọn **riêng**, không gộp với đồng ý xử lý dữ liệu để giao hàng. MVP chưa gửi email marketing nhưng vẫn lưu lựa chọn này. |
 | CMP-04 | Khách hàng xem và sửa được dữ liệu cá nhân của mình trong tài khoản. |
-| CMP-05 | Khách được **yêu cầu xoá dữ liệu**. Hệ thống **ẩn danh** thông tin cá nhân (tên, điện thoại, email, địa chỉ) và giữ lại dữ liệu đơn hàng cần cho kế toán, thuế. |
+| CMP-05 | Người mua được gửi **Yêu cầu xoá dữ liệu**. Hệ thống **ẩn danh** thông tin cá nhân (tên, điện thoại, email, địa chỉ, email nhận hoá đơn) và giữ lại dữ liệu đơn hàng cần cho kế toán, thuế, kể cả tên công ty, mã số thuế và địa chỉ công ty trên thông tin xuất hoá đơn. Yêu cầu chỉ hoàn thành khi mọi Đơn hàng liên quan đã ở trạng thái cuối và không còn Hoàn tiền nào chờ xử lý. Yêu cầu của Khách hàng chỉ áp cho các đơn đã gắn vào Tài khoản; đơn vãng lai chưa gắn cần một yêu cầu riêng, Staff xác minh người yêu cầu trước khi xử lý. |
 | CMP-06 | Yêu cầu xoá được xử lý trong thời hạn quy định **[Cần xác minh]**, hệ thống ghi lại thời điểm nhận và thời điểm hoàn thành. |
-| CMP-07 | Mọi lượt Staff xem thông tin chi tiết của khách đều được ghi lịch sử. |
+| CMP-07 | Mọi lượt Staff xem dữ liệu cá nhân của Người mua đều được ghi lịch sử: mở chi tiết Khách hàng, mở chi tiết Đơn hàng, tìm đơn theo số điện thoại. Mở danh sách đơn thì không ghi. |
 | CMP-08 | Khi triển khai lên AWS region Singapore (dữ liệu ra ngoài lãnh thổ Việt Nam), doanh nghiệp phải lập **hồ sơ đánh giá tác động chuyển dữ liệu cá nhân ra nước ngoài** theo quy định **[Cần xác minh]**. |
 | CMP-09 | Có quy trình thông báo khi xảy ra **sự cố lộ lọt dữ liệu**, trong thời hạn quy định **[Cần xác minh]**. |
 
 ## 3. Hoá đơn điện tử
 
 - **MVP**: hệ thống **không** tích hợp hoá đơn điện tử. Kế toán xuất hoá đơn thủ công bằng phần mềm hoá đơn bên ngoài.
-- Để hỗ trợ kế toán, back-office cung cấp **danh sách đơn đã thu tiền theo ngày**, xuất được ra file (CSV/Excel), kèm thông tin xuất hoá đơn nếu khách yêu cầu.
-- Checkout cho phép khách **yêu cầu xuất hoá đơn công ty** (tên công ty, mã số thuế, địa chỉ, email nhận hoá đơn) **[Giả định]**.
+- Để hỗ trợ kế toán, back-office cung cấp **danh sách đơn đã thu tiền theo ngày**, xuất được ra file (CSV/Excel), kèm thông tin xuất hoá đơn nếu Người mua yêu cầu. Kế toán không có Tài khoản trong hệ thống: Admin xuất file rồi gửi cho kế toán.
+- Checkout cho phép Người mua **yêu cầu xuất hoá đơn công ty** (tên công ty, mã số thuế, địa chỉ, email nhận hoá đơn) **[Giả định]**.
 - **Giai đoạn 2**: tích hợp tự động với nhà cung cấp hoá đơn điện tử.
 - **[Cần xác minh]** với kế toán: quy định hiện hành có cho phép xuất hoá đơn tổng hợp cuối ngày cho bán lẻ hay bắt buộc xuất theo từng giao dịch. Nếu bắt buộc theo từng giao dịch, cần cân nhắc đưa tích hợp lên MVP.
 
 ## 4. Thông tin bắt buộc công khai trên website
 
-Đây là phần nội dung của Frontend, nhưng Backend phải cho phép Admin cấu hình:
+Website phải công khai:
 
 - Thông tin doanh nghiệp: tên, địa chỉ, mã số thuế, số điện thoại, email.
 - Chính sách: bảo mật, đổi trả, vận chuyển, thanh toán, giải quyết khiếu nại.
 - Logo "Đã thông báo Bộ Công Thương" sau khi hoàn thành thủ tục.
+
+**MVP**: các nội dung này là nội dung tĩnh trong repo Frontend, sửa qua Pull Request và deploy lại. Backend **không** lưu và Admin không sửa được trên back-office, vì các nội dung này hiếm khi đổi. Khi cần Admin tự sửa thì đưa vào giai đoạn sau.
+
+Riêng phiên bản chính sách bảo mật mà Người mua đồng ý vẫn được Backend lưu cùng bằng chứng đồng ý (CMP-02).

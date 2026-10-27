@@ -1,4 +1,4 @@
-# 01. Bối cảnh hệ thống (C4 mức 1 và 2)
+# 01. Bối cảnh hệ thống (C4 mức 1, 2 và 3)
 
 > Trạng thái: **Bản nháp chờ review**. Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
 
@@ -6,12 +6,12 @@
 
 ```mermaid
 graph TB
-    guest([Khách vãng lai / Khách hàng])
+    guest([Người mua])
     staff([Staff / Admin])
 
     subgraph system [Hệ thống Fashion Store]
-        sf[Storefront<br/>Next.js - làm sau]
-        bo[Back-office<br/>Next.js - làm sau]
+        sf[Storefront<br/>Next.js BFF - làm sau]
+        bo[Back-office<br/>Next.js BFF - làm sau]
         be[Django Backend]
     end
 
@@ -24,8 +24,8 @@ graph TB
 
     guest --> sf
     staff --> bo
-    sf --> be
-    bo --> be
+    sf -->|mạng nội bộ| be
+    bo -->|mạng nội bộ| be
     be <--> vnpay
     be <--> momo
     be <--> ghn
@@ -34,21 +34,24 @@ graph TB
     be --> sentry
 ```
 
-| Bên ngoài | Hệ thống gọi tới | Gọi vào hệ thống |
+| Bên ngoài | Backend gọi ra để | Bên ngoài gọi vào Backend để |
 |---|---|---|
-| VNPay, MoMo | Tạo link thanh toán, truy vấn giao dịch (đối soát) | IPN báo kết quả thanh toán |
-| GHN | Báo giá phí ship, tạo vận đơn, truy vấn trạng thái | Webhook báo trạng thái vận đơn |
+| VNPay | Truy vấn trạng thái Thanh toán (Đối soát). Link thanh toán do Backend tự ký, không cần gọi VNPay | Báo kết quả thanh toán qua IPN |
+| MoMo | Tạo link thanh toán, truy vấn trạng thái Thanh toán (Đối soát) | Báo kết quả thanh toán qua IPN |
+| GHN | Báo giá phí ship, tạo và huỷ Vận đơn, truy vấn trạng thái Vận đơn (Đối soát) | Báo trạng thái Vận đơn qua webhook |
 | Google | Lấy khoá công khai để xác minh `id_token` | — |
 | Email | Gửi email (SMTP / SES) | — |
 | Sentry | Gửi lỗi và thông tin hiệu năng | — |
 
 Giai đoạn này **chỉ làm Backend**. Storefront và back-office được thể hiện để rõ ai sẽ gọi API.
 
+Trình duyệt không bao giờ gọi thẳng Django. Next.js là BFF cho **mọi** request tới Django và chạy cùng mạng nội bộ với Django (VPC trên AWS, [ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Ngoài Next.js, trình duyệt chỉ tới trang thanh toán của VNPay / MoMo, trang đăng nhập Google, và tải ảnh Sản phẩm qua CloudFront trên AWS. Từ internet, chỉ IPN và webhook của VNPay, MoMo, GHN gọi thẳng vào Django (`/api/v1/webhooks/*`).
+
 ## 2. Mức 2: các container của Backend
 
 ```mermaid
 graph TB
-    client[Storefront / Back-office / Swagger UI]
+    client[Next.js BFF<br/>storefront, back-office]
 
     subgraph backend [Django Backend - cùng 1 codebase, 1 Docker image]
         api[API<br/>gunicorn + Django + DRF]
@@ -60,38 +63,51 @@ graph TB
     pg[(PostgreSQL 18)]
     redis[(Redis)]
     files[(Ảnh Sản phẩm<br/>ổ đĩa local / S3)]
-    ext[VNPay · MoMo · GHN · Google · Email]
+    providers[VNPay · MoMo · GHN]
+    google[Google]
+    mail[Dịch vụ email]
 
-    client -->|HTTPS JSON| api
-    ext -->|IPN, webhook| api
+    client -->|HTTPS JSON, mạng nội bộ| api
+    providers -->|IPN, webhook - phần duy nhất public| api
     api --> pg
     api --> redis
     api --> files
-    api --> ext
+    api --> providers
+    api --> google
     relay -->|đọc outbox| pg
     relay -->|đẩy task| redis
+    beat -->|đọc lịch job| pg
     beat -->|đẩy task theo lịch| redis
     worker -->|nhận task| redis
     worker --> pg
-    worker --> ext
+    worker --> providers
+    worker --> mail
 ```
 
 | Container | Vai trò | Số bản chạy |
 |---|---|---|
 | API | Xử lý request HTTP: storefront, back-office, webhook | ≥ 2 trên AWS, scale theo CPU |
-| Celery worker | Chạy handler sự kiện, gửi email, gọi API ngoài, job đối soát | ≥ 1, scale theo độ dài queue |
-| Celery Beat | Đẩy job theo lịch (huỷ đơn hết hạn, đối soát, hoàn tất đơn) | **Đúng 1** |
-| Outbox relay | Đọc bảng `outbox` rồi đẩy sự kiện sang Celery | **Đúng 1** (có khoá chống chạy trùng) |
-| PostgreSQL | Dữ liệu nghiệp vụ, outbox, lịch job | 1 (Multi-AZ trên AWS) |
-| Redis | Broker Celery, cache, throttling, idempotency key | 1 |
+| Celery worker | Chạy handler sự kiện, gửi email, gọi API ngoài, job Đối soát | ≥ 1, scale theo độ dài queue |
+| Celery Beat | Đẩy job theo lịch (huỷ đơn hết hạn, Đối soát, chuyển đơn sang Hoàn tất). Lịch lưu trong PostgreSQL (`DatabaseScheduler`) | **Đúng 1** |
+| Outbox relay | Đọc bảng `shared_outbox_event` rồi đẩy sự kiện sang Celery | 1. Lúc deploy có thể chồng 2 bản, vẫn an toàn nhờ `FOR UPDATE SKIP LOCKED` |
+| PostgreSQL | Dữ liệu nghiệp vụ, outbox, `Idempotency-Key`, lịch job | 1 (Multi-AZ trên AWS) |
+| Redis | Broker Celery, cache, throttling, cache `token_version`. Đặt `noeviction`, mọi key cache có TTL | 1 |
 
 ## 3. Mức 3: module bên trong Backend
 
 Chi tiết xem [02-backend-structure.md](./02-backend-structure.md).
 
+Cách đọc sơ đồ:
+
+- Mũi tên liền `A --> B`: A được phép gọi B qua `B/contracts.py` và có FK tới model của B. Chiều ngược lại bị cấm.
+- Mũi tên đứt: module lớp dưới báo lên lớp trên bằng sự kiện. Tên sự kiện ghi tắt, bỏ tiền tố module. Sơ đồ chỉ nêu ví dụ, danh sách đầy đủ ở [07-async-events-jobs.md](./07-async-events-jobs.md) mục 2.
+- `shared` là app hạ tầng dùng chung, không phải module nghiệp vụ ([ADR 0006](../adr/0006-modular-monolith.md)).
+
 ```mermaid
 graph TB
     notifications --> ordering
+    notifications --> identity
+    notifications --> payments
     ordering --> inventory
     ordering --> promotions
     ordering --> identity
@@ -105,39 +121,52 @@ graph TB
     payments --> shared
     shipping --> shared
 
-    payments -. "sự kiện: payment-succeeded" .-> ordering
-    shipping -. "sự kiện: shipment-delivered" .-> ordering
+    payments -. "sự kiện: payment-succeeded, refund-recorded…" .-> ordering
+    shipping -. "sự kiện: shipment-created, shipment-delivered…" .-> ordering
     ordering -. "sự kiện: order-placed, order-cancelled…" .-> notifications
-    identity -. "sự kiện: customer-erased" .-> ordering
+    identity -. "sự kiện: email-verified, customer-erased" .-> ordering
+    identity -. "sự kiện: customer-registered, password-reset-requested" .-> notifications
 ```
-
-Mũi tên liền: gọi trực tiếp qua `contracts.py`. Mũi tên đứt: thông báo ngược lên bằng sự kiện.
 
 ## 4. Luồng chính: đặt hàng thanh toán VNPay
 
+Luồng dưới đây là của Khách vãng lai. Với Khách hàng đã đăng nhập, checkout không trả `lookup_token` và Next.js gửi access token thay cho `X-Lookup-Token`. Đường dẫn bỏ tiền tố `/api/v1`. Chi tiết request và response xem [04-api-contract.md](./04-api-contract.md); T3 là mã chuyển trạng thái trong [05-order-lifecycle.md](../business/05-order-lifecycle.md) mục 3.
+
 ```mermaid
 sequenceDiagram
-    participant C as Client
+    participant B as Trình duyệt
+    participant N as Next.js (BFF)
     participant API as Django API
     participant DB as PostgreSQL
-    participant R as Relay + Celery
+    participant R as Relay + Celery worker
     participant V as VNPay
 
-    C->>API: POST /store/checkout (Idempotency-Key)
-    API->>DB: Tạo Order PENDING_PAYMENT + Giữ hàng 15' + outbox(order-placed)
-    API-->>C: 201 {order_code}
-    C->>API: POST /store/orders/{code}/payments {method: vnpay}
-    API->>DB: Tạo Payment PENDING
-    API-->>C: {redirect_url}
-    C->>V: Khách thanh toán
-    V->>API: IPN (có chữ ký)
-    API->>DB: Kiểm tra chữ ký, chống trùng, Payment SUCCEEDED + outbox(payment-succeeded)
-    API-->>V: RspCode 00
-    R->>DB: Đọc outbox
-    R->>API: (worker) handler ordering: Order → PLACED, chuyển Giữ hàng thành trừ kho
-    Note over R: handler notifications gửi email "Thanh toán thành công"
-    V-->>C: Chuyển về Return URL
-    C->>API: GET /store/orders/{code} (hỏi lại trạng thái)
+    B->>N: Đặt hàng
+    N->>API: POST /store/checkout {payment_method: online, expected_total} + Idempotency-Key
+    Note over API: Ngoài transaction: tính lại tổng tiền, so với expected_total
+    API->>DB: Một transaction: Giữ hàng 15 phút, lượt Voucher, Order PENDING_PAYMENT (chưa phát sự kiện)
+    API-->>N: 201 {order_code, lookup_token}
+    N->>API: POST /store/orders/{code}/payments {gateway: vnpay, return_url} + Idempotency-Key + X-Lookup-Token
+    API->>DB: Tạo Payment pending, link hết hạn ở phút thứ 10 kể từ lúc đặt đơn
+    API-->>N: {redirect_url}
+    N-->>B: Chuyển sang trang VNPay
+    B->>V: Người mua thanh toán
+    par Server-to-server
+        V->>API: IPN có chữ ký (/webhooks/vnpay/ipn)
+        API->>DB: Kiểm tra chữ ký, so số tiền, chống trùng → Payment succeeded + outbox(payment-succeeded)
+        API-->>V: RspCode 00
+    and Trình duyệt quay về
+        V-->>B: Chuyển về Return URL
+        B->>N: Trang kết quả
+        N->>API: GET /store/orders/{code} (hỏi lại trạng thái)
+    end
+    R->>DB: Relay đọc outbox, worker chạy handler ordering
+    R->>DB: T3: Order → PLACED, Giữ hàng thành trừ Tồn kho, outbox(order-placed)
+    Note over R: handler notifications nhận order-placed và gửi email "Thanh toán thành công"
 ```
 
-Nếu IPN không tới, job `reconcile_pending_payments` (mỗi 5 phút) truy vấn VNPay và xử lý giống hệt như khi nhận IPN.
+IPN và Return URL tới theo thứ tự bất kỳ. Người mua có thể về trang kết quả trước khi IPN tới hoặc trước khi handler chuyển đơn sang `PLACED`, và hệ thống không bao giờ dựa vào Return URL để xác nhận Thanh toán (BR-PAY-02). Vì vậy trang kết quả luôn hỏi lại trạng thái Đơn hàng từ Django, và có thể thấy đơn vẫn ở `PENDING_PAYMENT` trong vài giây đầu.
+
+Nếu IPN không tới, job Đối soát `payments.reconcile_pending_payments` (mỗi 5 phút) truy vấn VNPay và xử lý giống hệt như khi nhận IPN.
+
+Tính từ lúc đặt đơn, link thanh toán hết hạn ở phút thứ 10, Giữ hàng hết hạn ở phút thứ 15. Khoảng đệm 5 phút dành cho IPN đến muộn và một vòng Đối soát. Nếu tiền vẫn về khi Đơn hàng không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi một lần Thanh toán khác), hệ thống tự tạo Hoàn tiền và gắn Cờ cần xử lý `unexpected_payment` (BR-PAY-05).
