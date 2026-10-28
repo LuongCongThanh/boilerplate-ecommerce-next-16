@@ -19,7 +19,7 @@
 | Giỏ của Khách vãng lai | Header `X-Cart-Token` (Frontend lưu trong cookie `cart_token`) |
 | Đơn của Khách vãng lai | Header `X-Lookup-Token`: token 30 phút gắn với đúng một đơn, do `POST checkout` (với Khách vãng lai) hoặc `POST orders/lookup` cấp. Next.js cất token trong session |
 | IP người dùng | Django đọc `X-Client-IP` do BFF gửi kèm `X-BFF-Secret` ([05-auth-security.md](./05-auth-security.md) mục 5) |
-| Chống tạo trùng | Header `Idempotency-Key` (UUID) **bắt buộc** với `POST /store/checkout` và `POST /store/orders/{code}/payments`. Key lưu trong PostgreSQL (`shared_idempotency_key`) 24 giờ. Cùng key và cùng body thì trả lại đúng kết quả lần đầu; cùng key nhưng body khác thì `409 IDEMPOTENCY_CONFLICT` |
+| Chống tạo trùng | Header `Idempotency-Key` (UUID) **bắt buộc** với `POST /store/checkout`, `POST /store/orders/{code}/payments` và các lệnh ghi Tồn kho cộng dồn ở back-office (`stock/inbound`, `stock/adjust`, `stock/count`). Các endpoint chuyển trạng thái không cần, vì gọi lần hai đã bị máy trạng thái chặn bằng `409 INVALID_TRANSITION`. Key lưu trong PostgreSQL (`shared_idempotency_key`) 24 giờ. Cùng key và cùng body thì trả lại đúng kết quả lần đầu; cùng key nhưng body khác thì `409 IDEMPOTENCY_CONFLICT` |
 
 ## 2. Phân trang
 
@@ -121,8 +121,8 @@ Ba mã cần Frontend xử lý riêng:
 | GET, POST | `refunds`, `refunds/{id}/complete` | Staff | Danh sách Hoàn tiền, ghi nhận đã hoàn |
 | GET, POST | `returns`, `returns/{id}/receive`, `accept`, `reject` | Staff | Đổi trả. `accept` nhận `{lines: [{return_line_id, accepted_quantity, restock}]}` (BR-RET-08) |
 | GET | `stock` | Staff | Tồn kho, Giữ hàng, Hàng chờ xuất và Số lượng bán được theo Biến thể. Lọc tồn thấp bằng `available_lt=<n>` (mặc định 5, US-702) |
-| POST | `stock/inbound`, `stock/adjust` | Staff | Nhập kho, điều chỉnh (bắt buộc lý do). Giảm quá Số lượng bán được thì `409 INSUFFICIENT_AVAILABLE` (BR-INV-11) |
-| POST | `stock/count` | Staff | Kiểm kê: gửi số đếm theo Biến thể, hệ thống điều chỉnh theo chênh lệch với Tồn kho + Hàng chờ xuất (US-703) |
+| POST | `stock/inbound`, `stock/adjust` | Staff | Nhập kho, điều chỉnh (bắt buộc lý do, cần `Idempotency-Key`). Giảm quá Số lượng bán được thì `409 INSUFFICIENT_AVAILABLE` (BR-INV-11) |
+| POST | `stock/count` | Staff | Kiểm kê (cần `Idempotency-Key`): gửi số đếm theo Biến thể, hệ thống điều chỉnh theo chênh lệch với Tồn kho + Hàng chờ xuất (US-703) |
 | GET | `customers`, `customers/{id}` | Staff | Xem khách (ghi log truy cập) |
 | GET, POST | `erasure-requests`, `erasure-requests/{id}/complete` | Staff | Xử lý Yêu cầu xoá dữ liệu. `complete` chỉ thành công khi mọi đơn liên quan ở trạng thái cuối và không còn Hoàn tiền chờ xử lý (CMP-05) |
 | CRUD | `categories`, `products`, `products/{id}/variants`, `products/{id}/images` | Admin | Quản lý danh mục hàng hoá. Hạ Giá bán xuống ≤ Giá khuyến mãi đang hoặc sắp hiệu lực thì `422 LIST_PRICE_BELOW_SALE_PRICE` (BR-PRC-05) |
@@ -144,7 +144,7 @@ Ba mã cần Frontend xử lý riêng:
 | POST | `momo/ipn` | Chữ ký HMAC-SHA256 | HTTP 204 |
 | POST | `ghn` | Token bí mật trong header + IP allow-list **[Cần xác minh cơ chế GHN hỗ trợ]** | HTTP 200 |
 
-Webhook luôn trả thành công nhanh sau khi lưu dữ liệu gốc và chống trùng; việc xử lý nghiệp vụ chạy qua sự kiện. Đây là phần duy nhất của Django mở ra internet.
+Webhook xử lý đồng bộ trong một transaction: kiểm tra chữ ký, lưu dữ liệu gốc, chống trùng, cập nhật Thanh toán hoặc Vận đơn và ghi sự kiện vào outbox. Phần của `ordering` (chuyển trạng thái Đơn hàng) chạy sau qua sự kiện, nên webhook không chờ nó. Mã phản hồi cho từng tình huống theo đặc tả của từng cổng, xem [06-integrations.md](./06-integrations.md). Đây là phần duy nhất của Django mở ra internet.
 
 ### 4.4. Vận hành
 

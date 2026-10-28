@@ -34,7 +34,7 @@ sequenceDiagram
 | Không mất sự kiện | Sự kiện ghi cùng transaction với dữ liệu nghiệp vụ |
 | Không xử lý trùng | `shared_processed_event` ghi cùng transaction với tác động của handler |
 | Một handler lỗi không ảnh hưởng handler khác | Mỗi cặp (sự kiện, handler) là một Celery task riêng |
-| Có thể phát lại | Bảng outbox giữ sự kiện **90 ngày** **[Giả định]**; lệnh `manage.py replay_events --type … --since …` |
+| Có thể phát lại | Bảng outbox giữ sự kiện **90 ngày** **[Giả định]**; lệnh `manage.py replay_events --type … --since …`. Lệnh chỉ đẩy các cặp (sự kiện, handler) chưa có trong `shared_processed_event`, nên dùng được cho handler mới thêm, không chạy lại handler đã xử lý |
 
 ### 1.2. Không bảo đảm
 
@@ -107,7 +107,7 @@ Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không g
 | `ordering.complete_delivered_orders` | Mỗi giờ | ordering | T13 |
 | `ordering.compute_best_sellers` | Mỗi ngày 02:00 | ordering | BR-CAT-12; ghi kết quả vào `catalog` qua `catalog.contracts.set_best_seller_counts` |
 | `ordering.purge_expired_guest_carts` | Mỗi ngày 03:00 | ordering | BR-CRT-02 |
-| `shared.purge_old_outbox_events` | Mỗi ngày 03:30 | shared | Giữ 90 ngày; xoá cả `shared_processed_event` cùng tuổi |
+| `shared.purge_old_outbox_events` | Mỗi ngày 03:30 | shared | Giữ 90 ngày; chỉ xoá sự kiện **đã dispatch**, xoá cả `shared_processed_event` cùng tuổi |
 | `shared.purge_idempotency_keys` | Mỗi ngày 03:45 | shared | Xoá `Idempotency-Key` quá 24 giờ |
 | `identity.purge_expired_tokens` | Mỗi ngày 04:00 | identity | Refresh token, reset token hết hạn |
 
@@ -119,6 +119,7 @@ Mọi job đều **idempotent** và xử lý theo lô (ví dụ 200 đơn mỗi 
 |---|---|---|
 | `task_acks_late` | `True` | Worker chết giữa chừng thì task được giao lại |
 | `task_reject_on_worker_lost` | `True` | Như trên |
+| `broker_transport_options.visibility_timeout` | 2 giờ | Với `acks_late`, Redis giao lại task chưa ack sau khoảng này. Phải lớn hơn khoảng chờ retry dài nhất (khoảng 30 phút) và `task_time_limit`, nếu không task đang chờ retry bị giao lại thành bản trùng |
 | `worker_prefetch_multiplier` | `1` | Không giữ nhiều task trong một worker |
 | `task_time_limit` | 120 giây | Chặn task treo |
 | `CELERY_TASK_ALWAYS_EAGER` | `True` chỉ trong `settings/test.py` | Test chạy đồng bộ |

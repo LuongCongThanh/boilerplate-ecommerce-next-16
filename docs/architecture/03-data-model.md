@@ -50,7 +50,7 @@ erDiagram
 - `shared_outbox_event`: index một phần (partial index) trên `occurred_at WHERE dispatched_at IS NULL` để relay đọc nhanh. Payload không chứa secret hay PII.
 - `shared_processed_event`: khoá chính ghép `(event_id, handler)`. Một sự kiện có thể được nhiều handler xử lý, và mỗi handler chỉ xử lý một lần.
 - `shared_failed_event`: ghi khi một cặp (sự kiện, handler) hết retry; `manage.py retry_failed_events` đọc bảng này.
-- `shared_idempotency_key`: lưu kết quả lần đầu của các POST có `Idempotency-Key`. Lưu ở PostgreSQL thay vì Redis vì liên quan tới tiền và không được mất khi Redis bị xoá key. Job `shared.purge_idempotency_keys` xoá bản ghi quá 24 giờ. `scope` gồm endpoint và danh tính bên gọi: `account_id` khi đã đăng nhập, `guest_token` của Giỏ hàng khi Khách vãng lai checkout, Mã đơn với `orders/{code}/payments`.
+- `shared_idempotency_key`: lưu kết quả lần đầu của các POST có `Idempotency-Key`. Lưu ở PostgreSQL thay vì Redis vì liên quan tới tiền và không được mất khi Redis bị xoá key. Job `shared.purge_idempotency_keys` xoá bản ghi quá 24 giờ. `scope` gồm endpoint và danh tính bên gọi: `account_id` khi đã đăng nhập, `guest_token` của Giỏ hàng khi Khách vãng lai checkout, Mã đơn với `orders/{code}/payments`, `account_id` của Staff với các lệnh ghi Tồn kho ở back-office.
 
 ## 2. `identity`
 
