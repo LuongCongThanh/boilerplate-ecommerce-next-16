@@ -1,6 +1,6 @@
 # 05. Vòng đời Đơn hàng
 
-> Trạng thái: **Bản nháp chờ review**. Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md), quy tắc tham chiếu [04-business-rules.md](./04-business-rules.md).
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md), quy tắc tham chiếu [04-business-rules.md](./04-business-rules.md).
 
 ## 1. Các trạng thái
 
@@ -97,7 +97,7 @@ Các thông báo từ Cổng thanh toán và GHN có thể tới trễ hoặc l�
 
 ### 4.3. Huỷ khi đơn Đang giao
 
-Đơn đã ở `SHIPPING` thì **không huỷ được** trực tiếp, trừ khi Vận đơn gặp sự cố (T14, mục 4.7). Nếu Người mua từ chối nhận hàng, GHN sẽ báo hoàn hàng và đơn chuyển sang `RETURNED_TO_SENDER` (T12) **[Giả định]**.
+Đơn đã ở `SHIPPING` thì **không huỷ được** trực tiếp, trừ khi Vận đơn gặp sự cố (T14, mục 4.7). Nếu Người mua từ chối nhận hàng, GHN sẽ báo hoàn hàng và đơn chuyển sang `RETURNED_TO_SENDER` (T12).
 
 ### 4.4. Đổi trả sau khi Đã giao
 
@@ -139,5 +139,5 @@ GHN báo mất hàng, hư hàng, sự cố, hoặc tự huỷ một Vận đơn 
 |---|---|---|
 | Huỷ đơn `PENDING_PAYMENT` quá 15 phút | Mỗi phút | T4 |
 | Đối soát Thanh toán treo với VNPay / MoMo | Mỗi 5 phút | T3 |
-| Đối soát trạng thái Vận đơn với GHN | Mỗi 15 phút **[Giả định]** | T11, T12 |
+| Đối soát trạng thái Vận đơn với GHN | Mỗi 15 phút **[Giả định · kiểm chứng: hạn mức API GHN khi nghiệm thu sandbox]** | T11, T12 |
 | Chuyển `DELIVERED` quá 7 ngày sang `COMPLETED` | Mỗi giờ | T13 |

@@ -1,6 +1,6 @@
 # 03. User stories
 
-> Trạng thái: **Bản nháp chờ review**. Chỉ gồm phạm vi **MVP**.
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Chỉ gồm phạm vi **MVP**.
 > Mỗi story có tiêu chí nghiệm thu (AC) viết theo dạng *Cho trước / Khi / Thì*, và tham chiếu tới quy tắc `BR-xxx` trong [04-business-rules.md](./04-business-rules.md).
 > Độ ưu tiên: **P1** bắt buộc cho MVP, **P2** nên có trong MVP.
 
@@ -147,19 +147,19 @@
 
 ### US-501 · Đăng ký bằng email · P1
 - AC1: Email chưa tồn tại, mật khẩu đạt yêu cầu tối thiểu, tick đồng ý dữ liệu cá nhân thì tạo tài khoản và gửi email xác thực.
-- AC2: Email đã tồn tại (kể cả email của Tài khoản Staff/Admin) thì báo lỗi chung, không xác nhận email đó có tồn tại hay không **[Giả định]**.
+- AC2: Mọi lần đăng ký hợp lệ về định dạng đều nhận cùng một phản hồi "Kiểm tra email để xác thực tài khoản", dù email đã tồn tại hay chưa, để không lộ email nào đã có Tài khoản. Email đã thuộc một Tài khoản Khách hàng chưa xác thực thì gửi lại email xác thực; đã thuộc Tài khoản đã xác thực, hoặc Tài khoản Staff/Admin, thì gửi cho chủ email thư báo "có người vừa thử đăng ký bằng email của bạn". Không tạo Tài khoản mới và không đổi mật khẩu của Tài khoản đã có.
 - AC3: Sau khi email được xác thực (kể cả qua đăng nhập Google), các đơn đặt như Khách vãng lai bằng cùng email được gắn vào Tài khoản (BR-ORD-08).
 - AC4: Khách hàng đã xác thực email mà đặt đơn như Khách vãng lai bằng cùng email thì đơn được gắn vào Tài khoản ngay lúc đặt (BR-ORD-08).
 
 ### US-502 · Đăng nhập bằng email hoặc Google · P1
 - AC1: Đăng nhập Google lần đầu bằng email chưa có Tài khoản thì tạo Tài khoản mới.
-- AC2: Đăng nhập Google bằng email đã có Tài khoản email + mật khẩu thì liên kết vào Tài khoản đó **[Giả định]**. Nếu Tài khoản đó chưa xác thực email, mật khẩu cũ bị xoá và mọi phiên đăng nhập cũ mất hiệu lực, để người đã đăng ký trước bằng email của người khác không giữ được quyền truy cập.
+- AC2: Đăng nhập Google bằng email đã có Tài khoản email + mật khẩu thì liên kết vào Tài khoản đó. Nếu Tài khoản đó chưa xác thực email, mật khẩu cũ bị xoá và mọi phiên đăng nhập cũ mất hiệu lực, để người đã đăng ký trước bằng email của người khác không giữ được quyền truy cập.
 - AC3: Đăng nhập sai nhiều lần liên tiếp thì tạm khoá đăng nhập trong một khoảng thời gian.
 - AC4: Email thuộc Tài khoản Staff hoặc Admin thì không đăng nhập storefront được, kể cả bằng Google; báo lỗi chung.
 
 ### US-503 · Quên mật khẩu · P1
 - AC1: Nhập email thì luôn hiện "Nếu email tồn tại, chúng tôi đã gửi hướng dẫn".
-- AC2: Link đặt lại mật khẩu dùng một lần và hết hạn sau 1 giờ **[Giả định]**.
+- AC2: Link đặt lại mật khẩu dùng một lần và hết hạn sau 1 giờ.
 - AC3: Đặt lại mật khẩu thành công thì mọi phiên đăng nhập cũ mất hiệu lực.
 
 ### US-504 · Sổ địa chỉ · P2
@@ -283,16 +283,16 @@
 - AC1: Sửa được Phí ship dự phòng, ngưỡng miễn phí ship, hạn mức COD; mọi lần sửa được ghi lịch sử.
 - AC2: Thời gian Giữ hàng và hạn link thanh toán là cố định, không sửa được (BR-INV-05). Thông tin doanh nghiệp và các chính sách là nội dung tĩnh của Frontend ở MVP (xem [06-compliance.md](./06-compliance.md) mục 4).
 
-### US-1004 · Ánh xạ phường/xã sang GHN · P1
-- AC1: Admin xem danh sách phường/xã chưa có ánh xạ sang GHN, kèm số đơn đang có Cờ cần xử lý `ghn_ward_unmapped`.
-- AC2: Admin chọn ID tỉnh, quận, phường của GHN cho một phường/xã; lưu xong thì Staff bàn giao các đơn đó như bình thường rồi gỡ cờ.
-- AC3: Story này có thể bỏ nếu kiểm tra cho thấy API GHN đã dùng địa chỉ 2 cấp (xem [06-integrations.md](../architecture/06-integrations.md) mục 4.2).
-
 ### US-1003 · Báo cáo doanh thu cơ bản · P2
 - AC1: Doanh thu theo ngày/tháng chỉ tính đơn **Hoàn tất**, ghi vào ngày Hoàn tất; Doanh thu của đơn = Tổng tiền đơn − Hoàn tiền của Đổi trả (BR-REV-01). Báo cáo tách tiền hàng và Phí ship (BR-REV-02).
 - AC2: Cho trước Người mua trả tiền hai lần cho một đơn và lần thứ hai được hoàn (BR-PAY-05), khi đơn Hoàn tất, thì Doanh thu của đơn vẫn bằng Tổng tiền đơn.
 - AC3: Có thêm số liệu tạm cho đơn Đã giao chưa Hoàn tất, hiển thị tách khỏi Doanh thu.
 - AC4: Admin xuất danh sách đơn đã thu tiền theo ngày ra file rồi gửi cho kế toán xuất hoá đơn (xem [06-compliance.md](./06-compliance.md)).
+
+### US-1004 · Ánh xạ phường/xã sang GHN · P1
+- AC1: Admin xem danh sách phường/xã chưa có ánh xạ sang GHN, kèm số đơn đang có Cờ cần xử lý `ghn_ward_unmapped`.
+- AC2: Admin chọn ID tỉnh, quận, phường của GHN cho một phường/xã; lưu xong thì Staff bàn giao các đơn đó như bình thường rồi gỡ cờ.
+- AC3: Story này có thể bỏ nếu kiểm tra cho thấy API GHN đã dùng địa chỉ 2 cấp (xem [06-integrations.md](../architecture/06-integrations.md) mục 4.2).
 
 ---
 

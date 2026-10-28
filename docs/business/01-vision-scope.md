@@ -1,6 +1,6 @@
 # 01. Tầm nhìn và phạm vi
 
-> Trạng thái: **Bản nháp chờ review**. Các mục có nhãn **[Giả định]** là con số hoặc quy tắc chưa được chốt, cần xác nhận trước khi đưa vào phát triển.
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)).
 > Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
 
 ## 1. Bối cảnh
@@ -21,7 +21,7 @@ Backend được thiết kế riêng cho Fashion Store theo phạm vi trong tài
 
 ## 3. Mục tiêu kinh doanh
 
-| # | Mục tiêu | Chỉ số đo (KPI) | Mục tiêu MVP **[Giả định]** |
+| # | Mục tiêu | Chỉ số đo (KPI) | Mục tiêu MVP **[Giả định · kiểm chứng: số liệu 3 tháng đầu production]** |
 |---|---|---|---|
 | G1 | Khách đặt hàng dễ dàng | Tỉ lệ chuyển đổi (đơn / phiên truy cập) | ≥ 1,5% |
 | G2 | Không bán vượt tồn kho | Số đơn bị huỷ do hết hàng thật | < 0,5% số đơn |
@@ -83,7 +83,7 @@ Chi tiết xem [02-actors-permissions.md](./02-actors-permissions.md).
 | Ràng buộc | Tiền tệ duy nhất là VND, không có số lẻ |
 | Ràng buộc | Giai đoạn đầu chỉ làm Backend; Frontend (storefront và back-office Next.js) làm sau |
 | Ràng buộc | Phát triển và chạy thử ở local trước, AWS là môi trường mục tiêu sau khi chạy thành công |
-| Giả định | Quy mô MVP khoảng 500–5.000 đơn/ngày **[Giả định]** |
+| Giả định | Quy mô MVP khoảng 500–5.000 đơn/ngày **[Giả định · kiểm chứng: test tải k6 trên staging, [10](../architecture/10-nfr.md)]** |
 | Giả định | Đổi trả và Hoàn tiền ở MVP được Staff xử lý thủ công qua hotline hoặc Zalo |
 | Giả định | Hoá đơn điện tử ở MVP được kế toán xuất thủ công bằng phần mềm hoá đơn bên ngoài |
 

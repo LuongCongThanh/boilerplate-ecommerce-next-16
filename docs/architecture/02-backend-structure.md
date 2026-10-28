@@ -1,6 +1,6 @@
 # 02. Cấu trúc Backend: thư mục, công nghệ, package và vai trò từng file
 
-> Trạng thái: **Bản nháp chờ review**. Quyết định nền tảng: [ADR 0006](../adr/0006-modular-monolith.md) (modular monolith), [ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md) (sự kiện), [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md) (xác thực).
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Quyết định nền tảng: [ADR 0006](../adr/0006-modular-monolith.md) (modular monolith), [ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md) (sự kiện), [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md) (xác thực).
 > Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
 
 File này là chuẩn tổ chức code và ranh giới module cho thiết kế mục tiêu. Schema cụ thể theo [03](./03-data-model.md); nghiệp vụ, API, bảo mật và recovery theo các tài liệu được dẫn chiếu. Các phiên bản package bên dưới là đầu vào cho bootstrap, chỉ được coi là đã tương thích khi `uv` resolve thành công, có `uv.lock` và các kiểm tra khởi tạo chạy đạt; danh sách này không thay thế lockfile.
@@ -18,13 +18,13 @@ File này là chuẩn tổ chức code và ranh giới module cho thiết kế m
 
 | Hạng mục | Lựa chọn | Phiên bản |
 |---|---|---|
-| Ngôn ngữ | Python | 3.13 |
+| Ngôn ngữ | Python | 3.14 |
 | Framework | Django | 5.2 LTS (hỗ trợ tới 04/2028; nâng lên 6.2 LTS khoảng Q3/2027) |
 | API | Django REST Framework | 3.18 |
-| Database | PostgreSQL (extension `unaccent`, `pg_trgm`, `btree_gist`) | 18 (RDS và CI); local dùng bản major mới nhất ([ADR 0019](../adr/0019-local-postgres-on-host.md)) |
+| Database | PostgreSQL (extension `unaccent`, `pg_trgm`, `btree_gist`) | 18 (RDS và CI); local dùng bản major mới nhất ([ADR 0015](../adr/0015-local-postgres-on-host.md)) |
 | Cache, broker | Redis (chạy bằng **Valkey**) | Ghim **Valkey 8** cho cả local và ElastiCache for Valkey trên AWS (xem [09](./09-deployment-aws-target.md)). Tài liệu gọi chung là "Redis" vì đó là tên giao thức và thư viện (`redis-py`, broker `redis://`); Valkey tương thích giao thức nên không phải sửa code |
 | Background jobs | Celery + Celery Beat | 5.6 |
-| Quản lý package | uv | 0.13 |
+| Quản lý package | uv | ≥ 0.13 |
 
 ## 3. Danh sách package
 
@@ -42,14 +42,13 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `redis` | 8.1.0 | Client Redis | Dùng cho cache, throttling, Celery |
 | `celery` | 5.6.3 | Worker chạy job | Có retry, định tuyến queue, hệ sinh thái lớn |
 | `django-celery-beat` | 2.9.0 | Lịch job lưu trong DB (`DatabaseScheduler`) | Beat trên ECS không cần ổ đĩa để ghi file lịch. Lịch vẫn khai báo trong code (`beat_schedule`) và được đồng bộ vào DB khi beat khởi động, nên muốn đổi lịch thì sửa code |
-| `uuid-utils` | — | Sinh UUID v7 cho khoá chính, chỉ được gọi trong `shared.models.uuid7()` | Python 3.13 chưa có `uuid.uuid7()`; bỏ khi lên Python 3.14 ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
 | `pydantic` | 2.14.1 | Định nghĩa schema sự kiện, DTO của `contracts.py` | Có type, validate, sinh JSON Schema (chuẩn bị cho Schema Registry) |
 | `pydantic-settings` | 2.16.1 | Đọc biến môi trường có kiểu | Sai cấu hình thì báo lỗi ngay khi khởi động |
 | `PyJWT[crypto]` | 2.15.1 | Ký và kiểm tra JWT (Ed25519) | Thư viện chuẩn; phần mật mã không tự viết ([ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md)) |
 | `cryptography` | — | Mã hoá response refresh trong RefreshReplay (AESGCM, 10 giây) | Dependency trực tiếp; dùng thư viện, không tự viết crypto (05 mục 2.1) |
 | `google-auth` | 2.62.0 | Xác minh `id_token` của Google | Thư viện chính thức của Google |
 | `argon2-cffi` | 25.1.0 | Hash mật khẩu Argon2 | Thuật toán được OWASP khuyến nghị |
-| `django-fsm-2` | 4.2.4 | Máy trạng thái Đơn hàng | `django-fsm` gốc đã chuyển sang viewflow; bản này giữ API cũ, do django-commons duy trì |
+| `django-fsm-2` | 4.3.0 | Máy trạng thái Đơn hàng | `django-fsm` gốc đã chuyển sang viewflow; bản này giữ API cũ, do django-commons duy trì |
 | `django-pghistory` | 3.9.2 | Lịch sử thay đổi (Đơn hàng, Thanh toán, Tồn kho, cấu hình vận hành). Chỉ theo dõi danh sách field tường minh, không chụp raw payload hay PII trực tiếp (03 mục 10.1) | Dùng trigger PostgreSQL nên bắt được cả `bulk_update` |
 | `httpx` | — | Gọi API VNPay, MoMo, GHN | Hỗ trợ timeout và retry rõ ràng; test bằng `respx` |
 | `Pillow` | 13.0.0 | Xử lý ảnh Sản phẩm | Bắt buộc cho `ImageField` |
@@ -89,7 +88,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `django-cors-headers` | Mọi request đi qua Next.js BFF, trình duyệt không gọi thẳng Django nên không cần CORS ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)) |
 | `django-money`, `py-moneyed` | VND không có số lẻ, lưu số nguyên là đủ |
 | `django-ratelimit` | Không cập nhật từ 2023; dùng throttling của DRF |
-| `django-health-check` 4.x | Yêu cầu Python 3.14 và Django 6; tự viết `/healthz`, `/readyz` |
+| `django-health-check` 4.x | Yêu cầu Django 6; tự viết `/healthz`, `/readyz` |
 | MinIO | Ngừng bảo trì từ 04/2026 |
 | Kafka, Schema Registry | Chưa cần ở quy mô MVP ([ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md)) |
 | `uvicorn-worker`, chạy ASGI | Mọi view đồng bộ; chạy dưới ASGI chỉ thêm bước chuyển qua thread pool và phải tắt `CONN_MAX_AGE`. Tính lại khi cần websocket hoặc streaming |
@@ -148,7 +147,7 @@ backend/
 ├── uv.lock                         # khoá phiên bản chính xác của mọi package
 ├── manage.py
 ├── .env.example                    # mẫu biến môi trường (file .env thật không commit)
-├── .python-version                 # 3.13
+├── .python-version                 # 3.14
 ├── Dockerfile                      # 1 image dùng chung cho api, worker, beat, relay
 ├── docker-compose.yml              # api, worker, beat, relay, redis, mailpit (PostgreSQL cài trên máy, xem 08 mục 2.2)
 ├── Makefile                        # lệnh tắt: make up, make test, make lint, make migrate…
@@ -177,6 +176,7 @@ backend/
 │   ├── models.py                   # uuid7(), BaseModel: id UUID v7, created_at, updated_at; IdempotencyKey; import model của events/ và geo/ để Django nhận ra
 │   ├── money.py                    # value object Money(amount: int, currency="VND")
 │   ├── phones.py                   # normalize_vn_phone: chuẩn hoá số điện thoại dùng chung, không import modules (03 mục 0.6)
+│   ├── privacy.py                  # pii_hmac(value) -> "<kid>:<hex>" bằng keyring PII_HMAC_KEYS (ADR 0016); dùng cho bằng chứng sau ẩn danh, IP trong log, key failure ledger
 │   ├── exceptions.py               # DomainError(code, message, details), RetryLater (handler báo consumer thử lại sau, không kế thừa DomainError) và các lỗi chung
 │   ├── tasks.py                    # enqueue_on_commit(task_name, **kwargs): đẩy Celery task theo tên sau khi transaction commit (on_commit robust=True: broker lỗi thì chỉ log); purge_old_outbox_events (chỉ xoá sự kiện đã kết thúc mọi delivery, cùng các delivery đó), purge_idempotency_keys
 │   ├── events/
@@ -321,6 +321,8 @@ modules/ordering/
 
 ### 6.2. Ví dụ luồng một request
 
+Mục này là **nơi sở hữu** luồng checkout; thứ tự khoá và quy tắc writer của catalog ở mục 9.1, vòng đời `quote_token` ở [04 mục 5.3](./04-api-contract.md#53-vòng-đời-quote_token). Các tài liệu khác chỉ tóm tắt và dẫn về đây.
+
 `POST /api/v1/store/checkout`:
 
 ```
@@ -352,7 +354,7 @@ views.CheckoutView
 
 Sau khi commit, với đơn COD relay đẩy `ordering.order-placed` sang Celery và `notifications.handlers` gửi email "Đặt đơn thành công". Với đơn online, Người mua gọi tiếp `POST /store/orders/{code}/payments`; `ordering.order-placed` chỉ phát khi Thanh toán thành công và đơn vào `PLACED` (T3).
 
-Giá chốt trong transaction sau khi khoá Cart, toàn bộ StockItem rồi toàn bộ Variant theo id tăng dần; mọi writer của catalog (kể cả thêm/sửa/xoá SalePrice) phải lấy khoá Variant tương ứng trước khi sửa. Nếu phiên bản, đơn giá, dữ liệu snapshot hoặc điều kiện bán khác báo giá Người mua đã xác nhận trong quote_token (không chỉ lần đọc ngoài transaction của request checkout), rollback toàn bộ rồi dựng quote mới ngoài transaction, trả 409 PRICE_CHANGED kể cả tổng tiền tình cờ không đổi. Không gọi GHN khi đang giữ khoá. Khách xác nhận quote mới bằng token và Idempotency-Key mới; snapshot trong OrderLine giữ nguyên sau commit. Contract token/canonical hash theo 04 mục 5; không có bảng Quote.
+Giá được chốt trong transaction, dưới khoá Variant. Checkout so với báo giá Người mua đã xác nhận trong `quote_token`, không chỉ với lần đọc ngoài transaction của chính request: phiên bản, đơn giá, snapshot hoặc điều kiện bán khác thì rollback toàn bộ, dựng quote mới ngoài transaction và trả `409 PRICE_CHANGED`, kể cả khi tổng tiền tình cờ không đổi ([ADR 0012](../adr/0012-checkout-price-snapshot.md)). Không gọi GHN khi đang giữ khoá. Người mua xác nhận quote mới bằng token và Idempotency-Key mới; snapshot trong OrderLine giữ nguyên sau commit. Không có bảng Quote.
 
 ### 6.3. FK sang module khác
 
@@ -382,10 +384,10 @@ Các module con đều theo khuôn ở mục 6. Bảng dưới chỉ liệt kê 
 | `auth/authentication.py` | `JWTAuthentication`, class xác thực của DRF |
 | `auth/google.py` | Xác minh `id_token` Google bằng `google-auth`. Khớp Tài khoản có `email_verified = false` thì đánh dấu đã xác thực, `set_unusable_password`, tăng `token_version`, thu hồi mọi refresh token. Tạo Tài khoản mới hoặc đánh dấu đã xác thực thì phát `EmailVerifiedV1` |
 | `services/` | `register`, `verify_email`, `login`, `refresh`, `logout`, `request_password_reset`, `reset_password`, `login_with_google`, `update_profile` (họ tên, số điện thoại, ngôn ngữ; không đổi email), `record_consent`, `erase_customer`, `apply_erasure_request`, `finalize_erasure_request` |
-| `events.py` | `CustomerRegisteredV1`, `EmailVerifiedV1`, `CustomerErasedV1`, `PasswordResetRequestedV1`. Payload chỉ mang `account_id` hoặc `erasure_request_id`, không mang token hay PII. `EmailVerifiedV1` phát mỗi khi email chuyển sang đã xác thực, từ `verify_email` hoặc `login_with_google` |
+| `events.py` | `CustomerRegisteredV1`, `VerificationEmailRequestedV1` (gửi lại email xác thực, hoặc đăng ký lại bằng email chưa xác thực), `RegistrationAttemptedV1` (đăng ký bằng email đã có Tài khoản, US-501 AC2), `EmailVerifiedV1`, `CustomerErasedV1`, `PasswordResetRequestedV1`. Payload chỉ mang `account_id` hoặc `erasure_request_id`, không mang token hay PII. `EmailVerifiedV1` phát mỗi khi email chuyển sang đã xác thực, từ `verify_email` hoặc `login_with_google` |
 | `contracts.py` | `get_customer(id)`, `CustomerDTO`, `record_consent(...)`, `issue_email_verification_link(account_id) -> str`, `issue_password_reset_link(account_id) -> str` (sinh token lúc gửi email), `get_erasure_subject(erasure_request_id) -> ErasureSubjectDTO`, `apply_erasure_request(erasure_request_id)` (chỉ ordering gọi sau khi kiểm tra CMP-05; ghi processing và sự kiện, chưa ghi completed_at), `find_verified_customer_id(email) -> UUID \| None`, `log_customer_data_access(staff_id, customer_id, subject_phone, order_code, action)` (CMP-07) |
 
-Job `identity.reconcile_erasure_requests` chạy mỗi phút, gọi finalize_erasure_request để đối chiếu delivery bắt buộc qua shared và hoàn tất yêu cầu processing; không truy vấn model của module khác.
+Job `identity.reconcile_erasure_requests` chạy mỗi phút, gọi finalize_erasure_request để đối chiếu delivery bắt buộc qua shared và hoàn tất yêu cầu processing; khi hoàn tất, thay `subject_phone` bằng `subject_phone_hmac` trên ErasureRequest, Consent và CustomerDataAccessLog cùng transaction ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)). Không truy vấn model của module khác. Hàm HMAC dùng chung nằm ở `shared.privacy.pii_hmac(value) -> str`.
 
 ### 7.2. `catalog`
 
@@ -537,10 +539,10 @@ CI phải chạy generator ở chế độ kiểm tra cấu hình không bị c�
 |---|---|
 | Ngôn ngữ | Tên biến, hàm, bảng, field, enum, error code: **tiếng Anh**. Comment và docstring: **tiếng Việt**, giữ nguyên thuật ngữ kỹ thuật tiếng Anh. Chuỗi hiển thị cho người dùng: bọc `gettext` để dịch vi/en |
 | Tiền | `BigIntegerField` lưu số đồng VND; trong code dùng `shared.money.Money`; API trả `{"amount": 250000, "currency": "VND"}` |
-| Khoá chính | UUID v7 cho bảng do dự án định nghĩa, trừ `shared_province`, `shared_ward` dùng mã chính thức; không áp lên bảng framework/history sinh tự động (03 mục 0.9). Khoá tự nhiên khác giữ bằng `UNIQUE`. `default` là hàm bọc `shared.models.uuid7` (không trỏ thẳng vào `uuid_utils`, để migration không phụ thuộc package ngoài), khai báo trong BaseModel cùng `created_at`, `updated_at`; cách cập nhật bulk và phân biệt default/seed theo 03 mục 0.1/0.3. Model nghiệp vụ không tự khai báo `id` ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
+| Khoá chính | UUID v7 cho bảng do dự án định nghĩa, trừ `shared_province`, `shared_ward` dùng mã chính thức; không áp lên bảng framework/history sinh tự động (03 mục 0.9). Khoá tự nhiên khác giữ bằng `UNIQUE`. `default` là hàm bọc `shared.models.uuid7` (không trỏ thẳng vào `uuid.uuid7`, để migration không phụ thuộc cách sinh UUID), khai báo trong BaseModel cùng `created_at`, `updated_at`; cách cập nhật bulk và phân biệt default/seed theo 03 mục 0.1/0.3. Model nghiệp vụ không tự khai báo `id` ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
 | Thời gian | Lưu UTC (`USE_TZ = True`); hiển thị theo `Asia/Ho_Chi_Minh`. Lấy thời điểm hiện tại bằng `django.utils.timezone.now()` |
 | Xoá dữ liệu | Không xoá cứng dữ liệu đã có đơn; dùng `status` / `archived` |
-| Transaction | Chỉ mở ở tầng `services` (và trong consumer của `shared.events`); sự kiện ghi vào outbox cùng transaction. Checkout tạo Order mới khoá Cart → StockItem theo variant_id → Variant theo id → Voucher, so fingerprint giỏ/token và xoá dòng giỏ đã mua cùng transaction. Mọi cart mutation/merge khoá Cart theo id tăng dần; không lấy Cart sau StockItem. Transition trên Order đã tồn tại khoá Order trước rồi StockItem → Variant cần cập nhật → Voucher, không truy cập Cart. Quy tắc auth/refresh Account → Token vẫn theo 05 và không được trộn thứ tự ngược |
+| Transaction | Chỉ mở ở tầng `services` (và trong consumer của `shared.events`); sự kiện ghi vào outbox cùng transaction. Checkout tạo Order mới khoá Cart → StockItem theo variant_id → Variant theo id → Voucher, so fingerprint giỏ/token và xoá dòng giỏ đã mua cùng transaction. Mọi cart mutation/merge khoá Cart theo id tăng dần; không lấy Cart sau StockItem. Transition trên Order đã tồn tại khoá Order trước rồi StockItem → Variant cần cập nhật → Voucher, không truy cập Cart. **Writer của catalog**: mọi service sửa dữ liệu ảnh hưởng checkout (Giá bán, SKU, snapshot, cân nặng, trạng thái Product, thêm/sửa/xoá SalePrice) phải khoá các Variant bị ảnh hưởng theo id tăng dần trước khi ghi và tăng `checkout_version`; chỉ khoá SalePrice đã có là không đủ để chặn việc thêm SalePrice mới. Quy tắc auth/refresh Account → Token vẫn theo 05 và không được trộn thứ tự ngược |
 | Việc ra ngoài DB | **Không gọi HTTP ra ngoài** (GHN, VNPay, MoMo, gửi email) bên trong `transaction.atomic`: gọi trước khi mở transaction (như `quote_fee` khi checkout), hoặc đưa vào Celery task. Code nghiệp vụ (`services`, `handlers.py`) **không đẩy Celery task trực tiếp** (`.delay()`, `.apply_async()`) mà dùng `shared.tasks.enqueue_on_commit(task_name, …)`, để task chỉ chạy khi dữ liệu đã commit và không chạy khi transaction rollback. Đánh đổi: task có thể mất nếu process dừng ngay sau commit hoặc broker lỗi; `enqueue_on_commit` dùng `transaction.on_commit(..., robust=True)`, nên lỗi enqueue broker chỉ được log mà không làm request đã commit trả lỗi API. Việc bắt buộc phải xảy ra phải có bản ghi DB và job quét lại (EventDelivery được relay giao lại; `recover_pending_emails` quét EmailLog và `reconcile_shipments` quét Vận đơn bị kẹt) |
 | Kiểu dữ liệu | Mọi hàm trong `services`, `selectors`, `contracts` có type hints đầy đủ; `mypy --strict` cho `modules/*/services`, `modules/*/selectors` và `contracts`. Dùng cú pháp mới: `list[X]`, `X \| None`, không dùng `List`, `Optional` |
 
@@ -578,7 +580,7 @@ Theo PEP 8 (`snake_case` cho hàm/biến/module, `PascalCase` cho class, `UPPER_
 ```toml
 # backend/pyproject.toml
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
@@ -587,7 +589,7 @@ select = [
     "F",        # pyflakes
     "I",        # sắp xếp import: stdlib → third-party → config, shared, modules
     "N",        # pep8-naming
-    "UP",       # pyupgrade: cú pháp Python 3.13
+    "UP",       # pyupgrade: cú pháp Python 3.14
     "B",        # flake8-bugbear
     "C4",       # comprehension gọn
     "SIM",      # đơn giản hoá code
@@ -612,7 +614,7 @@ known-first-party = ["config", "shared", "modules"]
 package = false
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
 
 # `strict` chỉ đặt được ở mục chung, không đặt được theo module, nên liệt kê từng flag

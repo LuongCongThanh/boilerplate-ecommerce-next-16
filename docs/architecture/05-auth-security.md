@@ -1,6 +1,6 @@
 # 05. Xác thực và bảo mật
 
-> Trạng thái: **Bản nháp chờ review**. Quyết định nền tảng: [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md), [ADR 0009](../adr/0009-nextjs-bff-django-private.md).
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Quyết định nền tảng: [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md), [ADR 0009](../adr/0009-nextjs-bff-django-private.md).
 
 ## 1. Mô hình xác thực
 
@@ -40,7 +40,7 @@ Vì vậy Next.js là BFF cho **mọi** request tới Django, kể cả request 
 | Thuật toán | **EdDSA (Ed25519)**, khai báo cứng khi decode: `jwt.decode(token, key, algorithms=["EdDSA"], …)` |
 | Khoá | Khoá bí mật chỉ ở Django (biến môi trường / Secrets Manager). Header có `kid` để thay khoá: giữ song song khoá cũ và mới trong thời gian bằng tuổi thọ refresh token |
 | Access token | Sống **10 phút**. Claims bắt buộc: `iss`, `aud` (`store` hoặc `backoffice`), `sub` (UUID Account), `token_use = access`, `kind`, `tv` (integer không âm), `jti` (UUID), `iat`, `exp` |
-| Refresh token | Sống **30 ngày** (storefront) / **12 giờ** (back-office) **[Giả định]**. Claims bắt buộc: `iss`, `aud` (`store` hoặc `backoffice`), `sub` (UUID Account), `token_use = refresh`, `kind`, `tv`, `jti` (UUID), `fam` (UUID family), `iat`, `exp`. Bảng RefreshToken chỉ lưu sha256; ngoại lệ có kiểm soát là response mã hoá trong RefreshReplay để trả lại cùng kết quả trong 10 giây (mục 2.1) |
+| Refresh token | Sống **30 ngày** (storefront) / **12 giờ** (back-office). Claims bắt buộc: `iss`, `aud` (`store` hoặc `backoffice`), `sub` (UUID Account), `token_use = refresh`, `kind`, `tv`, `jti` (UUID), `fam` (UUID family), `iat`, `exp`. Bảng RefreshToken chỉ lưu sha256; ngoại lệ có kiểm soát là response mã hoá trong RefreshReplay để trả lại cùng kết quả trong 10 giây (mục 2.1) |
 | Kiểm tra bắt buộc | Header `alg = EdDSA`, `kid` thuộc keyring cấu hình; claims bắt buộc phải tồn tại và đúng kiểu, `iss` bằng issuer cấu hình, `aud` đúng endpoint, `token_use` đúng mục đích, `iat <= exp`, chưa hết hạn/không phát hành trong tương lai quá leeway. Account phải còn active, `tv` và `kind` khớp trạng thái xác thực theo mục 2.2 |
 | Lệch giờ cho phép | 30 giây |
 | `lookup_token` | JWT ký bằng cùng khoá Ed25519, claims bắt buộc `iss`, `aud = order_lookup`, `sub` = Mã đơn, `token_use = lookup`, `iat`, `exp`; sống **30 phút**, không lưu DB và không thu hồi sớm được. Do `POST store/checkout` (Khách vãng lai) và `POST store/orders/lookup` cấp, gửi qua header `X-Lookup-Token`. `IsOrderOwner` kiểm tra chữ ký, mục đích và Mã đơn khớp URL; không yêu cầu Account/tv/family cho token vãng lai |
@@ -49,7 +49,7 @@ Ba validator là riêng biệt và loại trừ nhau: `JWTAuthentication` chỉ 
 
 Lookup token dùng public API `identity.contracts.issue_order_lookup_token` / `verify_order_lookup_token`; ordering không import nội bộ auth của identity. DTO sau xác minh chỉ mang Mã đơn/hạn token; selector của ordering kiểm tra đơn tồn tại và các quyền/thao tác còn hợp lệ. Không có đường fallback sang `TimestampSigner` cho lookup token.
 
-`quote_token` thuộc ordering, là payload có chữ ký HMAC-SHA256 qua Django signing, keyring `QUOTE_SIGNING_KEYS` độc lập với JWT/session và salt cố định `ordering.checkout-quote.v1`. Chỉ backend giữ key; chọn key hiện hành để ký, chỉ thử các key còn hiệu lực đã cấu hình để xác minh, giữ key cũ đủ tuổi thọ quote. Hạn mặc định `QUOTE_TTL = 5 phút` **[Giả định cấu hình]**; kiểm tra hạn tường minh, không gia hạn khi retry. Token chứa binding/hash và snapshot kiểm chứng theo 04, không chứa PII hoặc secret, không dùng làm auth token. Sai binding/chữ ký trả `400 INVALID_QUOTE`, hết hạn trả `409 QUOTE_EXPIRED`. Chữ ký không thay việc xác minh giá/tồn kho hiện tại; checkout vẫn kiểm tra dưới khoá theo 02/03.
+`quote_token` thuộc ordering, không phải token xác thực. Về khoá: keyring `QUOTE_SIGNING_KEYS` riêng, độc lập với JWT và session; chỉ backend giữ key, ký bằng key hiện hành, xác minh bằng các key còn hiệu lực, giữ key cũ ít nhất bằng `QUOTE_TTL`. Payload, binding và mã lỗi theo [04 mục 5.3](./04-api-contract.md#53-vòng-đời-quote_token).
 
 ### 2.1. Xoay vòng refresh token và phát hiện dùng lại
 
@@ -62,7 +62,7 @@ Refresh bằng R1 lần nữa ngoài cửa sổ 10 giây (R1 đã dùng!)
                    → kẻ gian và người dùng thật đều phải đăng nhập lại
 ```
 
-Trong cửa sổ **10 giây** từ used_at **[Giả định]**, request lặp bằng R1 chỉ nhận lại **chính cặp token đã cấp**, không tạo R2 thứ hai và không kéo dài cửa sổ ([ADR 0014](../adr/0014-refresh-single-successor.md)).
+Trong cửa sổ **10 giây** từ used_at, request lặp bằng R1 chỉ nhận lại **chính cặp token đã cấp**, không tạo R2 thứ hai và không kéo dài cửa sổ ([ADR 0014](../adr/0014-refresh-single-successor.md)).
 
 - Trong transaction, khoá Account trước, rồi RefreshToken của R1. Kiểm tra chữ ký/claims/hash, account.is_active, token_version và family chưa thu hồi từ DB, không dựa vào cache tv. Lần đầu tạo R2 và access token, đánh dấu R1.used_at, lưu successor_jti và RefreshReplay cùng transaction; mọi token mới của một family phải đi qua đường này.
 - RefreshReplay lưu response đã mã hoá bằng thư viện cryptography AESGCM, có expires_at=used_at+10 giây, encryption_key_id và nonce ngẫu nhiên 12 byte mới cho mỗi lần encrypt. Key 32 byte độc lập khoá ký JWT; associated data gắn parent_jti, family_id và aud. Không tự viết thuật toán mật mã, không log response/nonce cùng secret. Tham khảo [API AEAD của cryptography](https://cryptography.io/en/latest/hazmat/primitives/aead/).
@@ -109,6 +109,7 @@ Cam kết vô hiệu Staff và thu hồi do đổi/reset mật khẩu/ẩn danh 
 | Hash | Argon2id (`Argon2PasswordHasher` đứng đầu `PASSWORD_HASHERS`) |
 | Độ mạnh | Tối thiểu 8 ký tự, kiểm tra bằng các validator có sẵn của Django (giống thông tin cá nhân, mật khẩu phổ biến, toàn số) |
 | Chống dò | Đăng nhập: tối đa 5 lần sai / cửa sổ trượt 15 phút theo email chuẩn hoá và 20 lần sai / 15 phút theo IP tin cậy; chạm một trong hai ngưỡng thì lần thử tiếp theo trả `429` với `Retry-After`. Ghi nhận cả email không tồn tại và sai kênh/kind như thất bại, thông báo lỗi chung; cách đếm và concurrency theo mục 5 |
+| Đăng ký | Luôn trả `202 AcceptedDTO` như nhau. Email mới: tạo Account chưa xác thực và phát `CustomerRegisteredV1`. Email đã có: không tạo Account, không đổi mật khẩu; Khách hàng chưa xác thực thì phát `VerificationEmailRequestedV1`, còn lại phát `RegistrationAttemptedV1` để báo cho chủ email (US-501 AC2). Thời gian xử lý hai nhánh không được chênh lệch tới mức đo được: nhánh email đã có vẫn băm mật khẩu như nhánh tạo mới |
 | Đặt lại mật khẩu | Token ngẫu nhiên dùng một lần, lưu dạng hash, hết hạn 1 giờ. Token được sinh lúc gửi email (`identity.contracts.issue_password_reset_link`), không bao giờ nằm trong payload sự kiện. Email xác thực làm tương tự (`issue_email_verification_link`) |
 | Google | Xác minh `id_token` bằng `google-auth`: chữ ký, `aud` = client ID của dự án, `iss`, `exp`, `email_verified = true` |
 | Liên kết Google | Liên kết theo email. Nếu Tài khoản khớp có `email_verified = false` (có thể do kẻ gian đăng ký trước bằng email của nạn nhân, kèm mật khẩu của kẻ gian): đánh dấu đã xác thực, `set_unusable_password`, tăng `token_version`, thu hồi mọi refresh token |
@@ -130,7 +131,7 @@ Mặc định của DRF là **từ chối** (`DEFAULT_PERMISSION_CLASSES = [IsAu
 
 Dùng throttling của DRF cho hạn mức request chung, lưu trong Redis. Built-in throttle dùng thao tác cache không atomic nên là giới hạn gần đúng, không phải bảo đảm chống brute force tuyệt đối ([tài liệu DRF](https://www.django-rest-framework.org/api-guide/throttling/)). Hạn mức đăng nhập sai ở mục 3 có failure ledger Redis riêng, check/reserve/ghi kết quả atomic bằng Lua/script được kiểm thử; không diễn đạt một `ScopedRateThrottle` đếm mọi request là bộ đếm chỉ các lần sai.
 
-Failure ledger dùng timestamp của cửa sổ trượt 15 phút, request ID để hoàn tất một lần, và key HMAC của email sau trim/lowercase hoặc IP đã chuẩn hoá; không đưa email/IP thô vào tên key/log. Kiểm tra và giữ suất trước khi thử mật khẩu để các request đồng thời không cùng vượt ngưỡng; kết quả sai chuyển suất thành một failure, thành công trả suất và xoá các failure email đã xảy ra trước lần thành công đó, không xoá lịch sử IP. Suất còn chờ có hạn theo ngân sách timeout đăng nhập và được thu hồi khi worker chết; không ghi nhiều failure cho cùng request. `Retry-After` tính từ failure/suất chặn sớm nhất hết cửa sổ/hết lease. Redis lỗi thì cả throttle và failure ledger **fail-open** (bỏ qua), vẫn dùng lỗi đăng nhập chung và phát metric cảnh báo không chứa định danh; WAF trên CloudFront vẫn chặn thô. Đây là đánh đổi tính sẵn sàng đã chọn, không hứa giữ hạn mức chính xác khi Redis không hoạt động.
+Failure ledger dùng timestamp của cửa sổ trượt 15 phút, request ID để hoàn tất một lần, và key HMAC (`shared.privacy.pii_hmac`, keyring `PII_HMAC_KEYS`, [ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)) của email sau trim/lowercase hoặc IP đã chuẩn hoá; không đưa email/IP thô vào tên key/log. Kiểm tra và giữ suất trước khi thử mật khẩu để các request đồng thời không cùng vượt ngưỡng; kết quả sai chuyển suất thành một failure, thành công trả suất và xoá các failure email đã xảy ra trước lần thành công đó, không xoá lịch sử IP. Suất còn chờ có hạn theo ngân sách timeout đăng nhập và được thu hồi khi worker chết; không ghi nhiều failure cho cùng request. `Retry-After` tính từ failure/suất chặn sớm nhất hết cửa sổ/hết lease. Redis lỗi thì cả throttle và failure ledger **fail-open** (bỏ qua), vẫn dùng lỗi đăng nhập chung và phát metric cảnh báo không chứa định danh; WAF trên CloudFront vẫn chặn thô. Đây là đánh đổi tính sẵn sàng đã chọn, không hứa giữ hạn mức chính xác khi Redis không hoạt động.
 
 **IP của người dùng.** Mọi request storefront và back-office đi qua Next.js, nên IP nguồn mà Django thấy là IP của Next.js. Nếu throttle theo IP nguồn, mọi Người mua dùng chung một hạn mức. Cách xử lý:
 
@@ -138,15 +139,15 @@ Failure ledger dùng timestamp của cửa sổ trượt 15 phút, request ID đ
 - Next.js gửi IP đã xác định trong header `X-Client-IP`, kèm `X-BFF-Secret` có giá trị bằng biến môi trường `BFF_SHARED_SECRET`. Trước khi go-live cần test toàn đường browser → edge → BFF → Django với header giả, không chỉ unit test Django so secret.
 - Middleware của Django chỉ tin `X-Client-IP` khi `X-BFF-Secret` đúng (so bằng `hmac.compare_digest`); sai hoặc thiếu thì dùng IP nguồn.
 - `BFF_SHARED_SECRET` nhận tối đa hai giá trị, cách nhau bằng dấu phẩy, để xoay secret mà không gián đoạn: thêm secret mới vào Django trước, đổi Next.js, rồi bỏ secret cũ ([09](./09-deployment-aws-target.md)).
-- Mọi throttle "theo IP" bên dưới dùng giá trị đã xác minh này. Log ứng dụng dùng định danh IP có HMAC khi cần tương quan, không ghi nguyên IP hoặc toàn bộ proxy headers vào log nghiệp vụ.
+- Mọi throttle "theo IP" bên dưới dùng giá trị đã xác minh này. Log ứng dụng dùng định danh IP có HMAC (`shared.privacy.pii_hmac`) khi cần tương quan, không ghi nguyên IP hoặc toàn bộ proxy headers vào log nghiệp vụ.
 
-| Scope | Giới hạn **[Giả định]** |
+| Scope | Giới hạn **[Giả định · kiểm chứng: tỉ lệ `429` của người dùng thật trong tháng đầu production]** |
 |---|---|
 | Ẩn danh, mặc định | 120 request / phút / IP |
 | Đã đăng nhập, mặc định | 300 request / phút / Tài khoản |
 | `auth_login` | Như mục 3 |
 | `auth_google` | 20 request / 15 phút / IP; đếm mọi lần gọi |
-| Quên mật khẩu, gửi lại email xác thực | 3 request / giờ / email đã chuẩn hoá và 10 request / giờ / IP; đếm mọi lần gọi, phản hồi `202` không tiết lộ email tồn tại; khi bị throttle trả `429` cùng định dạng cho mọi email |
+| Đăng ký, quên mật khẩu, gửi lại email xác thực | 3 request / giờ / email đã chuẩn hoá và 10 request / giờ / IP; đếm mọi lần gọi, phản hồi `202` không tiết lộ email tồn tại; khi bị throttle trả `429` cùng định dạng cho mọi email |
 | Xác thực email, đặt lại mật khẩu | 20 request / 15 phút / IP; đếm mọi lần gọi, token sai/hết hạn có lỗi chung |
 | `order_lookup` | 10 lần / 15 phút / IP |
 | `checkout` | 10 lần / phút / Tài khoản hoặc cart token, và 30 lần / phút / IP (Khách vãng lai đổi được cart token tuỳ ý) |

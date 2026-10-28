@@ -49,6 +49,8 @@ Chi tiết ở [Cấu trúc Backend §9](./docs/architecture/02-backend-structur
 
 ## Khi nào cần cập nhật tài liệu
 
+Tài liệu đã chốt cho MVP; code chạm tới phần nào thì sửa tài liệu phần đó **trong cùng PR** ([quy ước](./README.md#trạng-thái-tài-liệu)).
+
 - Thêm hoặc đổi thuật ngữ nghiệp vụ → `GLOSSARY.md`.
 - Đổi quy tắc nghiệp vụ → `docs/business/04-business-rules.md` (giữ mã `BR-xxx`).
 - Quyết định khó đảo ngược, có đánh đổi thật → thêm ADR mới trong `docs/adr/`.

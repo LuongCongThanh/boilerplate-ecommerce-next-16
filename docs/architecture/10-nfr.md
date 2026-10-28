@@ -1,6 +1,6 @@
 # 10. Yêu cầu phi chức năng
 
-> Trạng thái: **Đã duyệt cho MVP**. Các con số là mục tiêu cho MVP với tải khoảng 500–5.000 đơn/ngày; mục có nhãn **[Giả định · kiểm chứng: …]** được giữ cho tới khi có số liệu ở nơi ghi trong nhãn.
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Các con số là mục tiêu cho MVP với tải khoảng 500–5.000 đơn/ngày.
 
 ## 1. Hiệu năng
 

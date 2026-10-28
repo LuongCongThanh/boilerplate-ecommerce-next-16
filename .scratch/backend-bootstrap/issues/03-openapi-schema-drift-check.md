@@ -1,6 +1,10 @@
 # Commit `openapi.yaml` và chặn schema lệch trong CI
 
-Status: needs-triage
+Status: ready-for-agent
+
+Blocked by: 07
+
+Spec: [spec.md](../spec.md)
 
 ## Việc cần làm
 

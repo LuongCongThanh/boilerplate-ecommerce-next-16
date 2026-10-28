@@ -4,7 +4,7 @@ Status: ready-for-human
 
 ## Bối cảnh
 
-Theo [ADR 0019](../../../docs/adr/0019-local-postgres-on-host.md), PostgreSQL ở local cài trên máy, bản major mới nhất: Windows cài trong WSL2 Ubuntu bằng apt (PGDG), macOS cài bằng Homebrew. Script `scripts/setup/postgres.sh` đã được viết nhưng **chưa chạy thử trên máy thật**. Ticket này chạy thử, sửa lỗi và gỡ các nhãn **[Cần xác minh]** trong [08](../../../docs/architecture/08-local-development.md).
+Theo [ADR 0015](../../../docs/adr/0015-local-postgres-on-host.md), PostgreSQL ở local cài trên máy, bản major mới nhất: Windows cài trong WSL2 Ubuntu bằng apt (PGDG), macOS cài bằng Homebrew. Script `scripts/setup/postgres.sh` đã được viết nhưng **chưa chạy thử trên máy thật**. Ticket này chạy thử, sửa lỗi và gỡ các nhãn **[Cần xác minh]** trong [08](../../../docs/architecture/08-local-development.md).
 
 ## Script làm gì
 

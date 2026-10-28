@@ -1,6 +1,6 @@
 # 11. Quy ước Git
 
-> Trạng thái: **Đã duyệt cho MVP**. Các file cấu hình theo tài liệu này đã có trong repo (mục 9).
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Các file cấu hình theo tài liệu này đã có trong repo (mục 9).
 > Ngôn ngữ: tên nhánh, commit message, tiêu đề PR viết **tiếng Anh**; mô tả PR có thể viết tiếng Việt.
 
 ## 1. Mô hình nhánh
