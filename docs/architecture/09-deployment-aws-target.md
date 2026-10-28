@@ -1,6 +1,6 @@
 # 09. Kiến trúc triển khai trên AWS (mục tiêu)
 
-> Trạng thái: **Đã duyệt cho MVP** làm kiến trúc đích, **chưa triển khai**. Tài liệu này mô tả kiến trúc đích để định hướng; sẽ được chi tiết hoá sau khi hệ thống chạy ổn ở local và nghiệm thu xong với sandbox.
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)) làm kiến trúc đích, **chưa triển khai**. Tài liệu này mô tả kiến trúc đích để định hướng; sẽ được chi tiết hoá sau khi hệ thống chạy ổn ở local và nghiệm thu xong với sandbox.
 > Region: **ap-southeast-1 (Singapore)**. Lưu ý yêu cầu hồ sơ chuyển dữ liệu ra nước ngoài (CMP-08 trong [06-compliance.md](../business/06-compliance.md)).
 > Quyết định nền tảng: [ADR 0009](../adr/0009-nextjs-bff-django-private.md) (Next.js là BFF, chạy cùng VPC; Django chỉ public webhook).
 

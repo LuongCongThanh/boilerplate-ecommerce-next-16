@@ -1,6 +1,6 @@
 # 07. Sự kiện và job chạy nền
 
-> Trạng thái: **Đã duyệt cho MVP**. Mục có nhãn **[Giả định · kiểm chứng: …]** được giữ cho tới khi có số liệu ở nơi ghi trong nhãn. Quyết định nền tảng: [ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md), [ADR 0003](../adr/0003-postgres-redis-celery.md).
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Quyết định nền tảng: [ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md), [ADR 0003](../adr/0003-postgres-redis-celery.md).
 
 ## 1. Luồng sự kiện (Transactional Outbox)
 
@@ -82,6 +82,8 @@ Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `ev
 | Sự kiện | Phát bởi | Dữ liệu chính | Handler |
 |---|---|---|---|
 | `identity.customer-registered` v1 | identity | `account_id`, `language` | notifications: tạo EmailLog xác thực; task cấp link và gửi ngoài transaction |
+| `identity.verification-email-requested` v1 | identity | `account_id` | Phát khi gửi lại email xác thực, hoặc khi đăng ký lại bằng email của Khách hàng chưa xác thực. notifications: như `customer-registered` |
+| `identity.registration-attempted` v1 | identity | `account_id` | Phát khi đăng ký bằng email đã thuộc Tài khoản đã xác thực hoặc Tài khoản nội bộ (US-501 AC2). notifications: email báo chủ email có người vừa thử đăng ký, không kèm link hay mật khẩu |
 | `identity.email-verified` v1 | identity | `account_id` | Phát mỗi khi email chuyển sang đã xác thực, kể cả qua đăng nhập Google. ordering: gắn các Đơn hàng có `contact_email` khớp (không phân biệt hoa thường) và `customer_id` null vào Tài khoản (BR-ORD-08) |
 | `identity.password-reset-requested` v1 | identity | `account_id` | notifications: tạo EmailLog reset; task cấp link và gửi ngoài transaction |
 | `identity.customer-erased` v1 | identity | `erasure_request_id` | ordering: ẩn danh Đơn hàng, xoá Giỏ hàng, gọi `shipping.contracts.redact_provider_payloads` và `payments.contracts.redact_provider_payloads` theo `reference`; promotions: ẩn danh `phone` trong lượt dùng Voucher; notifications: ẩn danh `to_address`. Mọi handler lấy đối tượng cần ẩn danh qua `identity.contracts.get_erasure_subject` |

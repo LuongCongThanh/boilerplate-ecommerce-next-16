@@ -1,6 +1,6 @@
 # 04. Quy tắc nghiệp vụ
 
-> Trạng thái: **Bản nháp chờ review**. Mỗi quy tắc có mã `BR-xxx` để user story và test tham chiếu tới. Các mục **[Giả định]** cần xác nhận.
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Mỗi quy tắc có mã `BR-xxx` để user story và test tham chiếu tới.
 > Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
 
 ## 1. Sản phẩm và Danh mục
@@ -44,7 +44,7 @@
 | BR-VCH-05 | Voucher chỉ giảm trên **Tạm tính**, không giảm phí ship. |
 | BR-VCH-06 | Số tiền giảm không vượt quá Tạm tính; Tạm tính sau giảm không âm. |
 | BR-VCH-07 | Số lượt dùng của một Người mua được đếm theo **Tài khoản hoặc số điện thoại**: mọi lượt dùng trùng Tài khoản, hoặc trùng số điện thoại liên hệ của đơn đang đặt, đều được tính. Ví dụ: Khách hàng đã dùng hết lượt thì không dùng tiếp được khi đặt như Khách vãng lai bằng cùng số điện thoại. |
-| BR-VCH-08 | Lượt dùng Voucher được tính khi đơn được tạo. Nếu đơn bị huỷ trước khi Đang giao, lượt dùng được **trả lại** **[Giả định]**. |
+| BR-VCH-08 | Lượt dùng Voucher được tính khi đơn được tạo. Nếu đơn bị huỷ trước khi Đang giao, lượt dùng được **trả lại**. |
 | BR-VCH-09 | Mã Voucher không phân biệt hoa thường, lưu dạng chữ in hoa, ví dụ `SALE10`. |
 | BR-VCH-10 | Tiền giảm theo % được **làm tròn xuống đến đồng** trước khi áp mức giảm tối đa và giới hạn bằng Tạm tính: `discount = min((subtotal * percent) // 100, max_discount nếu có, subtotal)`. Voucher số tiền cố định dùng `min(value, subtotal)`. Tính bằng số nguyên, không dùng số thực dấu phẩy động. |
 
@@ -73,7 +73,7 @@
 | BR-CRT-02 | Giỏ của Khách vãng lai hết hạn sau **30 ngày** không hoạt động. |
 | BR-CRT-03 | Khi Khách vãng lai đăng nhập, Giỏ hàng vãng lai được **gộp** vào Giỏ hàng của Tài khoản: Biến thể trùng thì cộng dồn số lượng, nhưng không vượt quá Số lượng bán được. |
 | BR-CRT-04 | Giá trong Giỏ hàng luôn là Giá áp dụng **hiện tại**. Nếu giá thay đổi so với lúc thêm vào Giỏ hàng, hệ thống thông báo cho Người mua. |
-| BR-CRT-05 | Số lượng tối đa của một Biến thể trong một giỏ là **10** **[Giả định]**. |
+| BR-CRT-05 | Số lượng tối đa của một Biến thể trong một giỏ là **10**. |
 
 ## 5. Đặt hàng và tính tiền
 
@@ -85,7 +85,7 @@
 | BR-ORD-04 | Địa chỉ giao hàng theo cấu trúc **2 cấp**: tỉnh/thành phố và phường/xã (theo sắp xếp đơn vị hành chính từ 07/2025), kèm địa chỉ chi tiết. |
 | BR-ORD-05 | Chỉ huỷ **cả đơn**, không huỷ từng Dòng đơn hàng. Nếu một phần hàng không giao được, Staff liên hệ Người mua, huỷ đơn và tạo đơn mới. |
 | BR-ORD-06 | Quy tắc huỷ và chuyển trạng thái xem [05-order-lifecycle.md](./05-order-lifecycle.md). |
-| BR-ORD-07 | Backend tính lại tổng khi đặt đơn, không tin giá Frontend. Tính thử trả quote_token có chữ ký gắn với Người mua, nội dung checkout và các dòng Giỏ hàng; checkout gửi lại token cùng expected_total. Trong transaction kiểm tra giỏ dưới khoá Cart rồi phiên bản giá, snapshot và điều kiện bán dưới khoá Biến thể. Tổng khác expected_total hoặc dữ liệu khác báo giá Người mua đã xác nhận thì không tạo đơn, yêu cầu xác nhận quote mới kể cả tổng tiền tình cờ không đổi. Báo giá có hạn, không Giữ hàng và không cam kết giá; hết hạn phải Tính thử lại. |
+| BR-ORD-07 | Backend tính lại tổng khi đặt đơn, không tin giá Frontend. Đơn chỉ được tạo khi các dòng, giá và điều kiện bán lúc đặt khớp với Tính thử mà Người mua đã xác nhận. Khác ở bất kỳ điểm nào thì không tạo đơn và Người mua phải xác nhận Tính thử mới, kể cả khi tổng tiền tình cờ không đổi. Tính thử có hạn, không Giữ hàng và không cam kết giá; hết hạn phải Tính thử lại. Cách kiểm tra kỹ thuật: [02 mục 6.2](../architecture/02-backend-structure.md#62-ví-dụ-luồng-một-request). |
 | BR-ORD-08 | Đơn của Khách vãng lai được gắn vào Tài khoản Khách hàng có email trùng (không phân biệt hoa thường): ngay khi email đó được xác thực, kể cả qua đăng nhập Google, với các đơn đã đặt trước đó; hoặc ngay lúc đặt đơn nếu email đó đã thuộc một Tài khoản đã xác thực. Không gắn theo số điện thoại. |
 | BR-ORD-09 | MVP chỉ nhận Đơn hàng có **Tổng tiền đơn > 0**, với cả COD và online. Tính thử và checkout đều từ chối nếu tổng tính được bằng 0 hoặc âm; không tự giảm giá trị Voucher, tăng Phí ship hoặc đổi Phương thức thanh toán để tạo đơn. Checkout kiểm tra lại trong transaction trước khi commit; bị từ chối thì không tạo Order, Payment, Giữ hàng, Hàng chờ xuất hay lượt dùng Voucher. |
 
@@ -102,7 +102,7 @@
 |---|---|
 | BR-SHP-01 | Phí ship được lấy **theo thời gian thực** từ GHN, dựa trên địa chỉ giao và tổng cân nặng (cân nặng Sản phẩm × số lượng). Kích thước gói dùng giá trị mặc định cấu hình được. |
 | BR-SHP-02 | Nếu API GHN lỗi hoặc quá thời gian chờ, dùng **Phí ship dự phòng** (mặc định 35.000đ) để Người mua vẫn checkout được. Đơn được gắn Cờ cần xử lý "phí ship dự phòng" để Staff theo dõi. |
-| BR-SHP-03 | Đơn có Tạm tính **sau khi trừ Voucher** đạt Ngưỡng miễn phí ship (mặc định 500.000đ **[Giả định]**) được **miễn phí ship**; cửa hàng vẫn trả Cước vận chuyển cho GHN. |
+| BR-SHP-03 | Đơn có Tạm tính **sau khi trừ Voucher** đạt Ngưỡng miễn phí ship (mặc định 500.000đ) được **miễn phí ship**; cửa hàng vẫn trả Cước vận chuyển cho GHN. |
 | BR-SHP-04 | Phí ship dự phòng và ngưỡng miễn phí ship do Admin cấu hình. |
 | BR-SHP-05 | Khi Staff bàn giao đơn cho GHN, hệ thống tự tạo Vận đơn ở GHN. Đơn chỉ chuyển sang Đang giao khi GHN tạo Vận đơn thành công; tạo thất bại thì đơn vẫn Đang đóng gói và được gắn Cờ cần xử lý. Staff bàn giao lại thì hệ thống dùng lại Vận đơn đó. |
 | BR-SHP-06 | Trạng thái giao hàng được cập nhật từ GHN qua webhook và job Đối soát định kỳ. |
@@ -118,7 +118,7 @@
 | BR-PAY-03 | Một thông báo thanh toán nhận lặp lại nhiều lần chỉ được xử lý **một lần**. |
 | BR-PAY-04 | Số tiền **đã được provider xác nhận thu thành công (captured)** phải khớp đúng Tổng tiền đơn. Không khớp thì không xác nhận đơn, gắn Cờ cần xử lý cho Staff và **tự tạo yêu cầu Hoàn tiền** đúng số tiền đã nhận. Đơn vẫn chờ thanh toán; Người mua trả lại đúng số tiền được nếu link còn hạn. Số tiền yêu cầu trong thông báo failed/pending/authorized không phải bằng chứng đã thu tiền và không tự tạo nghĩa vụ Hoàn tiền. |
 | BR-PAY-05 | Nếu nhận được tiền cho một Đơn hàng **không còn chờ thanh toán**, hệ thống **tự tạo yêu cầu Hoàn tiền** cho khoản tiền đó và gắn Cờ cần xử lý cho Staff; Đơn hàng giữ nguyên trạng thái. Hai trường hợp thường gặp: đơn đã bị huỷ (Người mua trả sát lúc hết hạn), hoặc đơn đã được thanh toán bởi một lần trả tiền khác (Người mua trả ở hai tab). |
-| BR-PAY-06 | Giá trị đơn COD tối đa (hạn mức COD) mặc định **5.000.000đ** **[Giả định]**, do Admin cấu hình; vượt mức thì Người mua phải thanh toán online. |
+| BR-PAY-06 | Giá trị đơn COD tối đa (hạn mức COD) mặc định **5.000.000đ**, do Admin cấu hình; vượt mức thì Người mua phải thanh toán online. |
 
 ## 8. Hoàn tiền
 
@@ -139,8 +139,8 @@
 | BR-RET-02 | Điều kiện: hàng **còn tag, chưa qua sử dụng**. |
 | BR-RET-03 | Hàng có Giá khuyến mãi giảm **trên 50%** (BR-PRC-04) **không** được Đổi trả. |
 | BR-RET-04 | MVP: Người mua gửi yêu cầu qua hotline hoặc Zalo; Staff ghi nhận yêu cầu trong back-office. |
-| BR-RET-05 | "Đổi" hàng (đổi size, đổi màu) được xử lý như **trả hàng + tạo đơn mới** **[Giả định]**. |
-| BR-RET-06 | Phí ship gửi trả: cửa hàng chịu nếu hàng lỗi hoặc giao sai, Người mua chịu trong các trường hợp còn lại **[Giả định]**. |
+| BR-RET-05 | "Đổi" hàng (đổi size, đổi màu) được xử lý như **trả hàng + tạo đơn mới**. |
+| BR-RET-06 | Phí ship gửi trả: cửa hàng chịu nếu hàng lỗi hoặc giao sai, Người mua chịu trong các trường hợp còn lại. |
 | BR-RET-07 | Số tiền Hoàn tiền khi Đổi trả = phần Người mua **đã thực trả** cho số lượng **được chấp nhận** (BR-RET-08), tức đơn giá trừ phần Voucher đã phân bổ cho dòng (BR-ORD-02). Không truy thu phí ship khi phần hàng còn giữ lại tụt dưới ngưỡng miễn phí ship. Ví dụ: 3 áo × 200.000đ, Voucher giảm 60.000đ, trả 1 áo thì hoàn 180.000đ. |
 | BR-RET-08 | Staff Chấp nhận Đổi trả **theo từng dòng**: nhập số lượng được chấp nhận (từ 0 tới số lượng gửi trả) và chọn nhập lại Tồn kho hay không (hàng lỗi thì không nhập lại). Yêu cầu được Chấp nhận nếu có ít nhất một sản phẩm được chấp nhận, ngược lại bị Từ chối. |
 | BR-RET-09 | Hàng không được chấp nhận được gửi lại cho Người mua, Người mua chịu phí ship. MVP: Staff xử lý việc gửi lại ngoài hệ thống và ghi chú vào yêu cầu Đổi trả. |

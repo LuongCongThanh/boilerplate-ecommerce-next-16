@@ -1,7 +1,7 @@
 # 08. Môi trường phát triển local (macOS và Windows WSL2)
 
-> Trạng thái: **Đã duyệt cho MVP**.
-> **PostgreSQL cài trên máy** (macOS: Homebrew; Windows: trong WSL2 Ubuntu), bằng bộ cài `scripts/setup/postgres.sh` ([ADR 0019](../adr/0019-local-postgres-on-host.md)). Các dịch vụ còn lại chạy bằng **Docker Compose**. Trên máy cần Docker, `uv`, `git`, `make`.
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)).
+> **PostgreSQL cài trên máy** (macOS: Homebrew; Windows: trong WSL2 Ubuntu), bằng bộ cài `scripts/setup/postgres.sh` ([ADR 0015](../adr/0015-local-postgres-on-host.md)). Các dịch vụ còn lại chạy bằng **Docker Compose**. Trên máy cần Docker, `uv` ≥ 0.13 (uv tự tải Python 3.14 theo `backend/.python-version`), `git`, `make`.
 
 ## 1. Tổng quan
 
@@ -104,7 +104,7 @@ Sau khi cài xong, mọi bước từ mục 2.2 trở đi **giống hệt macOS*
 
 ### 2.2. Database
 
-PostgreSQL cài trên máy, không chạy trong Docker ([ADR 0019](../adr/0019-local-postgres-on-host.md)). Từ gốc repo, chạy (trên Windows thì chạy trong Ubuntu của WSL):
+PostgreSQL cài trên máy, không chạy trong Docker ([ADR 0015](../adr/0015-local-postgres-on-host.md)). Từ gốc repo, chạy (trên Windows thì chạy trong Ubuntu của WSL):
 
 ```bash
 bash scripts/setup/postgres.sh
@@ -139,6 +139,7 @@ Các biến chính trong `.env`:
 
 ```dotenv
 DJANGO_SETTINGS_MODULE=config.settings.local
+DJANGO_SECRET_KEY=local-only-change-me
 DATABASE_URL=postgres://fashion:fashion@localhost:5432/fashion   # theo output của scripts/setup/postgres.sh
 PG_PORT=5432                                                      # Compose dùng để trỏ host.docker.internal
 REDIS_URL=redis://redis:6379/0
@@ -148,6 +149,8 @@ JWT_PRIVATE_KEY_PATH=.secrets/jwt_ed25519.pem
 JWT_KEY_ID=local-1
 REFRESH_REPLAY_KEY_ID=local-replay-1
 REFRESH_REPLAY_KEY_PATH=.secrets/refresh_replay.key
+QUOTE_SIGNING_KEYS=local-quote-1:local-quote-secret       # kid:secret, nhiều khoá cách nhau bằng dấu phẩy, khoá đầu dùng để ký (04 mục 5.3)
+PII_HMAC_KEYS=local-pii-1:local-pii-secret                # kid:secret, khoá đầu dùng cho giá trị mới, không xoá khoá cũ (ADR 0016)
 STOREFRONT_ORIGIN=http://localhost:3000
 PAYMENT_PROVIDER_VNPAY=fake
 PAYMENT_PROVIDER_MOMO=fake
@@ -283,4 +286,4 @@ services:
     ports: ["1025:1025", "8025:8025"]
 ```
 
-Phiên bản image (`valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Compose không có service `postgres` ([ADR 0019](../adr/0019-local-postgres-on-host.md)); `PG_PORT` đọc từ `.env` để Compose thay vào `DATABASE_URL`.
+Phiên bản image (`valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Compose không có service `postgres` ([ADR 0015](../adr/0015-local-postgres-on-host.md)); `PG_PORT` đọc từ `.env` để Compose thay vào `DATABASE_URL`.

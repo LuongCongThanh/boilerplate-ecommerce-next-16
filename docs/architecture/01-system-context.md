@@ -1,6 +1,6 @@
 # 01. Bối cảnh hệ thống (C4 mức 1, 2 và 3)
 
-> Trạng thái: **Bản nháp chờ review**. Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
 
 Tài liệu mô tả thiết kế mục tiêu, không phải xác nhận các dịch vụ đã được triển khai. File này sở hữu ranh giới hệ thống và các luồng tổng quan; [02](./02-backend-structure.md) sở hữu tổ chức code, [03](./03-data-model.md) sở hữu schema và ràng buộc dữ liệu. Quy tắc nghiệp vụ nằm trong `docs/business/`; API, bảo mật, tích hợp và async được đặc tả tại 04–07. Sơ đồ rút gọn không thay thế các bước kiểm tra trong những tài liệu đó; khi sửa một quyết định phải cập nhật các mô tả liên quan.
 
@@ -137,7 +137,7 @@ graph TB
     ordering -. "sự kiện: order-placed, order-cancelled…" .-> notifications
     payments -. "sự kiện: refund-recorded" .-> notifications
     identity -. "sự kiện: email-verified, customer-erased" .-> ordering
-    identity -. "sự kiện: customer-registered, password-reset-requested" .-> notifications
+    identity -. "sự kiện: customer-registered, registration-attempted, password-reset-requested" .-> notifications
 ```
 
 ## 4. Luồng chính: đặt hàng thanh toán VNPay
@@ -156,7 +156,7 @@ sequenceDiagram
     B->>N: Đặt hàng
     N->>API: POST /store/checkout {payment_method: online, expected_total, quote_token} + Idempotency-Key
     Note over API: Ngoài transaction: tính lại tổng tiền, so với expected_total
-    API->>DB: Một transaction: khoá Cart, StockItem rồi Variant; so giỏ/quote_token, giá/snapshot/điều kiện bán và Voucher, tổng > 0; Giữ hàng, lượt Voucher, Order PENDING_PAYMENT và xoá dòng giỏ đã mua
+    API->>DB: Một transaction: kiểm lại báo giá dưới khoá (02 mục 6.2); Giữ hàng, lượt Voucher, Order PENDING_PAYMENT và xoá dòng giỏ đã mua
     Note over API,DB: Dữ liệu khác báo giá thì rollback, trả PRICE_CHANGED; tổng không dương thì ORDER_TOTAL_NOT_POSITIVE. Chưa phát sự kiện.
     API-->>N: 201 {order_code, lookup_token}
     N->>API: POST /store/orders/{code}/payments {gateway: vnpay} + Idempotency-Key + X-Lookup-Token

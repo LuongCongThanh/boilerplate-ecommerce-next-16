@@ -15,7 +15,7 @@ README chỉ là bản đồ để biết file nào trả lời câu hỏi nào.
 
 ## Trạng thái
 
-Mọi file đang ở trạng thái **Bản nháp chờ review**, riêng [09](./09-deployment-aws-target.md) là **Target, chưa triển khai**: hạ tầng AWS chưa tồn tại, file đó chỉ để định hướng. Các con số có nhãn **[Giả định]** hoặc **[Cần xác minh]** chưa được chốt.
+Mọi file ở trạng thái **Đã chốt cho MVP**, riêng [09](./09-deployment-aws-target.md) là kiến trúc đích **chưa triển khai**: hạ tầng AWS chưa tồn tại, file đó chỉ để định hướng. Quy ước cập nhật và ý nghĩa các nhãn: [README gốc](../../README.md#trạng-thái-tài-liệu).
 
 ## Đọc gì trước
 
@@ -86,7 +86,7 @@ Liên quan: [ADR 0003](../adr/0003-postgres-redis-celery.md), [ADR 0007](../adr/
 
 ### [08. Môi trường phát triển local](./08-local-development.md)
 
-Cách dựng môi trường trên macOS và trên Windows qua WSL2. PostgreSQL cài trên máy bằng `scripts/setup/postgres.sh` ([ADR 0019](../adr/0019-local-postgres-on-host.md)); các dịch vụ còn lại, gồm Redis (Valkey), chạy bằng Docker Compose. File hướng dẫn cài đặt lần đầu, đặt biến môi trường, các lệnh `Makefile` hằng ngày, debug, chạy test và cấu hình VS Code hoặc PyCharm.
+Cách dựng môi trường trên macOS và trên Windows qua WSL2. PostgreSQL cài trên máy bằng `scripts/setup/postgres.sh` ([ADR 0015](../adr/0015-local-postgres-on-host.md)); các dịch vụ còn lại, gồm Redis (Valkey), chạy bằng Docker Compose. File hướng dẫn cài đặt lần đầu, đặt biến môi trường, các lệnh `Makefile` hằng ngày, debug, chạy test và cấu hình VS Code hoặc PyCharm.
 
 ### [09. Triển khai trên AWS (mục tiêu)](./09-deployment-aws-target.md)
 
@@ -94,7 +94,7 @@ Kiến trúc đích ở region Singapore, **chưa triển khai**. Thành phần 
 
 ### [10. Yêu cầu phi chức năng](./10-nfr.md)
 
-Mục tiêu cho MVP với tải khoảng 500–5.000 đơn/ngày. Gồm hiệu năng (p95 API, tải đỉnh khi có khuyến mãi), độ sẵn sàng (RPO, RTO, hệ thống vẫn chạy khi GHN, cổng thanh toán hoặc Redis lỗi), bảo mật, observability, khả năng mở rộng, chất lượng code và bản địa hoá. Phần lớn con số là **[Giả định]**.
+Mục tiêu cho MVP với tải khoảng 500–5.000 đơn/ngày. Gồm hiệu năng (p95 API, tải đỉnh khi có khuyến mãi), độ sẵn sàng (RPO, RTO, hệ thống vẫn chạy khi GHN, cổng thanh toán hoặc Redis lỗi), bảo mật, observability, khả năng mở rộng, chất lượng code và bản địa hoá. Các con số có nhãn **[Giả định · kiểm chứng: …]** sẽ được kiểm bằng test tải và số liệu production.
 
 ## Quy trình làm việc
 

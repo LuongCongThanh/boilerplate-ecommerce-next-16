@@ -1,6 +1,6 @@
 # 02. Vai trò người dùng và phân quyền
 
-> Trạng thái: **Bản nháp chờ review**. Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
 
 ## 1. Các vai trò
 
