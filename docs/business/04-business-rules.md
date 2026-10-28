@@ -19,6 +19,7 @@
 | BR-CAT-10 | Tên, mô tả Sản phẩm và tên Danh mục chỉ có **tiếng Việt**. |
 | BR-CAT-11 | Size và màu của Biến thể được chọn từ **danh sách size** và **bảng màu** dùng chung do Admin quản lý. Size có thứ tự hiển thị; màu có mã, tên và mã hex. Size hoặc màu đã có Biến thể dùng chỉ được ẩn, không được xoá. Bộ lọc trên storefront lọc theo mã size và mã màu. |
 | BR-CAT-12 | Sắp xếp **bán chạy** theo tổng số lượng trong Dòng đơn hàng của các đơn đã vào Chờ xác nhận, chưa bị huỷ và không Hoàn hàng, trong 30 ngày gần nhất, tính theo Sản phẩm. Số liệu cập nhật mỗi đêm, không cần thời gian thực. |
+| BR-CAT-13 | MVP tìm kiếm theo **chuỗi con liên tiếp trong tên Sản phẩm**, không phân biệt hoa thường và dấu tiếng Việt. Bỏ khoảng trắng đầu/cuối từ khoá; từ khoá rỗng được coi là không lọc tìm kiếm. Không sửa lỗi gõ, đảo thứ tự từ hoặc tìm gần đúng. Tìm kiếm chỉ lọc kết quả, vẫn kết hợp với các bộ lọc và cách sắp xếp của US-102. |
 
 ## 2. Giá và khuyến mãi
 
@@ -45,6 +46,7 @@
 | BR-VCH-07 | Số lượt dùng của một Người mua được đếm theo **Tài khoản hoặc số điện thoại**: mọi lượt dùng trùng Tài khoản, hoặc trùng số điện thoại liên hệ của đơn đang đặt, đều được tính. Ví dụ: Khách hàng đã dùng hết lượt thì không dùng tiếp được khi đặt như Khách vãng lai bằng cùng số điện thoại. |
 | BR-VCH-08 | Lượt dùng Voucher được tính khi đơn được tạo. Nếu đơn bị huỷ trước khi Đang giao, lượt dùng được **trả lại** **[Giả định]**. |
 | BR-VCH-09 | Mã Voucher không phân biệt hoa thường, lưu dạng chữ in hoa, ví dụ `SALE10`. |
+| BR-VCH-10 | Tiền giảm theo % được **làm tròn xuống đến đồng** trước khi áp mức giảm tối đa và giới hạn bằng Tạm tính: `discount = min((subtotal * percent) // 100, max_discount nếu có, subtotal)`. Voucher số tiền cố định dùng `min(value, subtotal)`. Tính bằng số nguyên, không dùng số thực dấu phẩy động. |
 
 ## 3. Tồn kho
 
@@ -83,8 +85,16 @@
 | BR-ORD-04 | Địa chỉ giao hàng theo cấu trúc **2 cấp**: tỉnh/thành phố và phường/xã (theo sắp xếp đơn vị hành chính từ 07/2025), kèm địa chỉ chi tiết. |
 | BR-ORD-05 | Chỉ huỷ **cả đơn**, không huỷ từng Dòng đơn hàng. Nếu một phần hàng không giao được, Staff liên hệ Người mua, huỷ đơn và tạo đơn mới. |
 | BR-ORD-06 | Quy tắc huỷ và chuyển trạng thái xem [05-order-lifecycle.md](./05-order-lifecycle.md). |
-| BR-ORD-07 | Backend tính lại tổng khi đặt đơn, không tin giá Frontend; trong transaction kiểm tra lại phiên bản giá, snapshot và điều kiện bán dưới khoá Biến thể. Tổng khác expected_total hoặc dữ liệu thay đổi sau báo giá thì không tạo đơn, yêu cầu Người mua xác nhận quote mới, kể cả tổng tiền tình cờ không đổi. |
+| BR-ORD-07 | Backend tính lại tổng khi đặt đơn, không tin giá Frontend. Tính thử trả quote_token có chữ ký gắn với Người mua, nội dung checkout và các dòng Giỏ hàng; checkout gửi lại token cùng expected_total. Trong transaction kiểm tra giỏ dưới khoá Cart rồi phiên bản giá, snapshot và điều kiện bán dưới khoá Biến thể. Tổng khác expected_total hoặc dữ liệu khác báo giá Người mua đã xác nhận thì không tạo đơn, yêu cầu xác nhận quote mới kể cả tổng tiền tình cờ không đổi. Báo giá có hạn, không Giữ hàng và không cam kết giá; hết hạn phải Tính thử lại. |
 | BR-ORD-08 | Đơn của Khách vãng lai được gắn vào Tài khoản Khách hàng có email trùng (không phân biệt hoa thường): ngay khi email đó được xác thực, kể cả qua đăng nhập Google, với các đơn đã đặt trước đó; hoặc ngay lúc đặt đơn nếu email đó đã thuộc một Tài khoản đã xác thực. Không gắn theo số điện thoại. |
+| BR-ORD-09 | MVP chỉ nhận Đơn hàng có **Tổng tiền đơn > 0**, với cả COD và online. Tính thử và checkout đều từ chối nếu tổng tính được bằng 0 hoặc âm; không tự giảm giá trị Voucher, tăng Phí ship hoặc đổi Phương thức thanh toán để tạo đơn. Checkout kiểm tra lại trong transaction trước khi commit; bị từ chối thì không tạo Order, Payment, Giữ hàng, Hàng chờ xuất hay lượt dùng Voucher. |
+
+### Phân bổ Voucher về Dòng đơn hàng (BR-ORD-02)
+
+- Sắp các dòng theo `variant_id` tăng dần để có thứ tự ổn định, không phụ thuộc thứ tự request hay thứ tự truy vấn DB. Giá trị dòng `L_i = unit_price_i * quantity_i`, tổng `S = SUM(L_i)`, số giảm của đơn `D` tính theo BR-VCH-10.
+- Phân bổ ban đầu `d_i = (D * L_i) // S`. Phần dư `R = D - SUM(d_i)` được cộng vào dòng cuối. Nếu vượt giá trị dòng đó, chỉ cộng tới `L_i`, rồi chuyển phần còn lại lần lượt về các dòng trước theo thứ tự ngược. Nhờ vậy luôn có `0 <= d_i <= L_i` và `SUM(d_i) = D`, kể cả khi các dòng có giá trị rất nhỏ.
+- Lưu `d_i` thành `voucher_discount` lúc tạo đơn; không phân bổ lại theo giá hoặc Voucher hiện tại khi Đổi trả.
+- Ví dụ: Tạm tính 1.001đ, Voucher 10% → giảm 100đ. Hai dòng lần lượt 500đ và 501đ → phân bổ 49đ và 51đ. Trường hợp ba dòng mỗi dòng 1đ, giảm 2đ → phân bổ 0đ, 1đ, 1đ; không dồn 2đ vào một dòng chỉ có giá trị 1đ.
 
 ## 6. Vận chuyển
 
@@ -106,7 +116,7 @@
 | BR-PAY-01 | Phương thức thanh toán: **COD** hoặc **online**, chốt khi đặt đơn. Thanh toán online đi qua Cổng thanh toán **VNPay** hoặc **MoMo**; Người mua chọn Cổng ở mỗi lần trả tiền, và khi đơn còn chờ thanh toán thì được thử lại bằng Cổng khác. |
 | BR-PAY-02 | Trạng thái Thanh toán chỉ được xác nhận qua **thông báo server-to-server (IPN)** hoặc **job Đối soát**, không bao giờ dựa vào trang Người mua được chuyển về (Return URL). |
 | BR-PAY-03 | Một thông báo thanh toán nhận lặp lại nhiều lần chỉ được xử lý **một lần**. |
-| BR-PAY-04 | Số tiền thanh toán nhận được phải khớp đúng Tổng tiền đơn. Không khớp thì không xác nhận, gắn Cờ cần xử lý cho Staff và **tự tạo yêu cầu Hoàn tiền** đúng số tiền đã nhận. Đơn vẫn chờ thanh toán; Người mua trả lại đúng số tiền được nếu link còn hạn. |
+| BR-PAY-04 | Số tiền **đã được provider xác nhận thu thành công (captured)** phải khớp đúng Tổng tiền đơn. Không khớp thì không xác nhận đơn, gắn Cờ cần xử lý cho Staff và **tự tạo yêu cầu Hoàn tiền** đúng số tiền đã nhận. Đơn vẫn chờ thanh toán; Người mua trả lại đúng số tiền được nếu link còn hạn. Số tiền yêu cầu trong thông báo failed/pending/authorized không phải bằng chứng đã thu tiền và không tự tạo nghĩa vụ Hoàn tiền. |
 | BR-PAY-05 | Nếu nhận được tiền cho một Đơn hàng **không còn chờ thanh toán**, hệ thống **tự tạo yêu cầu Hoàn tiền** cho khoản tiền đó và gắn Cờ cần xử lý cho Staff; Đơn hàng giữ nguyên trạng thái. Hai trường hợp thường gặp: đơn đã bị huỷ (Người mua trả sát lúc hết hạn), hoặc đơn đã được thanh toán bởi một lần trả tiền khác (Người mua trả ở hai tab). |
 | BR-PAY-06 | Giá trị đơn COD tối đa (hạn mức COD) mặc định **5.000.000đ** **[Giả định]**, do Admin cấu hình; vượt mức thì Người mua phải thanh toán online. |
 
@@ -134,6 +144,14 @@
 | BR-RET-07 | Số tiền Hoàn tiền khi Đổi trả = phần Người mua **đã thực trả** cho số lượng **được chấp nhận** (BR-RET-08), tức đơn giá trừ phần Voucher đã phân bổ cho dòng (BR-ORD-02). Không truy thu phí ship khi phần hàng còn giữ lại tụt dưới ngưỡng miễn phí ship. Ví dụ: 3 áo × 200.000đ, Voucher giảm 60.000đ, trả 1 áo thì hoàn 180.000đ. |
 | BR-RET-08 | Staff Chấp nhận Đổi trả **theo từng dòng**: nhập số lượng được chấp nhận (từ 0 tới số lượng gửi trả) và chọn nhập lại Tồn kho hay không (hàng lỗi thì không nhập lại). Yêu cầu được Chấp nhận nếu có ít nhất một sản phẩm được chấp nhận, ngược lại bị Từ chối. |
 | BR-RET-09 | Hàng không được chấp nhận được gửi lại cho Người mua, Người mua chịu phí ship. MVP: Staff xử lý việc gửi lại ngoài hệ thống và ghi chú vào yêu cầu Đổi trả. |
+
+### Làm tròn Hoàn tiền khi Đổi trả nhiều lần (BR-RET-07)
+
+- Với mỗi Dòng đơn hàng, gọi `N = unit_price * quantity - voucher_discount` là số tiền hàng thực trả, `q = quantity`. Số tiền hoàn lũy kế cho `k` sản phẩm được chấp nhận là `F(k) = (N * k) // q`, với `F(0) = 0`.
+- Nếu đã chấp nhận `k` sản phẩm ở các yêu cầu trước, lần này chấp nhận thêm `n` thì số hoàn của dòng là `F(k + n) - F(k)`. Tính `k` từ các yêu cầu `accepted` hoặc `refunded`, kể cả khoản hoàn còn chờ Staff xử lý; không tính yêu cầu bị từ chối hoặc số lượng không được chấp nhận. Khoá Order khi tính và chấp nhận để hai yêu cầu không dùng cùng một mốc `k`.
+- Tiền hoàn của yêu cầu là tổng số hoàn các dòng. Phần lẻ được bù theo số lượng lũy kế; khi trả hết dòng, `F(q) = N`, nên tổng các lần hoàn bằng đúng số tiền hàng thực trả. Không tính lại Voucher và không hoàn Phí ship trong Đổi trả.
+- Ví dụ: dòng 3 sản phẩm × 100đ, được phân bổ Voucher 1đ → `N = 299đ`. Trả lần lượt từng sản phẩm thì hoàn 99đ, 100đ, 100đ; tổng 299đ. Một lần trả cả 3 cũng hoàn 299đ.
+- Nếu có sản phẩm được chấp nhận nhưng tổng tiền hoàn của yêu cầu bằng 0 (do Voucher hoặc làm tròn), vẫn xử lý nhập lại Tồn kho theo lựa chọn của Staff và khép lại yêu cầu ở `refunded`, không tạo Hoàn tiền 0đ hay gọi Cổng thanh toán. `refunded` trong trường hợp này nghĩa là đã xử lý xong và không còn tiền phải hoàn. Không có sản phẩm nào được chấp nhận thì vẫn là `rejected` theo BR-RET-08.
 
 ## 10. Thông báo
 

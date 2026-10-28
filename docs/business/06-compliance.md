@@ -62,3 +62,14 @@ Website phải công khai:
 **MVP**: các nội dung này là nội dung tĩnh trong repo Frontend, sửa qua Pull Request và deploy lại. Backend **không** lưu và Admin không sửa được trên back-office, vì các nội dung này hiếm khi đổi. Khi cần Admin tự sửa thì đưa vào giai đoạn sau.
 
 Riêng phiên bản chính sách bảo mật mà Người mua đồng ý vẫn được Backend lưu cùng bằng chứng đồng ý (CMP-02).
+
+## 5. Thời hạn lưu dữ liệu
+
+| Dữ liệu | Thời hạn | Khi hết hạn |
+|---|---|---|
+| Log ứng dụng (CloudWatch Logs) | 30 ngày | Tự xoá. Log đã che PII và chỉ ghi IP dạng HMAC ([05-auth-security.md](../architecture/05-auth-security.md) mục 8) |
+| Lỗi gửi về Sentry | Theo gói Sentry đang dùng | Bắt buộc bật data scrubbing để không gửi PII lên Sentry |
+| Email đã gửi, thất bại hoặc đã huỷ (EmailLog) | 90 ngày | Xoá địa chỉ nhận và số tiền đã lưu, giữ bản ghi để thống kê ([07-async-events-jobs.md](../architecture/07-async-events-jobs.md) mục 3.2) |
+| Sự kiện trong outbox | 90 ngày, khi đã xử lý xong | Xoá. Payload không chứa PII ([07-async-events-jobs.md](../architecture/07-async-events-jobs.md) mục 2) |
+
+**Việc còn mở [Cần xác minh]**: thông báo thô của Cổng thanh toán và hãng vận chuyển (`raw_payload`), dữ liệu gửi GHN khi tạo Vận đơn (`creation_input`) và địa chỉ trên Đơn hàng hiện chỉ bị ẩn danh khi có Yêu cầu xoá dữ liệu. Thời hạn lưu của chúng phụ thuộc yêu cầu kế toán và thuế, nên phải do pháp chế hoặc kế toán chốt, không do kỹ sư tự chọn.

@@ -1,6 +1,6 @@
 # 08. Môi trường phát triển local (macOS và Windows WSL2)
 
-> Trạng thái: **Bản nháp chờ review**.
+> Trạng thái: **Đã duyệt cho MVP**.
 > **PostgreSQL cài trên máy** (macOS: Homebrew; Windows: trong WSL2 Ubuntu), bằng bộ cài `scripts/setup/postgres.sh` ([ADR 0019](../adr/0019-local-postgres-on-host.md)). Các dịch vụ còn lại chạy bằng **Docker Compose**. Trên máy cần Docker, `uv`, `git`, `make`.
 
 ## 1. Tổng quan
@@ -177,7 +177,7 @@ Lệnh từ chối ghi đè key đã có; không tạo lại mỗi lần khởi 
 
 ```bash
 make up             # docker compose up -d --build
-make migrate        # chạy migration
+make migrate        # chạy migration rồi sync_beat_schedule (lịch job Celery Beat)
 make load-geo       # nạp 34 tỉnh/thành và phường/xã
 make seed           # tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu
 make create-admin   # tạo tài khoản Admin
@@ -197,7 +197,7 @@ make create-admin   # tạo tài khoản Admin
 | `make up` / `make down` | Bật / tắt các container |
 | `make logs s=worker` | Xem log của một service |
 | `make shell` | `manage.py shell` trong container api |
-| `make makemigrations` / `make migrate` | Tạo / chạy migration |
+| `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) |
 | `make db-reset` | Xoá và tạo lại database `fashion` rồi migrate (mục 2.2) |
 | `make load-geo` | Nạp 34 tỉnh/thành và phường/xã |
 | `make seed` | Tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu |
@@ -217,7 +217,11 @@ make create-admin   # tạo tài khoản Admin
 
 - Test dùng database `test_fashion` do pytest-django tự tạo trên PostgreSQL cài trên máy, mỗi worker `pytest-xdist` một database riêng (không dùng SQLite, để giống production: `select_for_update`, `EXCLUDE`, `unaccent`).
 - Celery chạy đồng bộ; API bên ngoài dùng Fake hoặc `respx`; thời gian cố định bằng `time-machine`.
-- Có thể chạy test ngay trên máy (hoặc trong WSL), không qua container `api`: `uv run pytest` với `DATABASE_URL` trong `.env` (trỏ `localhost:<PG_PORT>`).
+- Có thể chạy test ngay trên máy (hoặc trong WSL), không qua container `api`. `DATABASE_URL` trong `.env` đã trỏ `localhost:<PG_PORT>`, nhưng `REDIS_URL` trỏ host `redis` (tên service trong Compose), nên phải ghi đè khi chạy từ máy:
+  ```bash
+  REDIS_URL=redis://localhost:6379/0 uv run pytest
+  ```
+  Biến môi trường của shell được ưu tiên hơn giá trị trong `.env`. Run configuration "Pytest (local)" của VS Code và "Pytest" của PyCharm (mục 6) cũng phải đặt biến này (thêm khi khởi tạo backend).
 
 ## 6. Cấu hình IDE dùng chung
 
@@ -264,7 +268,7 @@ services:
     ports: ["8000:8000", "5678:5678"]
   worker:
     <<: *app
-    command: celery -A config worker -Q default,events,emails,integrations -l info
+    command: celery -A config worker -Q default,events,emails,integrations -l info  # local: 1 worker cho cả 4 queue (07 mục 3.1)
   beat:
     <<: *app
     command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler

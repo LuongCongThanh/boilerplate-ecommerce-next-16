@@ -2,6 +2,8 @@
 
 > Trạng thái: **Bản nháp chờ review**. Thuật ngữ dùng theo [GLOSSARY.md](../../GLOSSARY.md).
 
+Tài liệu mô tả thiết kế mục tiêu, không phải xác nhận các dịch vụ đã được triển khai. File này sở hữu ranh giới hệ thống và các luồng tổng quan; [02](./02-backend-structure.md) sở hữu tổ chức code, [03](./03-data-model.md) sở hữu schema và ràng buộc dữ liệu. Quy tắc nghiệp vụ nằm trong `docs/business/`; API, bảo mật, tích hợp và async được đặc tả tại 04–07. Sơ đồ rút gọn không thay thế các bước kiểm tra trong những tài liệu đó; khi sửa một quyết định phải cập nhật các mô tả liên quan.
+
 ## 1. Mức 1: hệ thống và các bên liên quan
 
 ```mermaid
@@ -152,9 +154,10 @@ sequenceDiagram
     participant V as VNPay
 
     B->>N: Đặt hàng
-    N->>API: POST /store/checkout {payment_method: online, expected_total} + Idempotency-Key
+    N->>API: POST /store/checkout {payment_method: online, expected_total, quote_token} + Idempotency-Key
     Note over API: Ngoài transaction: tính lại tổng tiền, so với expected_total
-    API->>DB: Một transaction: Giữ hàng 15 phút, lượt Voucher, Order PENDING_PAYMENT (chưa phát sự kiện)
+    API->>DB: Một transaction: khoá Cart, StockItem rồi Variant; so giỏ/quote_token, giá/snapshot/điều kiện bán và Voucher, tổng > 0; Giữ hàng, lượt Voucher, Order PENDING_PAYMENT và xoá dòng giỏ đã mua
+    Note over API,DB: Dữ liệu khác báo giá thì rollback, trả PRICE_CHANGED; tổng không dương thì ORDER_TOTAL_NOT_POSITIVE. Chưa phát sự kiện.
     API-->>N: 201 {order_code, lookup_token}
     N->>API: POST /store/orders/{code}/payments {gateway: vnpay} + Idempotency-Key + X-Lookup-Token
     API->>DB: Tạo Payment pending, link hết hạn ở phút thứ 10 kể từ lúc đặt đơn (từ phút thứ 7 thì trả PAYMENT_WINDOW_CLOSED)
@@ -181,4 +184,4 @@ Nếu IPN không tới, job Đối soát `payments.reconcile_pending_payments` (
 
 Tính từ lúc đặt đơn, link thanh toán hết hạn ở phút thứ 10, Giữ hàng hết hạn ở phút thứ 15. Khoảng đệm 5 phút dành cho IPN đến muộn. Đối soát chỉ là lưới an toàn: job chạy theo lịch cố định chứ không canh theo từng đơn, nên không bảo đảm kịp trước phút 15.
 
-Điều kiện của T3 (Giữ hàng còn hiệu lực) và T4 (đơn vẫn ở `PENDING_PAYMENT`) được xét **lúc handler hoặc job chạy**, không phải lúc tiền về. Vì vậy nếu tiền về sát phút 15 và job `ordering.cancel_expired_pending_orders` chạy trước handler T3, đơn vẫn bị huỷ (T4) dù Người mua đã trả trong hạn. Đây là đánh đổi có chủ ý: Giữ hàng quá `expires_at` luôn vô hiệu ([03](./03-data-model.md)), và cửa sổ rủi ro chỉ vài giây trễ của relay. Để cửa sổ này không phình ra khi việc giao sự kiện bị tồn đọng (ví dụ sau khi Redis lỗi), job T4 bỏ qua lượt chạy khi `shared.events.delivery_lag()` quá **60 giây**, tức còn sự kiện chưa lập delivery hoặc delivery `pending` đã tới hạn mà chưa được xử lý ([07](./07-async-events-jobs.md) mục 3.2). Nếu handler T3 chạy khi đơn vẫn `PENDING_PAYMENT` nhưng Giữ hàng đã quá hạn, hệ thống thử giữ lại hàng: còn đủ Số lượng bán được thì đơn vẫn vào `PLACED`, không đủ thì chạy T4 rồi xử lý như đơn đã huỷ. Nếu tiền vẫn về khi Đơn hàng không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi một lần Thanh toán khác), hệ thống tự tạo Hoàn tiền và gắn Cờ cần xử lý `unexpected_payment` (BR-PAY-05).
+Điều kiện của T3 (Giữ hàng còn hiệu lực, hoặc giữ lại được hàng khi đã quá hạn) và T4 (đơn vẫn ở `PENDING_PAYMENT`) được xét **lúc handler hoặc job chạy**, không phải lúc tiền về. Vì vậy nếu tiền về sát phút 15 và job `ordering.cancel_expired_pending_orders` chạy trước handler T3, đơn vẫn bị huỷ (T4) dù Người mua đã trả trong hạn. Đây là đánh đổi có chủ ý: Giữ hàng quá `expires_at` luôn vô hiệu ([03](./03-data-model.md)), và cửa sổ rủi ro chỉ vài giây trễ của relay. Để cửa sổ này không phình ra khi việc giao sự kiện bị tồn đọng (ví dụ sau khi Redis lỗi), job T4 bỏ qua lượt chạy khi `shared.events.delivery_lag()` quá **60 giây**, tức còn sự kiện chưa lập delivery hoặc delivery `pending` đã tới hạn mà chưa được xử lý ([07](./07-async-events-jobs.md) mục 3.2). Nếu handler T3 chạy khi đơn vẫn `PENDING_PAYMENT` nhưng Giữ hàng đã quá hạn, hệ thống thử giữ lại hàng: còn đủ Số lượng bán được thì đơn vẫn vào `PLACED`, không đủ thì chạy T4 rồi xử lý như đơn đã huỷ. Nếu tiền vẫn về khi Đơn hàng không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi một lần Thanh toán khác), hệ thống tự tạo Hoàn tiền và gắn Cờ cần xử lý `unexpected_payment` (BR-PAY-05).

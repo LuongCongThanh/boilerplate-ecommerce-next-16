@@ -42,6 +42,10 @@ _Avoid_: Hold, lock, tạm giữ
 Phần hàng của một Biến thể trong Kho đã bán cho Đơn hàng nhưng chưa Bàn giao. Hàng trên kệ bằng Tồn kho cộng Hàng chờ xuất.
 _Avoid_: Allocated, committed, hàng đã đặt
 
+**Nhập kho (Stock Inbound)**:
+Việc Staff ghi nhận hàng mới về Kho theo một phiếu nhập, làm tăng Tồn kho của Biến thể.
+_Avoid_: Receiving, nhập hàng, restock
+
 **Kiểm kê (Stock Count)**:
 Việc Staff đếm hàng thực tế trên kệ của một Biến thể để hệ thống so với Tồn kho cộng Hàng chờ xuất, rồi điều chỉnh Tồn kho theo phần chênh lệch.
 _Avoid_: Stocktake, inventory audit, kiểm hàng
@@ -95,7 +99,7 @@ Số tiền Người mua phải trả cho một Đơn hàng: Tạm tính trừ g
 _Avoid_: Grand total, thành tiền
 
 **Tính thử (Quote)**:
-Bảng gồm Tạm tính, giảm giá Voucher, Phí ship và Tổng tiền đơn mà Người mua xem trước khi đặt đơn. Đơn chỉ được tạo khi tổng tính lại lúc đặt khớp với Tính thử mà Người mua đã xem.
+Bảng gồm các Dòng đơn hàng dự kiến, Tạm tính, giảm giá Voucher, Phí ship và Tổng tiền đơn mà Người mua xem trước khi đặt đơn. Tính thử có thời hạn, không Giữ hàng hoặc cam kết giá; Đơn chỉ được tạo khi các dòng, giá và điều kiện bán được kiểm tra lại khớp với báo giá đã xác nhận, kể cả khi tổng tiền tình cờ không đổi.
 _Avoid_: Preview, estimate
 
 **Cờ cần xử lý (Attention Flag)**:

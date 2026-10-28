@@ -1,6 +1,6 @@
 # 11. Quy ước Git
 
-> Trạng thái: **Bản nháp chờ review**. Sau khi duyệt, sẽ tạo `.gitignore`, `.github/pull_request_template.md` và `CONTRIBUTING.md` theo tài liệu này.
+> Trạng thái: **Đã duyệt cho MVP**. Các file cấu hình theo tài liệu này đã có trong repo (mục 9).
 > Ngôn ngữ: tên nhánh, commit message, tiêu đề PR viết **tiếng Anh**; mô tả PR có thể viết tiếng Việt.
 
 ## 1. Mô hình nhánh
@@ -58,7 +58,7 @@ gitGraph
 |---|---|
 | `feat/checkout-cod` | `feature/Checkout_COD` |
 | `fix/ipn-amount-mismatch` | `fix-bug` |
-| `docs/adr-0008-search` | `thanh/test` |
+| `docs/adr-0013-payment-recovery` | `thanh/test` |
 | `hotfix/vnpay-signature` | `hotfix` |
 
 ## 3. Commit message: Conventional Commits
