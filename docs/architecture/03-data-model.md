@@ -24,7 +24,6 @@ erDiagram
         jsonb payload
         timestamptz occurred_at
         timestamptz dispatched_at "null = chưa gửi"
-        int attempts
     }
     shared_processed_event {
         uuid event_id PK
@@ -39,7 +38,7 @@ erDiagram
         timestamptz retried_at
     }
     shared_idempotency_key {
-        string scope PK "endpoint + Người mua"
+        string scope PK "endpoint + account_id, guest_token hoặc Mã đơn"
         uuid key PK
         string request_hash
         int response_status
@@ -51,7 +50,7 @@ erDiagram
 - `shared_outbox_event`: index một phần (partial index) trên `occurred_at WHERE dispatched_at IS NULL` để relay đọc nhanh. Payload không chứa secret hay PII.
 - `shared_processed_event`: khoá chính ghép `(event_id, handler)`. Một sự kiện có thể được nhiều handler xử lý, và mỗi handler chỉ xử lý một lần.
 - `shared_failed_event`: ghi khi một cặp (sự kiện, handler) hết retry; `manage.py retry_failed_events` đọc bảng này.
-- `shared_idempotency_key`: lưu kết quả lần đầu của các POST có `Idempotency-Key`. Lưu ở PostgreSQL thay vì Redis vì liên quan tới tiền và không được mất khi Redis bị xoá key. Job `shared.purge_idempotency_keys` xoá bản ghi quá 24 giờ.
+- `shared_idempotency_key`: lưu kết quả lần đầu của các POST có `Idempotency-Key`. Lưu ở PostgreSQL thay vì Redis vì liên quan tới tiền và không được mất khi Redis bị xoá key. Job `shared.purge_idempotency_keys` xoá bản ghi quá 24 giờ. `scope` gồm endpoint và danh tính bên gọi: `account_id` khi đã đăng nhập, `guest_token` của Giỏ hàng khi Khách vãng lai checkout, Mã đơn với `orders/{code}/payments`.
 
 ## 2. `identity`
 
@@ -222,7 +221,6 @@ erDiagram
         uuid warehouse_id FK
         uuid variant_id FK
         int on_hand
-        int reserved
         int awaiting_dispatch
     }
     inventory_stock_allocation {
@@ -251,10 +249,10 @@ erDiagram
     }
 ```
 
-- `UNIQUE(warehouse_id, variant_id)`; `CHECK(on_hand >= 0)`, `CHECK(reserved >= 0)`, `CHECK(reserved <= on_hand)`, `CHECK(awaiting_dispatch >= 0)`.
-- `on_hand` là Tồn kho; Số lượng bán được = `on_hand − reserved` (BR-INV-02). Cột `reserved` được cập nhật cùng transaction với `inventory_stock_reservation`, nên không phải cộng dồn khi đọc.
+- `UNIQUE(warehouse_id, variant_id)`; `CHECK(on_hand >= 0)`, `CHECK(awaiting_dispatch >= 0)`. Index `reference` trên `inventory_stock_reservation` và `inventory_stock_allocation`, vì mọi contract đều tìm theo Mã đơn.
+- `on_hand` là Tồn kho; Số lượng bán được = `on_hand − SUM(quantity)` của các `inventory_stock_reservation` có `status = active` **và** `expires_at > now()` (BR-INV-02), tính trong cùng khoá dòng `inventory_stock_item`, dùng partial index `(stock_item_id, expires_at) WHERE status = 'active'`. Không lưu cột đếm `reserved`: một cột đếm chỉ giảm khi Giữ hàng được giải phóng, nên sẽ vẫn trừ các Giữ hàng đã quá hạn mà job chưa kịp giải phóng, trái với dòng cuối mục này. Số lượng bán được không âm được bảo đảm ở service, không bằng `CHECK`.
 - `awaiting_dispatch` là Hàng chờ xuất (BR-INV-10, [ADR 0010](../adr/0010-stock-decremented-at-order-awaiting-dispatch.md)), cập nhật cùng transaction với `inventory_stock_allocation`. Trừ Tồn kho khi bán (`decrement_stock` với COD, `commit_reservation` với online) tạo allocation `awaiting`; Vận đơn tạo xong (`dispatch_stock`) chuyển `dispatched`; huỷ đơn trước Bàn giao (`release_allocation`) chuyển `released` và trả số lượng về `on_hand`. Hàng trên kệ = `on_hand + awaiting_dispatch`.
-- Kiểm kê (`count_stock`, BR-INV-12) ghi một `inventory_stock_movement` loại `stock_count` với `delta` = số đếm − (`on_hand + awaiting_dispatch`). Điều chỉnh giảm làm `on_hand < reserved` thì bị từ chối (BR-INV-11).
+- Kiểm kê (`count_stock`, BR-INV-12) ghi một `inventory_stock_movement` loại `stock_count` với `delta` = số đếm − (`on_hand + awaiting_dispatch`). Điều chỉnh giảm vượt Số lượng bán được thì bị từ chối (BR-INV-11).
 - `actor_id` FK tới `identity_account`: `inventory` ở lớp trên `identity` nên được khai báo FK.
 - `inventory_stock_reservation.expires_at` được truyền từ `ordering_order.expires_at` (nguồn duy nhất), không tự tính.
 - Giữ hàng đã quá `expires_at` bị coi là không hợp lệ ngay cả khi job chưa kịp giải phóng ([ADR 0003](../adr/0003-postgres-redis-celery.md)): phần đó không còn bị trừ khỏi Số lượng bán được. Ngoại lệ duy nhất là T3 tới muộn: `commit_reservation` được giữ lại hàng nếu Số lượng bán được lúc đó vẫn đủ, kiểm tra trong cùng khoá dòng Tồn kho ([02](./02-backend-structure.md) mục 7.3).
@@ -336,6 +334,7 @@ erDiagram
 - Đơn COD có đúng một Thanh toán `method = cod`: tạo ở T2 (`pending`), `succeeded` khi GHN báo đã giao và thu tiền (T11), `cancelled` khi đơn bị huỷ hoặc Hoàn hàng.
 - Thanh toán COD (tạo, ghi nhận đã thu, huỷ) **không** phát sự kiện: `ordering` là bên gọi nên đã biết kết quả. `payments.payment-succeeded` chỉ dành cho Thanh toán online.
 - Hoàn tiền của đơn online có `channel = gateway`; Hoàn tiền Đổi trả của đơn COD gắn vào Thanh toán COD, `channel = bank_transfer`. Hoàn tiền cho tiền về sai số tiền (BR-PAY-04) gắn vào Thanh toán `failed` đã nhận khoản tiền đó.
+- Hoàn tiền `bank_transfer`: hệ thống **không** lưu số tài khoản ngân hàng của Người mua. Staff lấy thông tin qua hotline hoặc Zalo, chuyển khoản, rồi chỉ ghi mã giao dịch vào `provider_refund_ref`. `reason` là văn bản tự do và không được chứa PII.
 - `recorded_by` lưu id của Tài khoản Staff nhưng **không** khai báo FK: `payments` và `identity` cùng lớp nên không được phụ thuộc nhau ([ADR 0006](../adr/0006-modular-monolith.md)).
 
 ## 7. `shipping`
@@ -422,7 +421,10 @@ erDiagram
         bool invoice_requested
         jsonb invoice_info
         timestamptz expires_at "hạn Giữ hàng, nguồn duy nhất"
+        timestamptz placed_at "vào PLACED (T2, T3)"
+        timestamptz cancelled_at
         timestamptz delivered_at
+        timestamptz completed_at "ngày ghi Doanh thu (BR-REV-01)"
         timestamptz returned_to_warehouse_at "Hoàn hàng đã về Kho"
         string cancel_reason
     }
@@ -481,12 +483,13 @@ erDiagram
 - Mức giảm của Giá khuyến mãi trên một dòng tính từ `list_price` và `unit_price` khi cần (BR-PRC-04), không lưu thành cột số nguyên, để không làm tròn sai ở ngưỡng 50% của BR-RET-03.
 - `ordering_return_line`: `CHECK(0 <= accepted_quantity <= quantity)`. Yêu cầu chuyển `accepted` khi có ít nhất một dòng `accepted_quantity > 0`, ngược lại `rejected` (BR-RET-08). Chỉ phần `accepted_quantity` của dòng có `restock = true` được cộng lại Tồn kho.
 - `ordering_return_request.refund_id` FK tới `payments_refund` (`ordering` ở lớp trên `payments`). Handler `payments.refund-recorded` tìm Đổi trả theo `refund_id` để chuyển sang `refunded`; Hoàn tiền không gắn Đổi trả nào thì bỏ qua. Yêu cầu Đổi trả **đang mở** là yêu cầu có `status` khác `rejected` và `refunded`.
+- `placed_at`, `cancelled_at`, `completed_at` được ghi trong cùng transition với trạng thái tương ứng và null tới lúc đó. Báo cáo Doanh thu lọc theo `completed_at` (BR-REV-01); báo cáo đơn theo ngày dùng `placed_at`, không dùng `created_at`, vì `created_at` của đơn online là lúc vào `PENDING_PAYMENT`.
 - `returned_to_warehouse_at`: thời điểm Staff xác nhận hàng của đơn Hoàn hàng đã về Kho. Đơn `RETURNED_TO_SENDER` có cột này null là đơn chờ nhập kho (US-607).
 - `customer_id` cũng được gắn ngay lúc checkout của Khách vãng lai nếu `contact_email` trùng một Tài khoản đã xác thực (BR-ORD-08).
-- `ordering_order_flag` (Cờ cần xử lý): `kind` ∈ `payment_amount_mismatch | unexpected_payment | shipping_fee_fallback | ghn_ward_unmapped | shipment_failed | shipment_after_cancel`. Partial `UNIQUE(order_id, kind) WHERE resolved_at IS NULL` để một vấn đề chỉ có một cờ đang mở. `resolved_by` FK tới `identity_account`.
+- `ordering_order_flag` (Cờ cần xử lý): `kind` ∈ `payment_amount_mismatch | unexpected_payment | shipping_fee_fallback | ghn_ward_unmapped | shipment_failed | shipment_after_cancel`. Partial `UNIQUE(order_id, kind) WHERE resolved_at IS NULL` để một vấn đề chỉ có một cờ đang mở; `raise_flag` gặp cờ cùng `kind` đang mở thì nối thêm vào `note` chứ không báo lỗi (ví dụ tiền về lần hai cho đơn đã có cờ `unexpected_payment`). `resolved_by` FK tới `identity_account`.
 - `ordering_settings` là singleton (một dòng duy nhất), Admin sửa qua back-office.
-- `django-pghistory` ghi lịch sử của `ordering_order` (chỉ các field không phải PII: `status`, `payment_method`, `subtotal`, `discount`, `shipping_fee`, `total`, `cancel_reason`, `delivered_at`), `ordering_order_flag`, `ordering_settings`, `shipping_settings`, mọi thay đổi `payments_*` và `inventory_stock_item`. Không theo dõi các cột liên hệ của Đơn hàng để lịch sử không giữ lại PII sau khi ẩn danh.
-- Index: `(contact_phone, code)` cho tra cứu của Khách vãng lai; `(status, created_at)` cho back-office; partial index `expires_at WHERE status = 'PENDING_PAYMENT'` cho job huỷ đơn; partial index `(kind, raised_at) WHERE resolved_at IS NULL` trên `ordering_order_flag` cho bộ lọc theo cờ.
+- `django-pghistory` ghi lịch sử của `ordering_order` (chỉ các field không phải PII: `status`, `payment_method`, `subtotal`, `discount`, `shipping_fee`, `total`, `cancel_reason`, `placed_at`, `cancelled_at`, `delivered_at`, `completed_at`), `ordering_order_flag`, `ordering_settings`, `shipping_settings`, mọi thay đổi `payments_*` và `inventory_stock_item`. Không theo dõi các cột liên hệ của Đơn hàng để lịch sử không giữ lại PII sau khi ẩn danh.
+- Index: `(contact_phone, code)` cho tra cứu của Khách vãng lai; `(status, created_at)` cho back-office; `completed_at` cho báo cáo Doanh thu; partial index `expires_at WHERE status = 'PENDING_PAYMENT'` cho job huỷ đơn; partial index `(kind, raised_at) WHERE resolved_at IS NULL` trên `ordering_order_flag` cho bộ lọc theo cờ.
 
 ## 9. `notifications`
 
@@ -516,10 +519,11 @@ erDiagram
 | `identity_address` | identity | Xoá |
 | `ordering_order` | ordering | `contact_name`, `contact_phone`, `contact_email`, `ship_street`, email nhận hoá đơn trong `invoice_info` → giá trị ẩn danh; giữ `ship_ward_code`, số tiền, Dòng đơn hàng, tên công ty, mã số thuế, địa chỉ công ty trong `invoice_info` |
 | `ordering_cart` | ordering | Xoá |
+| `ordering_return_request` | ordering | `note` → rỗng. `note` là văn bản tự do; quy định cho Staff là không ghi PII vào đây, việc xoá trắng chỉ là lưới an toàn |
 | `promotions_voucher_redemption` | promotions | `phone` → giá trị ẩn danh |
 | `notifications_email_log` | notifications | `to_address` → giá trị ẩn danh |
 | `shipping_shipment_event` | shipping (do `ordering` gọi) | Xoá PII trong `raw_payload` |
 | `payments_payment_event` | payments (do `ordering` gọi) | Xoá PII trong `raw_payload` |
 | Lịch sử pghistory của `ordering_order` | — | Không cần xử lý: chỉ theo dõi field không phải PII (mục 8) |
 | `shared_outbox_event` | — | Không cần xử lý: payload sự kiện không chứa PII |
-| `identity_consent`, `identity_erasure_request` | identity | **Giữ** làm bằng chứng tuân thủ |
+| `identity_consent`, `identity_erasure_request`, `identity_customer_data_access_log` | identity | **Giữ** làm bằng chứng tuân thủ: đã đồng ý gì, đã yêu cầu xoá khi nào, và Staff nào đã xem dữ liệu của ai (CMP-07) |
