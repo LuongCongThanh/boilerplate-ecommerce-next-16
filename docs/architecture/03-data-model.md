@@ -257,7 +257,7 @@ erDiagram
 - Kiểm kê (`count_stock`, BR-INV-12) ghi một `inventory_stock_movement` loại `stock_count` với `delta` = số đếm − (`on_hand + awaiting_dispatch`). Điều chỉnh giảm làm `on_hand < reserved` thì bị từ chối (BR-INV-11).
 - `actor_id` FK tới `identity_account`: `inventory` ở lớp trên `identity` nên được khai báo FK.
 - `inventory_stock_reservation.expires_at` được truyền từ `ordering_order.expires_at` (nguồn duy nhất), không tự tính.
-- Giữ hàng đã quá `expires_at` bị coi là không hợp lệ ngay cả khi job chưa kịp giải phóng ([ADR 0003](../adr/0003-postgres-redis-celery.md)).
+- Giữ hàng đã quá `expires_at` bị coi là không hợp lệ ngay cả khi job chưa kịp giải phóng ([ADR 0003](../adr/0003-postgres-redis-celery.md)): phần đó không còn bị trừ khỏi Số lượng bán được. Ngoại lệ duy nhất là T3 tới muộn: `commit_reservation` được giữ lại hàng nếu Số lượng bán được lúc đó vẫn đủ, kiểm tra trong cùng khoá dòng Tồn kho ([02](./02-backend-structure.md) mục 7.3).
 
 ## 5. `promotions`
 

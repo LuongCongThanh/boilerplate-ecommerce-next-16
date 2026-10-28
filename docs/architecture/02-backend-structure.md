@@ -53,7 +53,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `vietnam-provinces` | 2026.9.0 | Dữ liệu 34 tỉnh/thành và phường/xã (sau 07/2025) | Đã cập nhật theo cấu trúc 2 cấp |
 | `structlog` + `django-structlog` | 26.1.0 / 11.0.0 | Log JSON có `request_id` | Dễ tìm kiếm log trên CloudWatch |
 | `sentry-sdk[django,celery]` | 2.73.0 | Theo dõi lỗi và hiệu năng | Chuẩn |
-| `gunicorn` + `uvicorn-worker` | — | Server chạy production | Chạy ASGI |
+| `gunicorn` | — | Server chạy production, worker `gthread` (WSGI) | DRF không có view async và service dùng ORM đồng bộ, nên ASGI chỉ thêm lớp `sync_to_async` mà không được lợi gì; dự án không có websocket hay SSE |
 
 ### 3.2. Dev và test
 
@@ -158,7 +158,6 @@ backend/
 │   │   └── production.py           # bảo mật, S3, SES, Sentry, log JSON
 │   ├── urls.py                     # gốc URL: /api/v1/store, /api/v1/backoffice, /api/v1/webhooks, /api/docs, /healthz
 │   ├── celery.py                   # khởi tạo Celery, định nghĩa queue
-│   ├── asgi.py
 │   └── wsgi.py
 │
 ├── shared/                         # Django app "shared": hạ tầng dùng chung
@@ -169,7 +168,7 @@ backend/
 │   ├── exceptions.py               # DomainError(code, message, details), RetryLater (handler báo consumer thử lại sau, không kế thừa DomainError) và các lỗi chung
 │   ├── tasks.py                    # enqueue_on_commit(task, **kwargs): đẩy Celery task sau khi transaction commit; purge_old_outbox_events (xoá cả ProcessedEvent cùng tuổi), purge_idempotency_keys
 │   ├── events/
-│   │   ├── __init__.py             # API công khai: publish(), handles()
+│   │   ├── __init__.py             # API công khai: publish(), handles(), undispatched_lag() (tuổi của sự kiện chưa dispatch lâu nhất, job T4 dùng)
 │   │   ├── base.py                 # DomainEvent (pydantic): event_id, event_type, schema_version, occurred_at. Payload không chứa secret hay PII
 │   │   ├── models.py               # OutboxEvent, ProcessedEvent, FailedEvent
 │   │   ├── publisher.py            # EventPublisher: ghi sự kiện vào outbox trong transaction hiện tại
@@ -242,7 +241,7 @@ modules/ordering/
 ├── __init__.py
 ├── contracts.py          # ⭐ public API của module: hàm + DTO mà module khác được gọi
 ├── events.py             # sự kiện module này phát ra (class pydantic, có version)
-├── constants.py          # enum: OrderStatus, PaymentMethod, OrderFlagKind, CancelReason…; RESERVATION_TTL, PAYMENT_LINK_TTL
+├── constants.py          # enum: OrderStatus, PaymentMethod, OrderFlagKind, CancelReason…; RESERVATION_TTL, PAYMENT_LINK_TTL, PAYMENT_START_CUTOFF
 ├── exceptions.py         # lỗi nghiệp vụ: OutOfStock, InvalidTransition, TransitionNotYetValid, VoucherNotApplicable, PriceChanged, ShipmentInProgress…
 ├── models/
 │   ├── __init__.py       # export các model
@@ -295,7 +294,7 @@ modules/ordering/
 | `models/` | Field, ràng buộc DB (`UniqueConstraint`, `CheckConstraint`), index, `Meta.db_table` có tiền tố module (ví dụ `ordering_order`), property đơn giản | `shared.models`, `models/` của module lớp dưới (chỉ để khai báo FK, mục 6.3) | Logic nghiệp vụ, gọi API ngoài, gửi email, override `save()` để làm việc phụ, tự khai báo `id` (phải kế thừa `shared.models.BaseModel`) |
 | `services/` | Mỗi nghiệp vụ ghi là một hàm có tham số keyword, chạy trong `transaction.atomic`, phát sự kiện qua `shared.events.publish` | Model của chính module, `contracts` của module lớp dưới | Nhận `request`; import `api/`; gọi HTTP ra ngoài bên trong `transaction.atomic`; đẩy Celery task trực tiếp (phải qua `shared.tasks.enqueue_on_commit`); truy vấn đi vào model của module khác (mục 6.3) |
 | `selectors/` | Hàm truy vấn đọc, tối ưu bằng `select_related`, `prefetch_related` | Model của chính module | Ghi dữ liệu; truy vấn đi vào model của module khác (mục 6.3) |
-| `handlers.py` | Hàm `@handles("payments.payment-succeeded", version=1)`, nhận sự kiện rồi gọi service. Không cần tự chống xử lý trùng: consumer ghi `ProcessedEvent` cùng transaction với handler. Sự kiện tới sớm hoặc không áp dụng được thì báo bằng exception ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 1.3) | `services`, `events` của module lớp dưới | Logic nghiệp vụ dài (phải đưa vào service); gọi HTTP hay đẩy Celery task trực tiếp, vì handler chạy trong transaction của consumer |
+| `handlers.py` | Hàm `@handles("payments.payment-succeeded", version=1)`, nhận sự kiện rồi gọi **một** service của chính module; service đó mới gọi `contracts` của module khác, để mỗi nhánh xử lý là một đơn vị nghiệp vụ có test service. Ngoại lệ: handler của `notifications` chỉ đọc dữ liệu để render email nên gọi thẳng `contracts` của module khác. Không cần tự chống xử lý trùng: consumer ghi `ProcessedEvent` cùng transaction với handler. Sự kiện tới sớm hoặc không áp dụng được thì báo bằng exception ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 1.3) | `services` của chính module, `events` của module lớp dưới; riêng `notifications` thêm `contracts` của module lớp dưới | Gọi `contracts` của module khác (trừ `notifications`); logic nghiệp vụ dài (phải đưa vào service); gọi HTTP hay đẩy Celery task trực tiếp, vì handler chạy trong transaction của consumer |
 | `tasks.py` | Celery task mỏng, chỉ gọi service | `services` | Logic nghiệp vụ |
 | `api/*/serializers.py` | Validate dữ liệu vào, định dạng dữ liệu ra | — | Gọi `.save()` lên model, logic nghiệp vụ |
 | `api/*/views.py` | `APIView` hoặc `GenericAPIView`: phân quyền, gọi serializer, gọi service/selector | `services`, `selectors`, `serializers` | `ModelViewSet` tự động CRUD; truy vấn ORM trực tiếp |
@@ -377,7 +376,7 @@ Các module con đều theo khuôn ở mục 6. Bảng dưới chỉ liệt kê 
 |---|---|
 | `models/` | `Warehouse`, `StockItem` (`variant`, `warehouse`, `on_hand`, `reserved`, `awaiting_dispatch`), `StockReservation` (`reference`, `stock_item`, `quantity`, `expires_at`, `status`), `StockAllocation` (Hàng chờ xuất: `reference`, `stock_item`, `quantity`, `status`), `StockMovement` (lịch sử) |
 | `services/` | `reserve_stock`, `commit_reservation`, `release_reservation`, `decrement_stock`, `dispatch_stock`, `release_allocation`, `restock`, `adjust_stock`, `count_stock` (Kiểm kê). `decrement_stock` và `commit_reservation` tạo Hàng chờ xuất theo `reference` ([ADR 0010](../adr/0010-stock-decremented-at-order-awaiting-dispatch.md)). `adjust_stock` và `count_stock` từ chối điều chỉnh giảm vượt Số lượng bán được (BR-INV-11). Đều khoá dòng `StockItem` bằng `select_for_update` và sắp xếp khoá theo `variant_id` để tránh deadlock. Khi Số lượng bán được chuyển giữa 0 và lớn hơn 0 thì gọi `catalog.contracts.set_variant_availability` |
-| `contracts.py` | `reserve_stock(reference, items, expires_at)` (`expires_at` lấy từ Đơn hàng), `commit_reservation`, `release_reservation`, `decrement_stock`, `dispatch_stock(reference)` (T10), `release_allocation(reference)` (huỷ trước Bàn giao), `restock`, `get_available(variant_ids)`. Hàm ghi gọi được trong transaction của bên gọi và trở thành một phần của transaction đó; `reserve_stock`, `decrement_stock` ném `OutOfStock` |
+| `contracts.py` | `reserve_stock(reference, items, expires_at)` (`expires_at` lấy từ Đơn hàng), `release_reservation`, `decrement_stock`, `commit_reservation(reference)` (T3: Giữ hàng còn hạn thì chuyển thẳng; đã quá hạn mà chưa giải phóng thì khoá dòng Tồn kho và kiểm tra lại Số lượng bán được, đủ thì chuyển, không đủ thì ném `ReservationExpired`), `dispatch_stock(reference)` (T10), `release_allocation(reference)` (huỷ trước Bàn giao), `restock`, `get_available(variant_ids)`. Hàm ghi gọi được trong transaction của bên gọi và trở thành một phần của transaction đó; `reserve_stock`, `decrement_stock` ném `OutOfStock` |
 
 ### 7.4. `promotions`
 
@@ -421,17 +420,17 @@ Xem ví dụ đầy đủ ở mục 6. Máy trạng thái của `Order.status` d
 | Chủ đề | Nội dung |
 |---|---|
 | Mã đơn | `FS<YYMM>-` + 6 ký tự Crockford Base32 ngẫu nhiên, `UNIQUE`, trùng thì sinh lại. Không dùng sequence |
-| Hạn thanh toán | `Order.expires_at` = lúc đặt + `RESERVATION_TTL` (15 phút), là nguồn duy nhất, truyền xuống `reserve_stock`. Link thanh toán của mọi lần thử hết hạn ở lúc đặt + `PAYMENT_LINK_TTL` (phút thứ 10), sớm hơn Giữ hàng 5 phút; quá mốc này không bắt đầu Thanh toán mới được (`PaymentWindowClosed` → `PAYMENT_WINDOW_CLOSED`) |
+| Hạn thanh toán | `Order.expires_at` = lúc đặt + `RESERVATION_TTL` (15 phút), là nguồn duy nhất, truyền xuống `reserve_stock`. Link thanh toán của mọi lần thử hết hạn ở lúc đặt + `PAYMENT_LINK_TTL` (phút thứ 10), sớm hơn Giữ hàng 5 phút. Từ lúc đặt + `PAYMENT_START_CUTOFF` (phút thứ 8) không bắt đầu Thanh toán mới được, vì link còn quá ít thời gian (`PaymentWindowClosed` → `PAYMENT_WINDOW_CLOSED`) |
 | Cờ cần xử lý | `OrderFlag` được bật từ handler hoặc service (`raise_flag`), Staff gỡ qua back-office (`resolve_flag`, có ghi lịch sử) |
 | Cấu hình | `OrderingSettings`: ngưỡng miễn phí ship, hạn mức COD |
-| Transition do sự kiện | T3, T10, T11, T12 (`mark_paid`, `mark_shipped`, `mark_delivered`, `mark_returned`) tự đối chiếu trạng thái hiện tại với sơ đồ ở [05-order-lifecycle.md](../business/05-order-lifecycle.md) mục 2, nên handler không cần tự kiểm tra thứ tự. Đơn **đã ở hoặc đã qua** trạng thái đích: không làm gì (sự kiện trùng hoặc tới muộn). Đơn **chưa tới** trạng thái nguồn nhưng còn đi tới được: ném `TransitionNotYetValid` (kế thừa `RetryLater`, consumer thử lại sau). Còn lại, ví dụ GHN báo đã giao khi đơn đã `RETURNED_TO_SENDER`: ném `InvalidTransition`, consumer bỏ qua và ghi log. Các tình huống có cách xử lý riêng (05 mục 4.1 và 4.5) được kiểm tra trước ba nhánh này |
+| Transition do sự kiện | T3, T10, T11, T12 (`mark_paid`, `mark_shipped`, `mark_delivered`, `mark_returned`) tự đối chiếu trạng thái hiện tại với sơ đồ ở [05-order-lifecycle.md](../business/05-order-lifecycle.md) mục 2, nên handler không cần tự kiểm tra thứ tự. Đơn **đã ở hoặc đã qua** trạng thái đích: không làm gì (sự kiện trùng hoặc tới muộn). Đơn **chưa tới** trạng thái nguồn nhưng còn đi tới được: ném `TransitionNotYetValid` (kế thừa `RetryLater`, consumer thử lại sau). Còn lại, ví dụ GHN báo đã giao khi đơn đã `RETURNED_TO_SENDER`: ném `InvalidTransition`, consumer bỏ qua và ghi log. Các tình huống có cách xử lý riêng (05 mục 4.1 và 4.5) được kiểm tra trước ba nhánh này. Riêng T3 khi Giữ hàng đã quá hạn nhưng đơn vẫn `PENDING_PAYMENT` (T4 chưa chạy, ví dụ do outbox tồn đọng): `commit_reservation` thử giữ lại hàng; ném `ReservationExpired` thì xử lý như tiền về cho đơn không còn chờ thanh toán, đơn để T4 huỷ |
 | `contracts.py` | Chỉ phục vụ `notifications`: đọc dữ liệu Đơn hàng để gửi email. Checkout và các transition không nằm ở đây vì chỉ API của chính `ordering` gọi chúng |
 | `events.py` | `OrderPlacedV1`, `OrderCancelledV1` (có `previous_status`), `OrderShippedV1`, `OrderDeliveredV1`, `UnexpectedPaymentReceivedV1` |
 | Đổi trả | `accept` nhận `accepted_quantity` và `restock` cho từng dòng (BR-RET-08), gọi `inventory.contracts.restock` cho phần nhập lại, gọi `payments.contracts.request_refund` rồi lưu `refund_id` vào yêu cầu |
 | Bán chạy | Task `compute_best_sellers` chạy hằng đêm, tính BR-CAT-12 rồi gọi `catalog.contracts.set_best_seller_counts` |
 | Xoá dữ liệu | `complete_erasure_request` kiểm tra điều kiện của CMP-05 (đơn ở trạng thái cuối, `payments.contracts.has_pending_refunds`) rồi gọi `identity.contracts.complete_erasure_request`. Endpoint back-office `erasure-requests` nằm ở `ordering` |
 | Log truy cập | Chi tiết đơn và tìm đơn theo số điện thoại ở back-office gọi `identity.contracts.log_customer_data_access` (CMP-07) |
-| `handlers.py` | `payment-succeeded`: T3, hoặc Hoàn tiền + cờ `unexpected_payment` + phát `UnexpectedPaymentReceivedV1` nếu đơn không ở `PENDING_PAYMENT`. `payment-failed` với `amount_mismatch`: Hoàn tiền đúng `amount_received` + cờ `payment_amount_mismatch` (BR-PAY-04). `refund-recorded`: Đổi trả có `refund_id` khớp → `refunded`, không khớp thì bỏ qua. `shipment-created`: T10 (gọi `inventory.contracts.dispatch_stock`), hoặc `shipping.contracts.request_shipment_cancellation` + cờ `shipment_after_cancel` nếu đơn đã huỷ. `shipment-creation-failed`: cờ `shipment_failed`. `shipment-delivered`: T11. `shipment-returned`: T12. `email-verified`: `attach_guest_orders`. `customer-erased`: `anonymize_orders` và gọi `redact_provider_payloads` của `shipping`, `payments` |
+| `handlers.py` | Mỗi handler gọi một service trong `services/` (các service này mới gọi `contracts` của module khác). `payment-succeeded`: service `mark_paid` (T3); nếu đơn không ở `PENDING_PAYMENT`, hoặc Giữ hàng đã quá hạn mà không đủ hàng để giữ lại, thì service `handle_unexpected_payment` tạo Hoàn tiền, gắn cờ `unexpected_payment` và phát `UnexpectedPaymentReceivedV1`. `payment-failed` với `amount_mismatch`: Hoàn tiền đúng `amount_received` + cờ `payment_amount_mismatch` (BR-PAY-04). `refund-recorded`: Đổi trả có `refund_id` khớp → `refunded`, không khớp thì bỏ qua. `shipment-created`: T10 (gọi `inventory.contracts.dispatch_stock`), hoặc `shipping.contracts.request_shipment_cancellation` + cờ `shipment_after_cancel` nếu đơn đã huỷ. `shipment-creation-failed`: cờ `shipment_failed`. `shipment-delivered`: T11. `shipment-returned`: T12. `email-verified`: `attach_guest_orders`. `customer-erased`: `anonymize_orders` và gọi `redact_provider_payloads` của `shipping`, `payments` |
 
 ### 7.8. `notifications`
 
@@ -492,7 +491,7 @@ forbidden_modules = ["shared.events.relay", "shared.events.tasks"]
 | Khoá chính | UUID v7 cho mọi bảng, `default` là hàm bọc `shared.models.uuid7` (không trỏ thẳng vào `uuid_utils`, để migration không phụ thuộc package ngoài), khai báo trong `shared.models.BaseModel` (cùng `created_at`, `updated_at`). Model không tự khai báo `id` ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
 | Thời gian | Lưu UTC (`USE_TZ = True`); hiển thị theo `Asia/Ho_Chi_Minh`. Lấy thời điểm hiện tại bằng `django.utils.timezone.now()` |
 | Xoá dữ liệu | Không xoá cứng dữ liệu đã có đơn; dùng `status` / `archived` |
-| Transaction | Chỉ mở ở tầng `services` (và trong consumer của `shared.events`); sự kiện ghi vào outbox trong cùng transaction. Khoá dòng theo thứ tự cố định: dòng Tồn kho (theo `variant_id`), rồi dòng Biến thể của `catalog` (chỉ khi trạng thái còn hàng đổi, qua `set_variant_availability`), rồi dòng Voucher |
+| Transaction | Chỉ mở ở tầng `services` (và trong consumer của `shared.events`); sự kiện ghi vào outbox trong cùng transaction. Khoá dòng theo thứ tự cố định: dòng Đơn hàng (transition như T3, T4, T5 khoá đơn trước), rồi dòng Tồn kho (theo `variant_id`), rồi dòng Biến thể của `catalog` (chỉ khi trạng thái còn hàng đổi, qua `set_variant_availability`), rồi dòng Voucher |
 | Việc ra ngoài DB | **Không gọi HTTP ra ngoài** (GHN, VNPay, MoMo, gửi email) bên trong `transaction.atomic`: gọi trước khi mở transaction (như `quote_fee` khi checkout), hoặc đưa vào Celery task. Code nghiệp vụ (`services`, `handlers.py`) **không đẩy Celery task trực tiếp** (`.delay()`, `.apply_async()`) mà dùng `shared.tasks.enqueue_on_commit`, để task chỉ chạy khi dữ liệu đã commit và không chạy khi transaction rollback. Đánh đổi: task có thể mất nếu process dừng ngay sau commit, nên việc bắt buộc phải xảy ra cần có job quét lại (ví dụ `reconcile_shipments` đẩy lại task cho Vận đơn bị kẹt) |
 | Kiểu dữ liệu | Mọi hàm trong `services`, `selectors`, `contracts` có type hints đầy đủ; `mypy --strict` cho `modules/*/services`, `modules/*/selectors` và `contracts`. Dùng cú pháp mới: `list[X]`, `X \| None`, không dùng `List`, `Optional` |
 
