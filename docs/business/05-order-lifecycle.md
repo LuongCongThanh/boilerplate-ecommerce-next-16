@@ -73,7 +73,7 @@ Mọi chuyển trạng thái không có trong bảng đều bị **từ chối**
 
 Link thanh toán hết hạn sau 10 phút, còn Giữ hàng hết hạn sau 15 phút, nên thông báo thanh toán đến muộn vài phút vẫn kịp T3. Tiền vẫn có thể về cho một đơn không còn ở `PENDING_PAYMENT` trong hai trường hợp:
 
-- **Đơn đã bị huỷ**: thông báo thanh toán tới quá muộn, sau khi hệ thống đã huỷ đơn (T4), hoặc Người mua đã tự huỷ (T5) trong lúc đang trả tiền. Kể cả khi tiền về trước phút 15, nếu hệ thống chưa kịp xử lý T3 mà job huỷ đơn đã chạy thì đơn vẫn bị huỷ và tiền được hoàn.
+- **Đơn đã bị huỷ**: thông báo thanh toán tới quá muộn, sau khi hệ thống đã huỷ đơn (T4), hoặc Người mua đã tự huỷ (T5) trong lúc đang trả tiền. Kể cả khi tiền về trước phút 15, nếu hệ thống chưa kịp xử lý T3 mà job huỷ đơn đã chạy thì đơn vẫn bị huỷ và tiền được hoàn. Cửa sổ này chỉ vài giây: khi hệ thống xử lý thông báo bị dồn ứ, job huỷ đơn tạm dừng cho tới khi xử lý kịp.
 - **Đơn đã được thanh toán**: Người mua mở hai tab và trả tiền ở cả hai lần thử; lần thứ hai tới khi đơn đã `PLACED`.
 
 Cách xử lý chung (BR-PAY-05):

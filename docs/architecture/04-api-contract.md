@@ -70,7 +70,7 @@ Ba mã cần Frontend xử lý riêng:
 
 - `PRICE_CHANGED`: tổng tiền tính lại khi đặt đơn khác `expected_total` (BR-ORD-07). Đơn **không** được tạo; `details.quote` chứa bảng tính mới (Tạm tính, giảm giá Voucher, phí ship, tổng) để Người mua xem lại rồi gửi lại.
 - `SHIPMENT_IN_PROGRESS`: Staff huỷ đơn khi Vận đơn đang được tạo ở GHN. Chờ kết quả tạo Vận đơn rồi xử lý tiếp.
-- `PAYMENT_WINDOW_CLOSED`: Người mua bắt đầu Thanh toán online sau phút thứ 10 kể từ khi đặt đơn (BR-INV-05). Đơn sẽ bị huỷ khi Giữ hàng hết hạn; Người mua phải đặt đơn mới.
+- `PAYMENT_WINDOW_CLOSED`: Người mua bắt đầu Thanh toán online từ phút thứ 8 kể từ khi đặt đơn, khi link mới còn quá ít thời gian để trả tiền (BR-INV-05). Đơn sẽ bị huỷ khi Giữ hàng hết hạn; Người mua phải đặt đơn mới.
 
 ## 4. Danh sách endpoint
 
@@ -88,7 +88,7 @@ Ba mã cần Frontend xử lý riêng:
 | DELETE | `cart/items/{id}` | Guest / Customer | Xoá | US-202 |
 | POST | `checkout/quote` | Guest / Customer | Tính thử: Tạm tính, Voucher, phí ship, tổng. `total` trả về được gửi lại làm `expected_total` | US-303, 304 |
 | POST | `checkout` | Guest / Customer | Đặt đơn (cần `Idempotency-Key`). Body có `payment_method` (`cod \| online`) và `expected_total`; lệch thì `409 PRICE_CHANGED`. Trả `201 {order_code, lookup_token}` (`lookup_token` chỉ có với Khách vãng lai) | US-301 → 307 |
-| POST | `orders/{code}/payments` | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Bắt đầu một lần Thanh toán online (cần `Idempotency-Key`). Body `{gateway: "vnpay" \| "momo", return_url}`; trả `redirect_url`. Mọi link của đơn hết hạn ở phút thứ 10 kể từ khi đặt đơn (BR-INV-05); sau mốc này trả `PAYMENT_WINDOW_CLOSED` | US-306 |
+| POST | `orders/{code}/payments` | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Bắt đầu một lần Thanh toán online (cần `Idempotency-Key`). Body `{gateway: "vnpay" \| "momo", return_url}`; trả `redirect_url`. Mọi link của đơn hết hạn ở phút thứ 10 kể từ khi đặt đơn (BR-INV-05); từ phút thứ 8 không tạo link mới mà trả `PAYMENT_WINDOW_CLOSED` | US-306 |
 | POST | `orders/lookup` | Công khai (throttle chặt) | Khách vãng lai tra cứu bằng `code` + `phone` | US-401 |
 | GET | `orders` | Customer | Lịch sử đơn | US-402 |
 | GET | `orders/{code}` | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Chi tiết đơn | US-402 |

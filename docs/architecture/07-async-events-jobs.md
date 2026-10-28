@@ -101,7 +101,7 @@ Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không g
 
 | Job | Tần suất | Module | Liên quan |
 |---|---|---|---|
-| `ordering.cancel_expired_pending_orders` | Mỗi phút | ordering | T4 |
+| `ordering.cancel_expired_pending_orders` | Mỗi phút | ordering | T4. Bỏ qua lượt chạy (log `WARNING` `cancel_skipped_outbox_backlog`) khi outbox còn sự kiện chưa dispatch quá **60 giây** **[Giả định]**, đọc qua `shared.events.undispatched_lag()`. Lý do: sau khi Redis hoặc relay lỗi, sự kiện `payments.payment-succeeded` còn kẹt trong outbox; nếu T4 chạy trước thì đơn đã trả đúng hạn bị huỷ và phải Hoàn tiền ([01](./01-system-context.md) mục 4) |
 | `payments.reconcile_pending_payments` | Mỗi 5 phút | payments | T3, ADR 0005; Payment quá hạn link mà chưa thanh toán thì chuyển `expired` |
 | `shipping.reconcile_shipments` | Mỗi 15 phút | shipping | T11, T12; đẩy lại task cho Vận đơn kẹt ở `requested` hoặc `cancel_requested` quá 15 phút |
 | `ordering.complete_delivered_orders` | Mỗi giờ | ordering | T13 |

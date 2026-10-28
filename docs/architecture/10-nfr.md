@@ -29,7 +29,7 @@ Cách đạt được:
 | RTO (thời gian khôi phục) | ≤ 1 giờ |
 | Khi GHN lỗi | Vẫn checkout được (phí ship dự phòng) |
 | Khi VNPay/MoMo lỗi | Vẫn đặt được đơn COD |
-| Khi Redis lỗi | API vẫn chạy, kể cả checkout: cache và throttle fail-open (chỉ còn rate limit thô của WAF), kiểm tra `token_version` đọc thẳng PostgreSQL, `Idempotency-Key` lưu ở PostgreSQL. Sự kiện nằm chờ trong outbox. `/readyz` chỉ kiểm tra PostgreSQL, nên ALB không rút task API khi Redis lỗi |
+| Khi Redis lỗi | API vẫn chạy, kể cả checkout: cache và throttle fail-open (chỉ còn rate limit thô của WAF), kiểm tra `token_version` đọc thẳng PostgreSQL, `Idempotency-Key` lưu ở PostgreSQL. Sự kiện nằm chờ trong outbox, nên đơn online đã trả tiền chưa chuyển sang `PLACED` cho tới khi Redis hồi lại; job T4 không huỷ các đơn này nhờ cơ chế bỏ qua khi outbox tồn đọng ([07](./07-async-events-jobs.md) mục 3.2). `/readyz` chỉ kiểm tra PostgreSQL, nên ALB không rút task API khi Redis lỗi |
 
 ## 3. Bảo mật
 
