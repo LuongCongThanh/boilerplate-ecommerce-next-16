@@ -100,7 +100,7 @@ Mục tiêu cho MVP với tải khoảng 500–5.000 đơn/ngày. Gồm hiệu n
 
 ### [11. Quy ước Git](./11-git-workflow.md)
 
-Mô hình nhánh `main`/`dev`, cách đặt tên nhánh và commit message theo Conventional Commits (bằng tiếng Anh), CI trên GitHub Actions. File còn mô tả cách merge PR theo từng chặng, quy trình làm tính năng, release và hotfix, cách bảo vệ nhánh, versioning và CHANGELOG, và những thứ không được commit.
+Mô hình nhánh `main`/`uat`/`dev`, cách đặt tên nhánh và commit message theo Conventional Commits (bằng tiếng Anh), CI trên GitHub Actions. File còn mô tả cách merge PR theo từng chặng, quy trình làm tính năng, release và hotfix, cách bảo vệ nhánh, versioning và CHANGELOG, và những thứ không được commit.
 
 ### [12. Chiến lược test](./12-testing-strategy.md)
 

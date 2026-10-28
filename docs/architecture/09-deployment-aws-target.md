@@ -87,10 +87,12 @@ STOREFRONT_ORIGIN production là origin HTTPS cấu hình cố định của sto
 
 ## 3. Môi trường
 
-| Môi trường | Mục đích | Adapter |
-|---|---|---|
-| `staging` | Nghiệm thu, dùng sandbox VNPay/MoMo/GHN; có đủ storefront và back-office Next.js | Sandbox; Fake chỉ bật tạm khi test tải ([06](./06-integrations.md) mục 1) |
-| `production` | Chạy thật | Thật |
+| Môi trường | Nhánh triển khai | Mục đích | Adapter |
+|---|---|---|---|
+| `staging` | `uat` | Nghiệm thu (UAT), dùng sandbox VNPay/MoMo/GHN; có đủ storefront và back-office Next.js | Sandbox; Fake chỉ bật tạm khi test tải ([06](./06-integrations.md) mục 1) |
+| `production` | `main` | Chạy thật | Thật |
+
+`dev` chưa có môi trường triển khai riêng; chỉ chạy CI ([11](./11-git-workflow.md) mục 1).
 
 ## 4. Triển khai
 
