@@ -56,8 +56,8 @@ Ngoài quy tắc chung, bắt buộc có các test service sau, vì đây là nh
 | Kiểm kê (BR-INV-12) | Tồn kho 7, Hàng chờ xuất 3, số đếm 10 → không điều chỉnh; số đếm 9 → điều chỉnh −1 loại `stock_count` |
 | Điều chỉnh giảm vượt Số lượng bán được (BR-INV-11) | Ném `INSUFFICIENT_AVAILABLE`; Tồn kho không đổi |
 | Giữ hàng đã quá `expires_at` nhưng job chưa giải phóng | `reserve_stock` của Người mua khác thành công; Giữ hàng cũ chuyển `released`, `reserved` giảm tương ứng |
-| Job T4 khi `shared.events.delivery_lag()` quá 60 giây | Không huỷ đơn nào, log `cancel_skipped_delivery_backlog`; hết tồn đọng thì lượt sau huỷ bình thường |
-| Bắt đầu Thanh toán online ở phút 7:59 và phút 8:00 kể từ khi đặt đơn (BR-INV-05) | 7:59 tạo được Thanh toán; 8:00 ném `PaymentWindowClosed` (`PAYMENT_WINDOW_CLOSED`) |
+| Job T4 khi `shared.events.delivery_lag()` quá 60 giây | Không huỷ đơn nào, log `cancel_skipped_delivery_backlog`; hết tồn đọng thì lượt sau huỷ bình thường. Bỏ lượt liên tục quá 15 phút thì phát cảnh báo `cancel_skipped_too_long` nhưng vẫn không huỷ |
+| Bắt đầu Thanh toán online ở phút 6:59 và phút 7:00 kể từ khi đặt đơn (BR-INV-05) | 6:59 tạo được Thanh toán; 7:00 ném `PaymentWindowClosed` (`PAYMENT_WINDOW_CLOSED`) |
 | `raise_flag` khi đơn đã có cờ cùng `kind` đang mở | Không tạo cờ thứ hai, `note` được nối thêm |
 | `placed_at`, `cancelled_at`, `completed_at` | Được ghi đúng trong transition tương ứng (T2/T3, T4/T5/T7/T9/T14, T13); báo cáo Doanh thu lọc theo `completed_at` (BR-REV-01) |
 | Staff huỷ đơn `SHIPPING` (T14) | Chỉ được khi đơn có cờ `shipment_exception` và bắt buộc lý do; Hoàn tiền toàn bộ nếu đã thanh toán online; không trả lượt Voucher |

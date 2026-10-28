@@ -34,7 +34,7 @@ graph LR
 | PostgreSQL 18 | Docker, dữ liệu trong named volume `pgdata` | 5432 (mở ra máy để chạy test và dùng IDE) |
 | Django API | Docker, code được mount vào container nên sửa code tự reload | 8000 |
 | Celery worker, Celery Beat, Outbox relay | Docker, cùng image với API | — |
-| Redis (Valkey, cùng major version với ElastiCache) | Docker | 6379 |
+| Redis (Valkey 8, cùng bản với ElastiCache) | Docker | 6379 |
 | Mailpit | Docker | 1025 (SMTP), 8025 (giao diện xem mail) |
 | Ảnh Sản phẩm | Ổ đĩa, thư mục `backend/media/` | — |
 | VNPay, MoMo | Fake Gateway trong Django | — |
@@ -251,7 +251,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U fashion"]
       interval: 2s
   redis:
-    image: valkey/valkey:8-alpine   # cùng major version với ElastiCache [Cần xác minh]
+    image: valkey/valkey:8-alpine   # ghim Valkey 8, cùng bản với ElastiCache
     ports: ["6379:6379"]
   mailpit:
     image: axllent/mailpit
