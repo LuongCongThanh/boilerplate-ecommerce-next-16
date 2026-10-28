@@ -155,6 +155,16 @@ Không dùng **rebase merge** trên GitHub.
   - Checklist: có test; có migration (nếu đổi model); đã chạy `make lint` và `make test`; đã cập nhật tài liệu, GLOSSARY hoặc ADR nếu cần; không lộ secret.
 - PR nên nhỏ: **dưới khoảng 400 dòng thay đổi**, không tính migration và file sinh tự động.
 
+Các mục ở sidebar PR trên GitHub:
+
+| Mục | Quy ước |
+|---|---|
+| Reviewers | Không gắn khi mới có một người làm. Tự review bằng `/code-review` trước khi merge. Có người thứ hai thì gắn họ và nâng số người duyệt lên 1 (mục 6) |
+| Assignees | Luôn gán người mở PR: `gh pr create --assignee @me` |
+| Labels | Không dùng. Loại PR nằm ở tiêu đề, trạng thái ticket nằm ở dòng `Status:` trong `.scratch/` |
+| Projects, Milestone | Không dùng. Phiên bản theo tag và `CHANGELOG.md` (mục 7) |
+| Development | Để trống vì ticket không nằm trong GitHub Issues. Liên kết ticket bằng đường dẫn `.scratch/` trong mô tả PR và footer `Refs:` của commit |
+
 ### 4.3. PR release `dev` → `main`
 
 - Tiêu đề: `chore(release): v0.2.0`. Không dùng `release: …` vì `release` không phải `type` hợp lệ (mục 3.1), job `pr-title` sẽ chặn.
@@ -248,7 +258,7 @@ Phải dùng `--onto` vì squash merge tạo trên `dev` một commit mới, nê
 | Cần ít nhất 1 người duyệt | ⏳ Tạm để 0 vì mới có một người làm; nâng lên 1 khi có người thứ hai | — |
 | Bắt buộc CI xanh trước khi merge (các check ở mục 3.5) | ✅ | — (CI vẫn chạy sau khi push) |
 | Nhánh phải cập nhật với nhánh đích trước khi merge | ✅ | — |
-| Chỉ cho phép merge commit (cho PR release) và squash (cho hotfix) | ✅ | Chỉ squash (cho PR thường) |
+| Chỉ cho phép merge commit (cho PR release) và squash (cho hotfix) | ✅ | — (quy ước: chỉ squash cho PR thường, mục 4.1; ruleset không ép để giữ quyền push gấp) |
 | Cấm force-push | ✅ | ✅ |
 | Cấm xoá nhánh | ✅ | ✅ |
 
