@@ -31,7 +31,7 @@ Status: resolved
 - [x] `02` và `08` cùng ghi `uv ≥ 0.13`.
 - [x] `pre-commit run --all-files` qua khi chưa có `backend/`; hook ruff, mypy, import-linter chỉ chạy trên file trong `backend/`.
 
-**PR:** (điền số PR khi mở)
+**PR:** #16
 
 ## Comments
 
