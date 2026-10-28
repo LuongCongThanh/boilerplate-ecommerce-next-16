@@ -1,6 +1,6 @@
 # 04. API contract
 
-> Trạng thái: **Bản nháp chờ review**. File này chốt hợp đồng dữ liệu và hành vi; khi có backend, OpenAPI được sinh bằng `drf-spectacular` tại `/api/schema/`, Swagger UI tại `/api/docs/` (chỉ local và staging nội bộ). Hiện chưa có backend hoặc `backend/openapi.yaml`; không coi bảng endpoint là bằng chứng API đã triển khai.
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). File này chốt hợp đồng dữ liệu và hành vi; khi có backend, OpenAPI được sinh bằng `drf-spectacular` tại `/api/schema/`, Swagger UI tại `/api/docs/` (chỉ local và staging nội bộ). Hiện chưa có backend hoặc `backend/openapi.yaml`; không coi bảng endpoint là bằng chứng API đã triển khai.
 >
 > Mọi request của storefront và back-office đi qua Next.js BFF ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Từ internet chỉ có `/api/v1/webhooks/` gọi thẳng vào Django.
 
@@ -109,7 +109,7 @@ Các mã cần Frontend xử lý riêng:
 | GET | `orders` | ordering | Customer | Lịch sử đơn | US-402 |
 | GET | `orders/{code}` | ordering | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Chi tiết đơn | US-402 |
 | POST | `orders/{code}/cancel` | ordering | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Tự huỷ đơn | US-403 |
-| POST | `auth/register` | identity | Công khai | Đăng ký | US-501 |
+| POST | `auth/register` | identity | Công khai (throttle) | Đăng ký; luôn trả `202` như nhau dù email đã tồn tại hay chưa (US-501 AC2) | US-501 |
 | POST | `auth/verify-email` | identity | Công khai | Xác thực email bằng token trong link | US-501 |
 | POST | `auth/verify-email/resend` | identity | Công khai (throttle) | Gửi lại email xác thực; luôn trả `202` như nhau dù email có tồn tại hay không | US-501 |
 | POST | `auth/login` | identity | Công khai | Đăng nhập email + mật khẩu | US-502 |
@@ -260,7 +260,7 @@ Webhook không dùng ErrorDTO/envelope chung khi provider có ACK riêng. Chỉ 
 
 ### 5.3. Vòng đời quote_token
 
-1. `ordering` validate QuoteInput, đọc các dòng giỏ và catalog, đánh giá Voucher/ship ngoài transaction khóa dài, trả QuoteDTO. Quote không Giữ hàng hoặc bảo đảm giá tương lai. `QUOTE_TTL = 5 phút` **[Giả định có thể cấu hình]**, ngắn hạn độc lập TTL Giữ hàng/Payment; chỉ cấp token cho quote có thể checkout và tổng > 0.
+1. `ordering` validate QuoteInput, đọc các dòng giỏ và catalog, đánh giá Voucher/ship ngoài transaction khóa dài, trả QuoteDTO. Quote không Giữ hàng hoặc bảo đảm giá tương lai. `QUOTE_TTL = 5 phút` **[Giả định · kiểm chứng: tỉ lệ `QUOTE_EXPIRED` trên staging]**, cấu hình được, ngắn hạn độc lập TTL Giữ hàng/Payment; chỉ cấp token cho quote có thể checkout và tổng > 0.
 2. Token dùng Django signing HMAC-SHA256, salt `ordering.checkout-quote.v1`, keyring `QUOTE_SIGNING_KEYS` có `kid` và active key riêng, không dùng khoá JWT hoặc secret provider. Đây là token ký, không mã hoá, không phải JWT xác thực. Payload có `schema_version = 1`, `kid`, `issued_at`, `expires_at`, `subject_hash`, `input_hash`, `cart_hash`, `lines: [{variant_id, quantity, checkout_version, snapshot_hash}]`, các số tiền VND dạng integer và `shipping_fingerprint`. Không chứa contact/email/phone/street/invoice hoặc secret.
 3. Binding hash là HMAC-SHA256 với key của token và domain riêng cho subject/input/cart/snapshot/shipping, không phải hash PII không có khoá. Subject = account_id của Customer, hoặc hash cart token ổn định của Guest; đổi từ Guest sang Customer phải lấy quote mới. Input canonical là QuoteInput đã validate, áp defaults, phone/email/voucher chuẩn hoá, JSON UTF-8 sort key và separator cố định, không whitespace tuỳ ý; invoice_info absent được chuẩn về null. Cart canonical là cặp variant_id/quantity sắp theo UUID. Snapshot hash gồm các field snapshot, giá/điều kiện bán/cân nặng dùng khi báo giá; shipping_fingerprint gồm phí, source/reason, dữ liệu request đã chuẩn hoá và revision config/mapping tác động phí. Không đưa consents, expected_total, Idempotency-Key hoặc quote_token vào input hash.
 4. Checkout kiểm tra quyền và Idempotency-Key. Key completed cùng request trả nguyên kết quả đã lưu **trước khi kiểm hạn quote**; cùng key khác request trả409, in_progress trả202. Với thao tác mới, xác minh chữ ký/salt/kid/schema/hạn, binding danh tính/body và so expected_total với số đã ký. Sai chữ ký/binding/body trả400 INVALID_QUOTE; hết hạn trả409 QUOTE_EXPIRED; không lấy payload ký làm quyền truy cập tài nguyên hoặc giá được bảo đảm.
@@ -330,7 +330,7 @@ Các DTO đọc chỉ có field trong bảng này. Ký hiệu `Base + ...` kế 
 | `StaffCreateInput` / `StaffPatchInput` | Create `{email, full_name, password, phone?: string = ""}`; kind luôn staff. Patch chỉ full_name?, phone?, is_active?; không đổi kind/email hay tạo Admin qua API |
 | `OrderCancelInput` | Store body rỗng; Staff `{reason: string 1..500, warehouse_return_required?: boolean}`; T14 bắt buộc boolean, các nhánh khác chỉ cho false/absent |
 | `NoteInput` | `{note: string <=500}`; không chứa PII; return reject dùng field này, flag resolve body rỗng |
-| `BulkInput` / `BulkResultDTO` | Input `{ids: UUID[]}` 1..100 **[Giả định giới hạn vận hành]**, không trùng; response `{results: [{id: UUID, http_status: integer, order: OrderSummaryDTO hoặc null, error: ErrorDTO.error hoặc null}]}` giữ thứ tự input. Confirm hợp lệ status200, hand-over đã nhận status202; từng đơn một transaction, lỗi đơn này không rollback đơn khác. Envelope HTTP200, không dùng 207; toàn request sai shape trả400 trước khi xử lý |
+| `BulkInput` / `BulkResultDTO` | Input `{ids: UUID[]}` 1..100, không trùng; response `{results: [{id: UUID, http_status: integer, order: OrderSummaryDTO hoặc null, error: ErrorDTO.error hoặc null}]}` giữ thứ tự input. Confirm hợp lệ status200, hand-over đã nhận status202; từng đơn một transaction, lỗi đơn này không rollback đơn khác. Envelope HTTP200, không dùng 207; toàn request sai shape trả400 trước khi xử lý |
 | `ShipmentAcceptedDTO` | `{order_id: UUID, shipment_id: UUID, status: enum Shipment.status}`; HTTP202, poll GET orders/{id}; nhận lệnh chưa có nghĩa tạo GHN thành công |
 | `ErasureAcceptedDTO` | `{request_id: UUID, status: received hoặc processing hoặc completed hoặc rejected, completed_at: timestamp hoặc null}`; request_id là ID ErasureRequest, khác error.request_id truy vết HTTP |
 | `PageQuery` / `ProductQuery` | Page `{page?: integer>=1 = 1, page_size?: integer1..100 = 24}`; Product thêm category?: UUID, size?: code, color?: code, price_min?/price_max?: integer>=0, in_stock?: boolean, q?: string<=255, ordering?: newest/price/-price/best_selling = newest. Back-office thêm status?: enum Product.status; storefront không cho lọc draft/archived |
@@ -355,7 +355,7 @@ Các route trong bảng ở mục 4 có schema tại đây; path params giữ UU
 | store POST orders/lookup | OrderLookupInput | 200 OrderLookupDTO |
 | store GET orders; orders/{code} | PageQuery + status?; None | 200 Page<OrderSummaryDTO>; OrderDTO |
 | store POST orders/{code}/cancel | None | 200 OrderDTO |
-| store POST auth/register | RegisterInput | 201 AccountDTO, không cấp token trong response đăng ký |
+| store POST auth/register | RegisterInput | 202 AcceptedDTO cho mọi email hợp lệ về định dạng; không cấp token, không trả AccountDTO. Lỗi validate (mật khẩu yếu, thiếu consent) vẫn trả 400/422 vì không phụ thuộc email đã tồn tại |
 | store POST auth/google | GoogleInput | 200 TokenPairDTO |
 | store/backoffice POST auth/login; auth/refresh | LoginInput; RefreshInput | 200 TokenPairDTO |
 | store/backoffice POST auth/logout | LogoutInput | 204; dùng refresh token để logout kể cả access token hết hạn |

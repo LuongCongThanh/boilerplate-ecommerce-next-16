@@ -1,7 +1,19 @@
 # Chốt giá dưới khoá Biến thể trong transaction checkout
 
-Checkout báo giá và gọi GHN ngoài transaction để tránh giữ khoá khi chờ mạng. Tính thử trả quote_token có chữ ký, gắn Người mua/input/giỏ/phiên bản và hash snapshot; token không chứa PII, không phải token đăng nhập, không Giữ hàng hoặc cam kết giá. Chọn token ký ngắn hạn thay vì thêm bảng Quote: không cần lưu/purge báo giá, đổi lại không thu hồi riêng từng token và phải kiểm tra lại dữ liệu hiện hành. Token dùng keyring và salt riêng theo 04 mục 5 và 05 mục 2.
+Checkout báo giá và gọi GHN ngoài transaction, để không giữ khoá trong lúc chờ mạng. Vì vậy phải có cách chứng minh rằng đơn được tạo đúng với báo giá Người mua đã xem. Chọn hai việc đi cùng nhau:
 
-Trước khi tạo Đơn hàng, khoá Cart để kiểm fingerprint báo giá, rồi toàn bộ StockItem và Variant theo thứ tự ổn định; kiểm tra lại checkout_version, Giá áp dụng, snapshot và điều kiện bán với token Người mua đã xác nhận, kể cả tổng tiền không đổi. Xoá các dòng giỏ đã mua cùng transaction với Order và kết quả idempotency, tránh dùng key mới đặt lại cùng giỏ. Mọi writer của catalog, kể cả tạo/sửa/xoá SalePrice, phải khoá Variant bị ảnh hưởng trước khi ghi. Chỉ khoá Variant ở checkout mà không ràng buộc writer không bảo vệ được việc thêm Giá khuyến mãi đồng thời.
+1. **Tính thử trả `quote_token` có chữ ký, không lưu bảng Quote.** Token gắn với Người mua, nội dung checkout, giỏ hàng và phiên bản/snapshot của từng Biến thể. Không cần lưu và purge báo giá; đổi lại, không thu hồi riêng được từng token, và checkout luôn phải kiểm tra lại dữ liệu hiện hành.
+2. **Kiểm tra lại dưới khoá Biến thể và bắt mọi writer của catalog cùng khoá.** Trong transaction tạo đơn, checkout khoá Cart, StockItem rồi Variant, so với token; khác ở bất kỳ điểm nào thì trả `PRICE_CHANGED`, kể cả khi tổng tiền tình cờ không đổi. Mọi service sửa dữ liệu ảnh hưởng checkout, kể cả thêm SalePrice mới, phải khoá các Variant bị ảnh hưởng trước khi ghi. Chỉ khoá ở checkout mà không ràng buộc writer thì không chặn được Giá khuyến mãi được thêm đồng thời.
 
-Chọn từ chối bằng PRICE_CHANGED và yêu cầu xác nhận quote mới khi dữ liệu thay đổi, thay vì cho phép dùng báo giá cũ. Đánh đổi là checkout phải khoá Variant ngay cả khi availability không đổi, và có thể yêu cầu xác nhận lại dù tổng tiền không đổi. Nếu cần quote mới, rollback trước rồi mới gọi tích hợp bên ngoài; OrderLine giữ snapshot sau commit.
+Chi tiết: luồng ở [02 mục 6.2](../architecture/02-backend-structure.md#62-ví-dụ-luồng-một-request), thứ tự khoá và quy tắc writer ở [02 mục 9.1](../architecture/02-backend-structure.md#91-quy-ước-chung), payload và vòng đời token ở [04 mục 5.3](../architecture/04-api-contract.md#53-vòng-đời-quote_token).
+
+## Các phương án đã cân nhắc
+
+- **Bảng Quote trong DB**: thu hồi được từng báo giá, nhưng thêm bảng, job purge và một lần ghi cho mỗi lần Tính thử; không chọn.
+- **Cho phép dùng báo giá cũ nếu tổng tiền không đổi**: ít lần phải xác nhận lại hơn, nhưng đơn có thể mang snapshot (tên, SKU, mức giảm quyết định quyền Đổi trả) khác cái Người mua đã thấy; không chọn.
+
+## Hệ quả
+
+- Checkout phải khoá Variant ngay cả khi tồn kho không đổi, và có thể bắt Người mua xác nhận lại dù tổng tiền không đổi.
+- Cần quote mới thì rollback trước rồi mới gọi tích hợp bên ngoài; không gọi GHN khi đang giữ khoá.
+- Token dùng keyring và salt riêng, không dùng khoá JWT ([05 mục 2](../architecture/05-auth-security.md#2-thiết-kế-jwt)).

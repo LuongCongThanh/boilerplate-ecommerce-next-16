@@ -1,6 +1,6 @@
 # 03. Mô hình dữ liệu
 
-> Trạng thái: **Bản nháp chờ review**. Tên bảng có tiền tố theo module ([ADR 0006](../adr/0006-modular-monolith.md)).
+> Trạng thái: **Đã chốt cho MVP** ([quy ước](../../README.md#trạng-thái-tài-liệu)). Tên bảng có tiền tố theo module ([ADR 0006](../adr/0006-modular-monolith.md)).
 > Tài liệu này là đặc tả để viết model và migration: mỗi bảng có danh sách cột đầy đủ, kiểu, NULL, mặc định và ràng buộc. Sơ đồ ER chỉ vẽ khoá (PK, FK, UK) để xem quan hệ; chi tiết cột nằm trong bảng bên dưới sơ đồ.
 
 Phạm vi chính là 44 bảng do dự án định nghĩa. Các bảng framework và history sinh tự động được liệt kê riêng ở mục 0.9; không coi danh sách 44 bảng là toàn bộ physical schema. Tổ chức code theo [02](./02-backend-structure.md); thuật toán nghiệp vụ theo `docs/business/`, tích hợp và recovery theo 06–07. Khi các tài liệu mâu thuẫn phải sửa đồng bộ trước khi triển khai phần liên quan, không tự chọn một mô tả để bỏ qua mô tả kia.
@@ -77,7 +77,7 @@ Phạm vi chính là 44 bảng do dự án định nghĩa. Các bảng framework
 | Bảng | Giá trị seed | Nguồn |
 |---|---|---|
 | `shipping_settings` | `singleton = 1`, `fallback_fee = 35000` | BR-SHP-02 |
-| `ordering_settings` | `singleton = 1`, `free_shipping_threshold = 500000`, `cod_limit = 5000000` | BR-SHP-03, BR-PAY-06; hai mức này vẫn là **[Giả định]** nghiệp vụ, Admin sửa qua cấu hình |
+| `ordering_settings` | `singleton = 1`, `free_shipping_threshold = 500000`, `cod_limit = 5000000` | BR-SHP-03, BR-PAY-06; Admin sửa qua cấu hình |
 
 Seed không tạo default cho mọi insert và không ghi đè cấu hình đã được Admin sửa. Singleton constraint chỉ bảo đảm tối đa một dòng; data migration và kiểm tra cấu hình khi khởi động bảo đảm dòng cần thiết tồn tại.
 
@@ -369,13 +369,14 @@ Chỉ thêm dòng, không sửa: mỗi lần đồng ý hoặc rút lại là m�
 | Cột | Kiểu | NULL | Mặc định | Ý nghĩa và ràng buộc |
 |---|---|---|---|---|
 | `account_id` | `uuid` | có | `NULL` | FK → `identity_account`, `PROTECT`; NULL với Khách vãng lai |
-| `subject_phone` | `varchar(20)` | không | `''` | Số điện thoại của Khách vãng lai |
+| `subject_phone` | `varchar(20)` | không | `''` | Số điện thoại của Khách vãng lai; `''` sau khi ẩn danh |
+| `subject_phone_hmac` | `varchar(80)` | không | `''` | `<kid>:<hex>` HMAC-SHA256 của số E.164 bằng `PII_HMAC_KEYS`; ghi khi Yêu cầu xoá dữ liệu của đối tượng hoàn tất, cùng lúc xoá `subject_phone` ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)) |
 | `purpose` | `enum(data_processing \| marketing)` | không | — | |
 | `policy_version` | `varchar(32)` | không | — | Phiên bản chính sách đã hiển thị |
 | `channel` | `enum(register \| checkout \| profile)` | không | — | `profile` cho thay đổi lựa chọn marketing qua `PATCH me` |
 | `granted` | `boolean` | không | — | `true` = đồng ý, `false` = rút lại |
 
-Ràng buộc: `CHECK(account_id IS NOT NULL OR subject_phone <> '')`. Index: `account_id`, `subject_phone`.
+Ràng buộc: `CHECK(account_id IS NOT NULL OR subject_phone <> '' OR subject_phone_hmac <> '')`. Index: `account_id`, `subject_phone`, `subject_phone_hmac`.
 
 ### 2.7. `identity_erasure_request`: Yêu cầu xoá dữ liệu
 
@@ -383,6 +384,7 @@ Ràng buộc: `CHECK(account_id IS NOT NULL OR subject_phone <> '')`. Index: `ac
 |---|---|---|---|---|
 | `account_id` | `uuid` | có | `NULL` | FK → `identity_account`, `PROTECT`; NULL với yêu cầu của Khách vãng lai |
 | `subject_phone` | `varchar(20)` | không | `''` | Số điện thoại của Khách vãng lai; xoá về `''` khi `completed` |
+| `subject_phone_hmac` | `varchar(80)` | không | `''` | `<kid>:<hex>` HMAC-SHA256 của số E.164 bằng `PII_HMAC_KEYS`; ghi khi Yêu cầu xoá dữ liệu của đối tượng hoàn tất, cùng lúc xoá `subject_phone` ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)) |
 | `status` | `enum(received \| processing \| completed \| rejected)` | không | `received` | |
 | `received_at` | `timestamptz` | không | — | Lúc cửa hàng nhận yêu cầu (có thể sớm hơn lúc Staff ghi vào hệ thống); hạn xử lý tính từ mốc này |
 | `started_at` | `timestamptz` | có | `NULL` | Lúc chuyển `processing` |
@@ -407,11 +409,12 @@ Chỉ thêm dòng, không sửa. Thời điểm là `created_at`.
 |---|---|---|---|---|
 | `staff_id` | `uuid` | không | — | FK → `identity_account`, `PROTECT` |
 | `customer_id` | `uuid` | có | `NULL` | FK → `identity_account`, `PROTECT`; NULL khi đối tượng là Khách vãng lai |
-| `subject_phone` | `varchar(20)` | không | `''` | Số điện thoại đã tìm hoặc của đơn vãng lai |
+| `subject_phone` | `varchar(20)` | không | `''` | Số điện thoại đã tìm hoặc của đơn vãng lai; `''` sau khi ẩn danh |
+| `subject_phone_hmac` | `varchar(80)` | không | `''` | `<kid>:<hex>` HMAC-SHA256 của số E.164 bằng `PII_HMAC_KEYS`; ghi khi Yêu cầu xoá dữ liệu của đối tượng hoàn tất, cùng lúc xoá `subject_phone` ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)) |
 | `order_code` | `varchar(16)` | không | `''` | Khi xem từ Đơn hàng; không FK (`identity` ở lớp dưới `ordering`) |
 | `action` | `enum(view_customer \| view_order \| search_by_phone)` | không | — | |
 
-Index: `(customer_id, created_at)`, `(staff_id, created_at)`.
+Index: `(customer_id, created_at)`, `(staff_id, created_at)`, `subject_phone_hmac`.
 
 ## 3. `catalog`
 
@@ -552,8 +555,7 @@ Ràng buộc và index: `UNIQUE(product_color_id, size_id)` (BR-CAT-02); index t
 Ghi chú:
 
 - `checkout_version` có mặt trong `VariantForSaleDTO`. Tăng phiên bản khi Giá bán, SKU, dữ liệu snapshot, cân nặng hoặc điều kiện bán thay đổi; thay đổi liên quan ở Product/Size/Color cũng phải tăng phiên bản các Biến thể bị ảnh hưởng. `is_available` là bản sao tồn kho, không làm đổi phiên bản; `inventory` vẫn quyết định đủ hàng hay không.
-- `checkout/quote` đưa phiên bản và hash snapshot vào `quote_token` có chữ ký theo 04 mục 5. Checkout kiểm tra với báo giá Người mua đã xem, không chỉ với một lần đọc catalog mới trong chính request checkout; cùng tổng tiền nhưng phiên bản/snapshot khác vẫn PRICE_CHANGED. Token không Giữ hàng hoặc cố định giá. Không có bảng Quote riêng.
-- Checkout khoá toàn bộ StockItem theo thứ tự `variant_id`, rồi gọi catalog kiểm tra snapshot dưới khoá toàn bộ Variant theo `id` tăng dần, trước khi dùng Voucher và tạo đơn. Catalog tính lại Giá áp dụng tại một thời điểm `timezone.now()` chung trong transaction; so phiên bản, đơn giá, dữ liệu snapshot và điều kiện bán. Mọi service sửa các dữ liệu này, kể cả thêm/sửa/xoá SalePrice hoặc đổi trạng thái Product, phải khoá các Variant bị ảnh hưởng theo cùng thứ tự trước khi ghi; không gọi inventory khi đang giữ khoá Variant. Quy tắc này bảo vệ cả việc thêm SalePrice mới; chỉ khoá các SalePrice đã tồn tại là không đủ.
+- `checkout_version` và hash snapshot được đưa vào `quote_token` ([04 mục 5.3](./04-api-contract.md#53-vòng-đời-quote_token)) và được kiểm tra lại dưới khoá Variant khi checkout ([02 mục 6.2](./02-backend-structure.md#62-ví-dụ-luồng-một-request)). Writer của catalog khoá Variant theo [02 mục 9.1](./02-backend-structure.md#91-quy-ước-chung); không gọi inventory khi đang giữ khoá Variant.
 - Đổi `price` bị từ chối khi có `catalog_sale_price` đang hoặc sắp hiệu lực với `price` ≥ giá mới (BR-PRC-05), kiểm tra ở service.
 
 ### 3.8. `catalog_sale_price`: Giá khuyến mãi
@@ -1269,7 +1271,7 @@ Ghi chú: tạo EmailLog `queued` cùng transaction với handler; task claim b�
 - Staff gọi endpoint complete để **bắt đầu** xử lý: `ordering` kiểm tra điều kiện rồi gọi `apply_erasure_request`. Trong cùng transaction, `identity` khoá yêu cầu, chuyển `received` → `processing`, lưu `started_at`, `erasure_event_id` và `required_handlers`, ẩn danh Tài khoản và ghi sự kiện vào outbox. Không đặt `completed_at` lúc này. Gọi lại khi `processing`/`completed` thì trả trạng thái hiện tại, không phát thêm sự kiện.
 - Danh sách handler bắt buộc có ID đăng ký ổn định cho `ordering`, `promotions`, `notifications`. Cấu hình tại project và kiểm tra đủ đăng ký lúc khởi động; snapshot danh sách vào yêu cầu, không suy ra từ các delivery tình cờ tồn tại. Không import module lớp trên vào `identity`. Handler `ordering` hoàn tất cả redaction của `payments` và `shipping` trước khi commit.
 - Job `identity.reconcile_erasure_requests` đọc kết quả qua API hạ tầng `shared.events.get_delivery_outcomes(event_id, handler_names)`; API này chỉ truy vấn `shared_event_delivery`, không import modules. Chỉ khi **tất cả handler bắt buộc** có delivery `completed` mới chuyển `processing` → `completed` và đặt `completed_at` dưới khoá yêu cầu. Delivery thiếu, `pending`, `failed` hoặc `rejected` đều không được coi là xong: giữ `processing` và cảnh báo; `retry_failed_events` phục hồi cặp `failed`. Lỗi xử lý ẩn danh cần retry, không cố tình chuyển thành `DomainError` bị bỏ qua.
-- Giữ đối tượng cần ẩn danh (`account_id` hoặc `subject_phone` của Khách vãng lai) trong ErasureRequest suốt `processing` để handler còn lấy được sau khi Account/Order đã ẩn danh. Không đưa thông tin này vào sự kiện. Khi hoàn tất, xoá `subject_phone`; giữ ID và các mốc thời gian làm bằng chứng. Replay không tự thêm handler mới vào yêu cầu đã hoàn tất; thay đổi phạm vi ẩn danh cần quy trình migration riêng.
+- Giữ đối tượng cần ẩn danh (`account_id` hoặc `subject_phone` của Khách vãng lai) trong ErasureRequest suốt `processing` để handler còn lấy được sau khi Account/Order đã ẩn danh. Không đưa thông tin này vào sự kiện. Khi hoàn tất, thay `subject_phone` bằng `subject_phone_hmac` trên yêu cầu và các dòng Consent/CustomerDataAccessLog của đối tượng; giữ ID và các mốc thời gian làm bằng chứng ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)). Replay không tự thêm handler mới vào yêu cầu đã hoàn tất; thay đổi phạm vi ẩn danh cần quy trình migration riêng.
 
 | Bảng | Module | Xử lý |
 |---|---|---|
@@ -1285,7 +1287,7 @@ Ghi chú: tạo EmailLog `queued` cùng transaction với handler; task claim b�
 | `payments_payment_event` | payments (do `ordering` gọi) | Xoá PII trong `raw_payload` |
 | Lịch sử pghistory | — | Không cần xử lý: chỉ ghi field không phải PII (mục 10.1) |
 | `shared_outbox_event` | — | Không cần xử lý: payload sự kiện không chứa PII |
-| `identity_consent`, `identity_erasure_request`, `identity_customer_data_access_log` | identity | **Giữ** làm bằng chứng tuân thủ: đã đồng ý gì, đã yêu cầu xoá khi nào, và Staff nào đã xem dữ liệu của ai (CMP-07) |
+| `identity_consent`, `identity_erasure_request`, `identity_customer_data_access_log` | identity | **Giữ** làm bằng chứng tuân thủ: đã đồng ý gì, đã yêu cầu xoá khi nào, và Staff nào đã xem dữ liệu của ai (CMP-07). Các dòng khớp đối tượng (theo `account_id`, hoặc `subject_phone` với Khách vãng lai): `subject_phone` → `''`, ghi `subject_phone_hmac`, trong cùng transaction chuyển yêu cầu sang `completed` ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)) |
 
 ### 10.1. Các field được ghi lịch sử
 
