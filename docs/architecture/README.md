@@ -74,7 +74,7 @@ Liên quan: [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md), [ADR 00
 
 ### [06. Tích hợp bên ngoài](./06-integrations.md)
 
-Mô hình adapter tự viết bằng `httpx` cho VNPay, MoMo và GHN, vì các bên này không có SDK Python được duy trì. File còn mô tả cách ánh xạ trạng thái GHN, rủi ro về địa chỉ 2 cấp và 3 cấp, Google OAuth, email, Fake Gateway dùng ở local và test, và quy trình nghiệm thu với sandbox thật.
+Mô hình adapter tự viết bằng `httpx` cho VNPay, MoMo và GHN, vì các bên này không có SDK Python được duy trì. File còn mô tả cách ánh xạ trạng thái GHN, Đối soát chỉ hỏi lại Vận đơn lâu không có cập nhật, rủi ro mở về đối chiếu tiền COD, rủi ro về địa chỉ 2 cấp và 3 cấp, Google OAuth, email, Fake Gateway dùng ở local và test, và quy trình nghiệm thu với sandbox thật.
 Liên quan: [ADR 0005](../adr/0005-provider-adapters-fake-gateways.md).
 
 ### [07. Sự kiện và job chạy nền](./07-async-events-jobs.md)

@@ -37,7 +37,7 @@ Ngoài pytest, CI còn có các **cổng kiểm tra tĩnh** (mục 8).
 - Mốc thời gian (Giữ hàng 15 phút, Hoàn tất sau 7 ngày, Đổi trả trong 7 ngày) dùng `time-machine`, test cả hai phía của mốc.
 
 ```python
-@pytest.mark.br("BR-INV-03")
+@pytest.mark.br("BR-INV-02")
 def test_reserve_stock_fails_when_stock_is_insufficient(stock_item_factory):
     ...
 ```
@@ -56,6 +56,10 @@ Ngoài quy tắc chung, bắt buộc có các test service sau, vì đây là nh
 | Kiểm kê (BR-INV-12) | Tồn kho 7, Hàng chờ xuất 3, số đếm 10 → không điều chỉnh; số đếm 9 → điều chỉnh −1 loại `stock_count` |
 | Điều chỉnh giảm vượt Số lượng bán được (BR-INV-11) | Ném `INSUFFICIENT_AVAILABLE`; Tồn kho không đổi |
 | Giữ hàng đã quá `expires_at` nhưng job chưa giải phóng | `reserve_stock` của Người mua khác thành công; Giữ hàng cũ chuyển `released`, `reserved` giảm tương ứng |
+| Job T4 khi `shared.events.delivery_lag()` quá 60 giây | Không huỷ đơn nào, log `cancel_skipped_delivery_backlog`; hết tồn đọng thì lượt sau huỷ bình thường |
+| Bắt đầu Thanh toán online ở phút 7:59 và phút 8:00 kể từ khi đặt đơn (BR-INV-05) | 7:59 tạo được Thanh toán; 8:00 ném `PaymentWindowClosed` (`PAYMENT_WINDOW_CLOSED`) |
+| `raise_flag` khi đơn đã có cờ cùng `kind` đang mở | Không tạo cờ thứ hai, `note` được nối thêm |
+| `placed_at`, `cancelled_at`, `completed_at` | Được ghi đúng trong transition tương ứng (T2/T3, T4/T5/T7/T9/T14, T13); báo cáo Doanh thu lọc theo `completed_at` (BR-REV-01) |
 | Staff huỷ đơn `SHIPPING` (T14) | Chỉ được khi đơn có cờ `shipment_exception` và bắt buộc lý do; Hoàn tiền toàn bộ nếu đã thanh toán online; không trả lượt Voucher |
 | Chấp nhận Đổi trả một phần (BR-RET-08) | Chỉ phần `accepted_quantity` của dòng `restock = true` được cộng lại Tồn kho; Hoàn tiền tính trên số lượng được chấp nhận; không dòng nào được chấp nhận thì yêu cầu `rejected` |
 | Doanh thu khi Người mua trả tiền hai lần (BR-REV-01) | Hoàn tiền theo BR-PAY-05 không bị trừ; Doanh thu của đơn bằng Tổng tiền đơn |
@@ -80,6 +84,7 @@ Bắt buộc có các test:
 | Hai yêu cầu hoàn cùng payment_id và request_key | Chỉ một Refund được tạo, cả hai trả cùng refund_id; khác tham số bị từ chối |
 | Checkout song song với đổi Giá bán hoặc thêm/sửa/xoá SalePrice | Writer và checkout đều khoá Variant; đơn dùng snapshot đã xác thực hoặc rollback PRICE_CHANGED, không lọt giá đọc trước khi writer commit |
 | Hai checkout chứa nhiều Biến thể, availability chỉ đổi ở các Biến thể khác nhau | Khoá toàn bộ StockItem rồi toàn bộ Variant theo id trước khi đổi availability; không có thứ tự khoá một phần Variant trước phần còn lại |
+| T3 tới muộn của đơn có Giữ hàng vừa quá hạn và checkout của người khác cùng tranh phần hàng đó | Đúng một bên được hàng, Tồn kho không âm; bên thua nhận `OUT_OF_STOCK` hoặc đi nhánh Hoàn tiền |
 | Người mua tự huỷ (T5) đúng lúc IPN thành công (T3) trên cùng một đơn | Chỉ một transition chạy trên trạng thái `PENDING_PAYMENT` (khoá dòng Đơn hàng); nếu T5 thắng thì tiền về được xử lý theo BR-PAY-05 |
 
 ### 2.3. Handler và outbox
@@ -110,7 +115,8 @@ Bắt buộc có các test handler sau:
 | `shipping.shipment-delivered` tới khi đơn còn `PACKING` (T10 chưa chạy) | Ném `TransitionNotYetValid`; đơn giữ nguyên |
 | `shipping.shipment-delivered` tới khi đơn đã `DELIVERED` hoặc `COMPLETED` | Không làm gì, không ném lỗi |
 | `shipping.shipment-delivered` tới khi đơn đã `RETURNED_TO_SENDER` | Ném `InvalidTransition`; đơn giữ nguyên |
-| `payments.payment-succeeded` tới khi đơn còn `PENDING_PAYMENT` nhưng đã quá `expires_at` | Chạy T4 (đơn `CANCELLED`, giải phóng Giữ hàng) rồi tạo Hoàn tiền và gắn cờ `unexpected_payment` |
+| `payments.payment-succeeded` tới khi đơn còn `PENDING_PAYMENT`, Giữ hàng đã quá `expires_at`, Số lượng bán được còn đủ | Đơn vào `PLACED`; Tồn kho giảm và Hàng chờ xuất tăng đúng số lượng; không tạo Hoàn tiền |
+| `payments.payment-succeeded` tới khi đơn còn `PENDING_PAYMENT`, Giữ hàng đã quá hạn và hàng đã bị người khác mua | `commit_reservation` ném `ReservationExpired`; chạy T4 (đơn `CANCELLED`) rồi tạo Hoàn tiền và gắn cờ `unexpected_payment` |
 | `shipping.shipment-exception` | Gắn cờ `shipment_exception`; đơn giữ `SHIPPING` |
 | `identity.email-verified` | Chỉ gắn các đơn có `contact_email` khớp (không phân biệt hoa thường) và chưa có `customer_id`; đơn đã thuộc Tài khoản khác không bị đổi |
 | Đặt đơn online (T1) rồi IPN thành công (T3) | T1 không ghi sự kiện nào vào outbox; T3 ghi đúng một `ordering.order-placed` |
@@ -124,7 +130,7 @@ Bắt buộc có các test handler sau:
 - **Phân quyền**: mỗi endpoint thử với Guest, Customer, Staff, Admin (theo cột quyền trong [04-api-contract.md](./04-api-contract.md)); Khách hàng này không xem được Đơn hàng của Khách hàng khác.
 - **`X-Lookup-Token`**: `GET orders/{code}`, `POST orders/{code}/payments`, `POST orders/{code}/cancel` của Khách vãng lai bị từ chối khi thiếu token, token hết hạn hoặc token của đơn khác. Checkout của Khách vãng lai trả về `lookup_token` dùng được ngay cho ba endpoint này.
 - **Lỗi**: đúng mã HTTP và đúng định dạng lỗi chuẩn (400, 401, 403, 404, 409, 429), gồm `409 PRICE_CHANGED` (có bảng tính mới trong `details`) và `409 SHIPMENT_IN_PROGRESS`.
-- **`Idempotency-Key`**: thiếu key; gửi lại cùng key thì nhận lại đúng kết quả cũ; cùng key nhưng body khác thì ra `IDEMPOTENCY_CONFLICT`. Key lưu ở `shared_idempotency_key` (PostgreSQL), nên vẫn đúng khi Redis không chạy.
+- **`Idempotency-Key`** cho `checkout`, `orders/{code}/payments`, `stock/inbound`, `stock/adjust`, `stock/count`: thiếu key; gửi lại cùng key thì nhận lại đúng kết quả cũ; cùng key nhưng body khác thì ra `IDEMPOTENCY_CONFLICT`. Key lưu ở `shared_idempotency_key` (PostgreSQL), nên vẫn đúng khi Redis không chạy.
 - **Còn xử lý:** hai request đồng thời cùng key chỉ có một operation_id/Payment; request còn lại nhận 202 PAYMENT_INITIALIZING. Khác body luôn 409, kể cả khi key in_progress. Purge không xoá key chưa rõ kết quả. Checkout commit kết quả key cùng Order, rollback không để Order mồ côi.
 - **Phục hồi khởi tạo:** giả lập gateway đã tạo nhưng response timeout/process chết trước lưu; cùng key và job phục hồi phải giữ Payment, provider_txn_ref và provider_request_id. Query trước; chỉ retry create khi adapter có hợp đồng idempotency đã xác minh. Test fake provider đếm giao dịch ngoài DB để phát hiện tạo trùng; không chỉ đếm Payment.
 - **Kết quả tới muộn:** IPN succeeded đến trước response tạo link; lưu response không hạ status/amount_received. Lease cũ không ghi đè lease mới. Quá hạn link không tạo/gia hạn link; gateway không cung cấp lại link thì API trả đang xử lý hoặc trạng thái cuối, không bịa redirect_url.
@@ -137,11 +143,10 @@ Bắt buộc có các test handler sau:
 
 Theo [05-auth-security.md](./05-auth-security.md) mục 9 và [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md): sai thuật toán, `alg: none`, sai `aud`, hết hạn, sai `kid`, dùng lại refresh token (phải thu hồi cả chuỗi), đổi `token_version`, thu hồi qua `jti`, token storefront không dùng được cho back-office.
 
-Thêm kịch bản refresh đồng thời: hai request refresh cùng dùng R1 trong 10 giây đều nhận cặp token hợp lệ và family không bị thu hồi; dùng lại R1 sau 10 giây thì thu hồi cả family.
-
-Thêm hai kịch bản về Tài khoản:
+Thêm các kịch bản sau:
 
 - **Đăng nhập Google vào Tài khoản chưa xác thực email** (chiếm tài khoản trước): Tài khoản được đánh dấu đã xác thực, mật khẩu cũ không còn đăng nhập được, mọi refresh token cũ bị thu hồi và access token cũ sai `tv`.
+- **`lookup_token`**: token có `aud` khác `order_lookup` (ví dụ access token `store`), token của đơn khác và token hết hạn đều bị từ chối.
 - **Một email một Tài khoản**: đăng ký Khách hàng bằng email của một Tài khoản Staff bị từ chối; đăng nhập storefront bằng Tài khoản Staff (mật khẩu hoặc Google) bị từ chối với lỗi chung.
 - **Một successor:** hai request đồng thời dùng R1 chỉ tạo R2 một lần. R1.used_at, successor_jti và ciphertext response commit cùng transaction. Mất response rồi retry trong 10 giây nhận đúng cặp cũ, không gia hạn replay; Redis tắt vẫn không tạo nhánh mới.
 - **Replay sau thu hồi:** logout/reset/Google takeover/ẩn danh/vô hiệu hoá giữa hai request → không trả lại token từ ciphertext. Kiểm tra trực tiếp account/tv/family từ DB dưới thứ tự khoá Account → Token; ciphertext liên quan được vô hiệu/xoá.
