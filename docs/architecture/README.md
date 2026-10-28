@@ -86,11 +86,11 @@ Liên quan: [ADR 0003](../adr/0003-postgres-redis-celery.md), [ADR 0007](../adr/
 
 ### [08. Môi trường phát triển local](./08-local-development.md)
 
-Cách dựng môi trường trên macOS và trên Windows qua WSL2. PostgreSQL cài trực tiếp trên máy, các thành phần còn lại chạy bằng Docker Compose. File hướng dẫn cài đặt lần đầu, đặt biến môi trường, các lệnh `Makefile` hằng ngày, debug, chạy test và cấu hình VS Code hoặc PyCharm.
+Cách dựng môi trường trên macOS và trên Windows qua WSL2. Mọi dịch vụ, kể cả PostgreSQL và Redis (Valkey), chạy bằng Docker Compose. File hướng dẫn cài đặt lần đầu, đặt biến môi trường, các lệnh `Makefile` hằng ngày, debug, chạy test và cấu hình VS Code hoặc PyCharm.
 
 ### [09. Triển khai trên AWS (mục tiêu)](./09-deployment-aws-target.md)
 
-Kiến trúc đích ở region Singapore, **chưa triển khai**. Thành phần gồm CloudFront kèm WAF, ALB, ECS Fargate (chạy api, worker, beat, relay và Next.js), RDS PostgreSQL Multi-AZ, ElastiCache Redis, S3, SES, Secrets Manager. File còn mô tả các môi trường staging và production, quy trình deploy (migration chạy trước, phải tương thích ngược) và lý do beat và relay deploy theo hai cách khác nhau.
+Kiến trúc đích ở region Singapore, **chưa triển khai**. Thành phần gồm CloudFront kèm WAF, ALB, ECS Fargate (chạy api, worker, beat, relay và Next.js), RDS PostgreSQL Multi-AZ, ElastiCache for Valkey, S3, SES, Secrets Manager. File còn mô tả các môi trường staging và production, quy trình deploy (migration chạy trước, phải tương thích ngược) và lý do beat và relay deploy theo hai cách khác nhau.
 
 ### [10. Yêu cầu phi chức năng](./10-nfr.md)
 

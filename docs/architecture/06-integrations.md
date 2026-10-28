@@ -49,7 +49,7 @@ Return URL do backend dựng từ STOREFRONT_ORIGIN cấu hình và path /paymen
 | Việc | Cách làm |
 |---|---|
 | Tạo thanh toán | Dựng URL có các tham số `vnp_*`, ký **HMAC-SHA512** bằng `vnp_HashSecret`; `vnp_TxnRef` = `payments_payment.provider_txn_ref` (mỗi lần thử sinh mã mới); `vnp_Amount` = số tiền × 100 theo đặc tả VNPay |
-| Hết hạn | `vnp_ExpireDate` = `payments_payment.expires_at` do `ordering` truyền vào: lúc đặt đơn + `PAYMENT_LINK_TTL` (phút thứ 10), giống nhau cho mọi lần thử. Link hết hạn sớm hơn Giữ hàng (phút thứ 15) 5 phút, để IPN đến muộn và một vòng Đối soát vẫn kịp trước khi Giữ hàng hết hạn |
+| Hết hạn | `vnp_ExpireDate` = `payments_payment.expires_at` do `ordering` truyền vào: lúc đặt đơn + `PAYMENT_LINK_TTL` (phút thứ 10), giống nhau cho mọi lần thử. Link hết hạn sớm hơn Giữ hàng (phút thứ 15) 5 phút, để IPN đến muộn vẫn kịp T3. Một vòng Đối soát (mỗi 5 phút) có thể kịp trước phút 15 nhưng không bảo đảm ([01](./01-system-context.md) mục 4) |
 | IPN | `GET /api/v1/webhooks/vnpay/ipn`: kiểm tra chữ ký → tìm Payment → so số tiền → chống trùng → cập nhật → trả `RspCode` theo đặc tả (`00` thành công, `01` không tìm thấy, `02` đã xử lý, `04` sai số tiền, `97` sai chữ ký). Sai số tiền thì Payment `failed` và phát `payments.payment-failed` với `reason = amount_mismatch` và `amount_received` (`ordering` tự tạo Hoàn tiền cho số tiền đã nhận và gắn cờ `payment_amount_mismatch`, BR-PAY-04) |
 | Đối soát | API truy vấn giao dịch (`querydr`) cho Payment `pending` quá 2 phút. Payment đã quá `expires_at` mà cổng báo chưa thanh toán thì chuyển `expired` |
 | Hoàn tiền | MVP: Staff thao tác thủ công trên trang quản trị VNPay (BR-REF-03) |
@@ -87,7 +87,7 @@ MoMo mô tả requestId dùng cho idempotency và API query tra theo orderId: [i
 | Tạo vận đơn | request_shipment ghi requested cùng snapshot creation_input và reference/client_order_code ổn định, enqueue sau commit. Task claim lease trong DB rồi gọi GHN ngoài transaction. Thành công chắc chắn thì ghi mã GHN và phát ShipmentCreatedV1 một lần; bị từ chối chắc chắn thì failed. Timeout/mất kết nối/crash chưa rõ kết quả không chuyển failed, giữ creation_unknown để query theo mã shop trước retry (mục 4.3) |
 | Huỷ vận đơn | Dùng khi Vận đơn được tạo xong cho một đơn đã bị huỷ (cờ `shipment_after_cancel`). `ordering` gọi `shipping.contracts.request_shipment_cancellation`: ghi Vận đơn `cancel_requested` rồi đẩy task lên queue `integrations` sau khi transaction commit. Task gọi `cancel_shipment` của adapter (API huỷ đơn của GHN). Thành công: Vận đơn `cancelled`. Lỗi sau khi hết retry: giữ `cancel_requested`, báo Sentry; Staff xử lý tay theo Cờ cần xử lý đã gắn **[Cần xác minh API huỷ của GHN và trạng thái nào còn huỷ được]** |
 | Webhook | `POST /api/v1/webhooks/ghn`: lưu `shipping_shipment_event`, đổi trạng thái GHN sang trạng thái nội bộ, phát sự kiện |
-| Đối soát | Mỗi 15 phút truy vấn Vận đơn chưa cuối theo mã GHN; requested/creation_unknown hết lease phải query bằng mã shop trước khi quyết định tạo lại. cancel_requested vẫn được thử huỷ lại qua cùng mã; không tạo Vận đơn thay thế |
+| Đối soát | Mỗi 15 phút truy vấn Vận đơn chưa cuối theo mã GHN, chỉ những Vận đơn không có cập nhật nào (webhook hay Đối soát) trong **6 giờ** **[Giả định]**, tối đa 500 Vận đơn mỗi vòng, ưu tiên Vận đơn lâu chưa cập nhật nhất. Đa số Vận đơn đã có webhook; quét hết sẽ thành hàng chục nghìn lần gọi mỗi vòng và vượt rate limit của GHN. requested/creation_unknown hết lease phải query bằng mã shop trước khi quyết định tạo lại. cancel_requested vẫn được thử huỷ lại qua cùng mã; không tạo Vận đơn thay thế |
 
 ### 4.1. Ánh xạ trạng thái GHN
 
@@ -125,6 +125,10 @@ Hệ thống dùng địa chỉ **2 cấp** (tỉnh/thành → phường/xã). [
 - Giữ creation_unknown, next_recovery_at và cảnh báo khi chưa thể xác định; hết retry lỗi mạng không biến thành failed. Staff không được huỷ Đơn hàng hoặc bấm bàn giao lại khi requested/creation_unknown. Chỉ retry failed khi biết chắc chưa có Vận đơn ngoài GHN; không sinh client_order_code mới để né lỗi trùng.
 - Tài liệu GHN có [tra theo mã shop](https://developer.ghn.vn/vi/docs/order/info-by-client-code) và mô tả client_order_code duy nhất theo shop trong [API tạo](https://developer.ghn.vn/vi/docs/order/create). Phải nghiệm thu sandbox với đúng ShopID/môi trường: tạo thành công nhưng mất response, query ngay/lặp lại, create trùng và response tới muộn. Chưa xác minh các trường hợp này thì không bật retry tạo tự động sau timeout. FakeShippingProvider cần mô phỏng chúng.
 
+### 4.4. ⚠️ Rủi ro mở: đối chiếu tiền COD
+
+Thanh toán COD được ghi `succeeded` khi GHN báo đã giao (T11), nhưng tiền thật về tài khoản cửa hàng khi GHN chuyển tiền thu hộ, thường vài ngày sau và theo đợt. MVP **không** đối chiếu khoản chuyển này với từng Đơn hàng: kế toán đối chiếu bằng báo cáo của GHN và file `reports/paid-orders.csv`. Đây không phải Đối soát theo nghĩa trong [GLOSSARY.md](../../GLOSSARY.md).
+
 ## 5. Google OAuth
 
 - Frontend (NextAuth) lấy `id_token` từ Google rồi server Next.js gửi sang `POST /api/v1/store/auth/google`.
@@ -144,7 +148,7 @@ EmailLog được tạo trong PostgreSQL cùng transaction với handler. Task n
 
 ## 7. Fake Gateway (local và test)
 
-Chỉ có khi `FAKE_PROVIDERS_ENABLED = true` (mục 1).
+Chỉ có khi `FAKE_PROVIDERS_ENABLED = true` (mục 1). Đây là ngoại lệ duy nhất mà trình duyệt gọi thẳng Django, và chỉ có ở local, thay cho trang thanh toán của cổng thật.
 
 ```
 1. Client gọi POST /store/orders/{code}/payments {gateway: "vnpay"}
@@ -163,7 +167,7 @@ Nút "Không gửi IPN" dùng để thử job Đối soát: `FakeGateway.query_t
 
 Dùng **Cloudflare Tunnel** để VNPay, MoMo, GHN gọi được vào máy local:
 
-1. `cloudflared tunnel --url http://localhost:8000` (hoặc tunnel có tên miền cố định).
+1. Tạo tunnel có tên miền cố định, cấu hình ingress chỉ cho path `/api/v1/webhooks/*` đi qua tới `http://localhost:8000`, các path khác trả 404. Không dùng `cloudflared tunnel --url`, vì lệnh này mở cả API local ra internet.
 2. Khai báo URL IPN và webhook với sandbox của VNPay, MoMo, GHN.
 3. Đổi adapter sang bản thật (mục 1).
 4. Chạy kịch bản nghiệm thu: thanh toán thành công, thất bại, link hết hạn sau 10 phút, IPN đến muộn, trả tiền hai lần cho cùng một đơn, tạo Vận đơn, huỷ Vận đơn, giao thành công, Hoàn hàng.
