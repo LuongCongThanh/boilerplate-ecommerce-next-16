@@ -112,8 +112,8 @@ debian_install() {
   [ -n "$PG_MAJOR" ] || die "Không tìm thấy gói postgresql-<major> trên PGDG."
 
   if dpkg -s "postgresql-$PG_MAJOR" >/dev/null 2>&1; then
+    # Không nâng bản minor: nâng sẽ restart cluster, cắt kết nối của container đang chạy.
     info "PostgreSQL $PG_MAJOR (bản mới nhất) đã có sẵn, dùng luôn"
-    sudo apt-get install -y -qq --only-upgrade "postgresql-$PG_MAJOR"
   else
     # postgresql-common tự tạo cluster 'main' ở cổng trống đầu tiên từ 5432,
     # nên cluster cũ (nếu có) giữ nguyên cổng của nó.

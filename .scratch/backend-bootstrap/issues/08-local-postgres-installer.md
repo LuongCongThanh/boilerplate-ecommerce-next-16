@@ -1,6 +1,6 @@
 # Bộ cài PostgreSQL local cho Windows (WSL2) và macOS
 
-Status: ready-for-agent
+Status: ready-for-human
 
 ## Bối cảnh
 

@@ -160,7 +160,7 @@ backend/
 │
 ├── config/                         # cấu hình project, KHÔNG chứa nghiệp vụ
 │   ├── __init__.py                 # nạp Celery app khi Django khởi động
-│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production)
+│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) và PG_PORT (chỉ Compose dùng, khai báo để pydantic-settings không báo biến thừa khi đọc .env)
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường
