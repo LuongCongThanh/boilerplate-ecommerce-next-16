@@ -136,6 +136,9 @@ EMAIL_HOST=mailpit
 EMAIL_PORT=1025
 JWT_PRIVATE_KEY_PATH=.secrets/jwt_ed25519.pem
 JWT_KEY_ID=local-1
+REFRESH_REPLAY_KEY_ID=local-replay-1
+REFRESH_REPLAY_KEY_PATH=.secrets/refresh_replay.key
+STOREFRONT_ORIGIN=http://localhost:3000
 PAYMENT_PROVIDER_VNPAY=fake
 PAYMENT_PROVIDER_MOMO=fake
 SHIPPING_PROVIDER=fake
@@ -151,6 +154,14 @@ Sinh khoá JWT cho local:
 ```bash
 mkdir -p .secrets && openssl genpkey -algorithm ed25519 -out .secrets/jwt_ed25519.pem
 ```
+
+Khoá RefreshReplay độc lập JWT, tạo một lần cho local và không commit. Chạy từ backend/ sau khi có .secrets/:
+
+```bash
+python -c "from pathlib import Path; import secrets; Path('.secrets/refresh_replay.key').open('xb').write(secrets.token_bytes(32))"
+```
+
+Lệnh từ chối ghi đè key đã có; không tạo lại mỗi lần khởi động. Key có ID để xoay và các API replica phải cùng đọc được key còn hiệu lực trong cửa sổ replay. STOREFRONT_ORIGIN chỉ là origin tin cậy, không kèm path/query/userinfo; payment return path do backend cố định.
 
 ### 2.4. Chạy
 

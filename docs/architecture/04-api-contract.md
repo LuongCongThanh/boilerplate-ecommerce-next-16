@@ -19,7 +19,7 @@
 | Giỏ của Khách vãng lai | Header `X-Cart-Token` (Frontend lưu trong cookie `cart_token`) |
 | Đơn của Khách vãng lai | Header `X-Lookup-Token`: token 30 phút gắn với đúng một đơn, do `POST checkout` (với Khách vãng lai) hoặc `POST orders/lookup` cấp. Next.js cất token trong session |
 | IP người dùng | Django đọc `X-Client-IP` do BFF gửi kèm `X-BFF-Secret` ([05-auth-security.md](./05-auth-security.md) mục 5) |
-| Chống tạo trùng | Header `Idempotency-Key` (UUID) **bắt buộc** với `POST /store/checkout` và `POST /store/orders/{code}/payments`. Key lưu trong PostgreSQL (`shared_idempotency_key`) 24 giờ. Cùng key và cùng body thì trả lại đúng kết quả lần đầu; cùng key nhưng body khác thì `409 IDEMPOTENCY_CONFLICT` |
+| Chống tạo trùng | Header Idempotency-Key (UUID) bắt buộc với checkout và bắt đầu Thanh toán. Key lưu PostgreSQL theo endpoint + Người mua, có in_progress/completed và resource_id. Cùng key khác body trả 409 IDEMPOTENCY_CONFLICT; còn xử lý trả 202 với Retry-After; hoàn tất trả kết quả đã lưu. Giữ completed 24 giờ; không purge in_progress chưa rõ kết quả. Xác nhận quote mới hoặc bắt đầu lần thử khác phải dùng key mới |
 
 ## 2. Phân trang
 
@@ -59,7 +59,7 @@ HTTP 409
 | 401 | Chưa đăng nhập, token hết hạn | `NOT_AUTHENTICATED`, `TOKEN_EXPIRED` |
 | 403 | Không đủ quyền | `PERMISSION_DENIED` |
 | 404 | Không tìm thấy | `NOT_FOUND`, `ORDER_NOT_FOUND` |
-| 409 | Xung đột nghiệp vụ | `OUT_OF_STOCK`, `INVALID_TRANSITION`, `IDEMPOTENCY_CONFLICT`, `PRICE_CHANGED`, `SHIPMENT_IN_PROGRESS`, `PAYMENT_WINDOW_CLOSED`, `INSUFFICIENT_AVAILABLE` |
+| 409 | Xung đột nghiệp vụ | `OUT_OF_STOCK`, `INVALID_TRANSITION`, `REFRESH_SUPERSEDED`, `IDEMPOTENCY_CONFLICT`, `PRICE_CHANGED`, `SHIPMENT_IN_PROGRESS`, `PAYMENT_WINDOW_CLOSED`, `INSUFFICIENT_AVAILABLE` |
 | 422 | Vi phạm quy tắc nghiệp vụ | `VOUCHER_EXPIRED`, `VOUCHER_MIN_ORDER_NOT_MET`, `COD_LIMIT_EXCEEDED`, `LIST_PRICE_BELOW_SALE_PRICE` |
 | 429 | Vượt giới hạn tần suất | `THROTTLED` |
 | 500 | Lỗi hệ thống | `INTERNAL_ERROR` (không lộ chi tiết) |
@@ -68,7 +68,8 @@ Frontend dịch theo `code`; `message` chỉ là bản dịch mặc định theo
 
 Ba mã cần Frontend xử lý riêng:
 
-- `PRICE_CHANGED`: tổng tiền tính lại khi đặt đơn khác `expected_total` (BR-ORD-07). Đơn **không** được tạo; `details.quote` chứa bảng tính mới (Tạm tính, giảm giá Voucher, phí ship, tổng) để Người mua xem lại rồi gửi lại.
+- `PRICE_CHANGED`: tổng tiền khác expected_total, hoặc phiên bản giá/dữ liệu snapshot/điều kiện bán thay đổi khi kiểm tra lại trong transaction, kể cả tổng tiền không đổi (BR-ORD-07). Rollback trước khi lấy lại quote ngoài transaction; đơn không được tạo. details.quote chứa bảng tính mới và chỉ rõ dòng không còn bán được; không bịa giá cho dòng đã bị ẩn. Client xác nhận bằng key mới.
+- `PAYMENT_INITIALIZING` (202): giao dịch đang tạo/chưa rõ kết quả. Response `{payment_id, code: "PAYMENT_INITIALIZING"}` kèm Retry-After; thử lại cùng endpoint/body/key. Nếu đã thanh toán/hết hạn mà không còn link, kết quả cuối trả payment_id/status để xem lại Đơn hàng; không tạo/gia hạn link mới.
 - `SHIPMENT_IN_PROGRESS`: Staff huỷ đơn khi Vận đơn đang được tạo ở GHN. Chờ kết quả tạo Vận đơn rồi xử lý tiếp.
 - `PAYMENT_WINDOW_CLOSED`: Người mua bắt đầu Thanh toán online sau phút thứ 10 kể từ khi đặt đơn (BR-INV-05). Đơn sẽ bị huỷ khi Giữ hàng hết hạn; Người mua phải đặt đơn mới.
 
@@ -88,7 +89,7 @@ Ba mã cần Frontend xử lý riêng:
 | DELETE | `cart/items/{id}` | Guest / Customer | Xoá | US-202 |
 | POST | `checkout/quote` | Guest / Customer | Tính thử: Tạm tính, Voucher, phí ship, tổng. `total` trả về được gửi lại làm `expected_total` | US-303, 304 |
 | POST | `checkout` | Guest / Customer | Đặt đơn (cần `Idempotency-Key`). Body có `payment_method` (`cod \| online`) và `expected_total`; lệch thì `409 PRICE_CHANGED`. Trả `201 {order_code, lookup_token}` (`lookup_token` chỉ có với Khách vãng lai) | US-301 → 307 |
-| POST | `orders/{code}/payments` | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Bắt đầu một lần Thanh toán online (cần `Idempotency-Key`). Body `{gateway: "vnpay" \| "momo", return_url}`; trả `redirect_url`. Mọi link của đơn hết hạn ở phút thứ 10 kể từ khi đặt đơn (BR-INV-05); sau mốc này trả `PAYMENT_WINDOW_CLOSED` | US-306 |
+| POST | `orders/{code}/payments` | Customer chủ đơn, hoặc Guest có X-Lookup-Token | Cần Idempotency-Key. Body `{gateway}` (vnpay hoặc momo); backend tự dựng URL quay về, gửi return_url bị từ chối 400 INVALID_RETURN_URL; sẵn sàng trả redirect_url, chưa xong trả 202 PAYMENT_INITIALIZING. Link hết hạn ở phút thứ 10; không bắt đầu lần thử mới sau mốc này. Gọi lại key cũ tiếp tục/trả kết quả của Payment cũ (06 mục 3.1) | US-306 |
 | POST | `orders/lookup` | Công khai (throttle chặt) | Khách vãng lai tra cứu bằng `code` + `phone` | US-401 |
 | GET | `orders` | Customer | Lịch sử đơn | US-402 |
 | GET | `orders/{code}` | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Chi tiết đơn | US-402 |
@@ -97,7 +98,7 @@ Ba mã cần Frontend xử lý riêng:
 | POST | `auth/verify-email` | Công khai | Xác thực email | US-501 |
 | POST | `auth/login` | Công khai | Đăng nhập email + mật khẩu | US-502 |
 | POST | `auth/google` | Công khai | Đổi `id_token` Google lấy JWT | US-502 |
-| POST | `auth/refresh` | Có refresh token | Lấy access token mới, xoay vòng refresh token | — |
+| POST | `auth/refresh` | Có refresh token | Xoay refresh token: request trùng trong 10 giây trả chính cặp đã cấp, không tạo nhánh; successor đã dùng thì 409 REFRESH_SUPERSEDED (05 mục 2.1) | — |
 | POST | `auth/logout` | Customer | Thu hồi refresh token | — |
 | POST | `auth/password/forgot`, `auth/password/reset` | Công khai | Quên mật khẩu | US-503 |
 | GET, PATCH | `me` | Customer | Hồ sơ: họ tên, số điện thoại, ngôn ngữ. Không đổi được email ở MVP | US-505, 506 |
@@ -114,17 +115,17 @@ Ba mã cần Frontend xử lý riêng:
 | GET | `orders` | Staff | Lọc theo trạng thái, Phương thức thanh toán, ngày, Cờ cần xử lý (`flag=<kind>`); tìm theo Mã đơn, số điện thoại (tìm theo số điện thoại thì ghi log truy cập, CMP-07) |
 | GET | `orders/{id}` | Staff | Chi tiết đơn, lịch sử trạng thái, Cờ cần xử lý (ghi log truy cập, CMP-07) |
 | POST | `orders/{id}/flags/{flag_id}/resolve` | Staff | Gỡ Cờ cần xử lý sau khi xử lý xong (ghi lịch sử) |
-| POST | `orders/{id}/confirm`, `start-packing`, `cancel` | Staff | Chuyển trạng thái (T6, T8, T7/T9). `cancel` trả `409 SHIPMENT_IN_PROGRESS` khi Vận đơn đang được tạo |
-| POST | `orders/{id}/hand-over` | Staff | Bàn giao GHN (T10), chạy nền: trả `202`, đơn sang `SHIPPING` khi GHN tạo Vận đơn xong; lỗi thì gắn cờ `shipment_failed`. Gọi lại sau `shipment_failed` thì dùng lại Vận đơn cũ |
+| POST | `orders/{id}/confirm`, `start-packing`, `cancel` | Staff | Chuyển trạng thái (T6, T8, T7/T9). `cancel` trả `409 SHIPMENT_IN_PROGRESS` khi Vận đơn requested hoặc creation_unknown |
+| POST | `orders/{id}/hand-over` | Staff | Bàn giao GHN (T10), chạy nền: trả `202`, đơn sang `SHIPPING` khi GHN tạo Vận đơn xong; lỗi thì gắn cờ `shipment_failed`. Chỉ dùng lại sau shipment_failed đã xác nhận chưa tạo bên GHN; creation_unknown phải đối soát trước |
 | POST | `orders/bulk/confirm` | Staff | Xác nhận hàng loạt |
 | POST | `orders/{id}/returned-to-warehouse` | Staff | Xác nhận đơn Hoàn hàng đã về Kho |
-| GET, POST | `refunds`, `refunds/{id}/complete` | Staff | Danh sách Hoàn tiền, ghi nhận đã hoàn |
+| GET, POST | `refunds`, `refunds/{id}/complete` | Staff | Danh sách Hoàn tiền có `payment_id`, gateway và số tiền; ghi nhận đã hoàn. Hoàn tất lại cùng dữ liệu trả kết quả cũ, không phát thêm sự kiện; khác dữ liệu đã ghi thì từ chối |
 | GET, POST | `returns`, `returns/{id}/receive`, `accept`, `reject` | Staff | Đổi trả. `accept` nhận `{lines: [{return_line_id, accepted_quantity, restock}]}` (BR-RET-08) |
 | GET | `stock` | Staff | Tồn kho, Giữ hàng, Hàng chờ xuất và Số lượng bán được theo Biến thể. Lọc tồn thấp bằng `available_lt=<n>` (mặc định 5, US-702) |
 | POST | `stock/inbound`, `stock/adjust` | Staff | Nhập kho, điều chỉnh (bắt buộc lý do). Giảm quá Số lượng bán được thì `409 INSUFFICIENT_AVAILABLE` (BR-INV-11) |
 | POST | `stock/count` | Staff | Kiểm kê: gửi số đếm theo Biến thể, hệ thống điều chỉnh theo chênh lệch với Tồn kho + Hàng chờ xuất (US-703) |
 | GET | `customers`, `customers/{id}` | Staff | Xem khách (ghi log truy cập) |
-| GET, POST | `erasure-requests`, `erasure-requests/{id}/complete` | Staff | Xử lý Yêu cầu xoá dữ liệu. `complete` chỉ thành công khi mọi đơn liên quan ở trạng thái cuối và không còn Hoàn tiền chờ xử lý (CMP-05) |
+| GET, POST | `erasure-requests`, `erasure-requests/{id}/complete` | Staff | Complete kiểm tra đơn ở trạng thái cuối và không còn Hoàn tiền chờ, bắt đầu processing rồi trả 202 kèm request_id/status. Gọi lại không phát thêm sự kiện. GET hiển thị trạng thái; completed_at chỉ có khi mọi bước ẩn danh bắt buộc thành công. Đã completed thì trả kết quả hiện tại |
 | CRUD | `categories`, `products`, `products/{id}/variants`, `products/{id}/images` | Admin | Quản lý danh mục hàng hoá. Hạ Giá bán xuống ≤ Giá khuyến mãi đang hoặc sắp hiệu lực thì `422 LIST_PRICE_BELOW_SALE_PRICE` (BR-PRC-05) |
 | GET, POST, PATCH | `sizes`, `colors` | Admin | Danh sách size và bảng màu; không xoá, chỉ ẩn bằng `is_active = false` (US-805) |
 | POST | `products/{id}/publish`, `archive` | Admin | Đăng bán, ngừng bán |

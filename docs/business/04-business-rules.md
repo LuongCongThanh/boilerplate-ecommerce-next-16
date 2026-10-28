@@ -83,7 +83,7 @@
 | BR-ORD-04 | Địa chỉ giao hàng theo cấu trúc **2 cấp**: tỉnh/thành phố và phường/xã (theo sắp xếp đơn vị hành chính từ 07/2025), kèm địa chỉ chi tiết. |
 | BR-ORD-05 | Chỉ huỷ **cả đơn**, không huỷ từng Dòng đơn hàng. Nếu một phần hàng không giao được, Staff liên hệ Người mua, huỷ đơn và tạo đơn mới. |
 | BR-ORD-06 | Quy tắc huỷ và chuyển trạng thái xem [05-order-lifecycle.md](./05-order-lifecycle.md). |
-| BR-ORD-07 | Khi đặt đơn, hệ thống tính lại tổng tiền (Giá áp dụng, Voucher, Phí ship). Nếu kết quả khác Tổng tiền đơn Người mua đã xem ở bước Tính thử, **không tạo đơn** mà trả về Tính thử mới để Người mua xác nhận lại. |
+| BR-ORD-07 | Backend tính lại tổng khi đặt đơn, không tin giá Frontend; trong transaction kiểm tra lại phiên bản giá, snapshot và điều kiện bán dưới khoá Biến thể. Tổng khác expected_total hoặc dữ liệu thay đổi sau báo giá thì không tạo đơn, yêu cầu Người mua xác nhận quote mới, kể cả tổng tiền tình cờ không đổi. |
 | BR-ORD-08 | Đơn của Khách vãng lai được gắn vào Tài khoản Khách hàng có email trùng (không phân biệt hoa thường): ngay khi email đó được xác thực, kể cả qua đăng nhập Google, với các đơn đã đặt trước đó; hoặc ngay lúc đặt đơn nếu email đó đã thuộc một Tài khoản đã xác thực. Không gắn theo số điện thoại. |
 
 ## 6. Vận chuyển
@@ -113,11 +113,12 @@
 
 | Mã | Quy tắc |
 |---|---|
-| BR-REF-01 | Hoàn tiền của đơn online luôn trả về **đúng Cổng thanh toán** đã nhận khoản tiền đó. |
+| BR-REF-01 | Mỗi Hoàn tiền gắn với đúng Thanh toán đã nhận tiền. Hoàn tiền của đơn online luôn trả về **đúng Cổng thanh toán** đã nhận khoản tiền đó. |
 | BR-REF-02 | Phát sinh khi: huỷ đơn đã thanh toán online, Hoàn hàng đơn đã thanh toán online, Đổi trả được chấp nhận, hoặc trường hợp BR-PAY-04, BR-PAY-05. |
 | BR-REF-03 | MVP: Staff thực hiện hoàn tiền **thủ công** trên trang quản trị của VNPay hoặc MoMo, rồi ghi nhận "Đã hoàn tiền" trong back-office kèm mã giao dịch hoàn. |
 | BR-REF-04 | Đơn COD bị huỷ trước khi giao: không phát sinh Hoàn tiền. Đơn COD Đổi trả: hoàn bằng chuyển khoản ngân hàng, Staff ghi nhận thủ công và gắn với khoản thu COD của đơn. Việc đối chiếu tiền COD mà GHN chuyển về cho cửa hàng nằm ngoài phạm vi MVP; kế toán làm tay theo bảng kê của GHN. |
 | BR-REF-05 | Số tiền Hoàn tiền: huỷ hoặc Hoàn hàng đơn đã thanh toán online thì hoàn **toàn bộ** Tổng tiền đơn, kể cả Phí ship; trường hợp BR-PAY-04, BR-PAY-05 thì hoàn đúng số tiền đã nhận; Đổi trả thì theo BR-RET-07. |
+| BR-REF-06 | Một thao tác nghiệp vụ chỉ tạo một yêu cầu Hoàn tiền cho mỗi Thanh toán, kể cả khi xử lý lại. Tổng các khoản Hoàn tiền đang yêu cầu và đã hoàn không vượt số tiền thực nhận của Thanh toán đó. |
 
 ## 9. Đổi trả
 

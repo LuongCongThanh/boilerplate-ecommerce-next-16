@@ -18,7 +18,7 @@ Cách đạt được:
 - Danh sách Sản phẩm dùng `catalog_variant.is_available` (bản sao) để lọc "còn hàng" mà không phải join sang `inventory`.
 - Cache trong Redis: cây danh mục (5 phút), báo giá GHN (10 phút), dữ liệu địa giới (1 ngày).
 - Checkout không gọi HTTP ra ngoài bên trong transaction. Phí ship lấy từ cache báo giá (thường đã có từ bước `checkout/quote`) trước khi mở transaction, nên khoá dòng chỉ được giữ trong lúc ghi DB.
-- Trong transaction, checkout khoá dòng `inventory_stock_item` theo thứ tự `variant_id` rồi mới khoá dòng Voucher, để tránh deadlock khi nhiều người mua cùng lúc.
+- Trong transaction, checkout khoá toàn bộ `inventory_stock_item` theo variant_id, rồi toàn bộ Variant theo id để kiểm tra lại giá, sau đó mới khoá Voucher, để tránh deadlock khi nhiều người mua cùng lúc.
 
 ## 2. Độ sẵn sàng và phục hồi
 
@@ -29,7 +29,7 @@ Cách đạt được:
 | RTO (thời gian khôi phục) | ≤ 1 giờ |
 | Khi GHN lỗi | Vẫn checkout được (phí ship dự phòng) |
 | Khi VNPay/MoMo lỗi | Vẫn đặt được đơn COD |
-| Khi Redis lỗi | API vẫn chạy, kể cả checkout: cache và throttle fail-open (chỉ còn rate limit thô của WAF), kiểm tra `token_version` đọc thẳng PostgreSQL, `Idempotency-Key` lưu ở PostgreSQL. Sự kiện nằm chờ trong outbox. `/readyz` chỉ kiểm tra PostgreSQL, nên ALB không rút task API khi Redis lỗi |
+| Khi Redis lỗi | API vẫn chạy, kể cả checkout: cache và throttle fail-open (chỉ còn rate limit thô của WAF), kiểm tra `token_version` đọc thẳng PostgreSQL, `Idempotency-Key` lưu ở PostgreSQL. Outbox/EventDelivery và EmailLog giữ công việc còn chờ trong PostgreSQL; relay/job quét khôi phục khi broker và worker hoạt động lại, kể cả task từng được enqueue rồi mất. `/readyz` chỉ kiểm tra PostgreSQL, nên ALB không rút task API khi Redis lỗi |
 
 ## 3. Bảo mật
 
@@ -47,7 +47,7 @@ Xem [05-auth-security.md](./05-auth-security.md). Thêm:
 | Log | `structlog` → stdout (JSON) → CloudWatch | Mỗi dòng có `request_id`, `user_id` (nếu có), `order_code` (nếu có); che PII |
 | Lỗi | Sentry | API, Celery task, relay |
 | Health | `/healthz` (tiến trình sống), `/readyz` (kết nối được PostgreSQL) | Dùng cho ALB và ECS health check |
-| Chỉ số nghiệp vụ cần cảnh báo | Sentry / CloudWatch | Outbox tồn quá 1.000 sự kiện chưa gửi; Thanh toán `pending` quá 30 phút; tỉ lệ đơn dùng Phí ship dự phòng > 10%; có dòng trong `shared_failed_event` chưa chạy lại; Cờ cần xử lý mở quá 24 giờ **[Giả định]** |
+| Chỉ số nghiệp vụ cần cảnh báo | Sentry / CloudWatch | Outbox chưa lập delivery hoặc delivery pending tồn quá 1.000; tuổi delivery pending cũ nhất; EmailLog queued/sending quá 5 phút hoặc failed; heartbeat relay/job khôi phục quá 3 phút; ErasureRequest processing có handler thiếu/failed/rejected; Payment creation_status prepared/unknown quá lease; Thanh toán pending quá 30 phút; tỉ lệ đơn dùng Phí ship dự phòng > 10%; có delivery failed chưa xử lý; Cờ cần xử lý mở quá 24 giờ **[Giả định]** |
 
 `request_id` lấy từ header `X-Request-ID` nếu có, ngược lại tự sinh; được đưa vào cả sự kiện outbox để lần theo một luồng từ API tới email.
 
@@ -71,7 +71,7 @@ Xem [05-auth-security.md](./05-auth-security.md). Thêm:
 | `pytest` | Toàn bộ test qua |
 | Độ phủ test | ≥ 80% branch coverage cho `services/` và `handlers.py`, tính riêng từng module, không đặt ngưỡng toàn repo ([12-testing-strategy.md](./12-testing-strategy.md) mục 8) |
 | OpenAPI | Schema sinh ra trùng với `backend/openapi.yaml` đã commit |
-| Migration | Không thiếu migration (`makemigrations --check`), không trùng số |
+| Migration | Không thiếu migration (`makemigrations --check`), không có nhánh migration xung đột trong cùng app; số migration được lặp giữa các app |
 | Lỗ hổng phụ thuộc | Không có lỗ hổng mức cao |
 
 ## 7. Bản địa hoá

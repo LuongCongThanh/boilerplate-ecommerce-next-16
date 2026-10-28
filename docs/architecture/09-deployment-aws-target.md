@@ -70,11 +70,13 @@ Từ internet chỉ vào được Django qua đúng một đường: `/api/v1/we
 | Redis | **ElastiCache for Redis OSS** | Broker Celery, cache, throttle, cache `token_version`. `maxmemory-policy noeviction`, mọi key cache có TTL. `Idempotency-Key` **không** nằm ở Redis mà ở PostgreSQL. Dùng Redis 7.2 ở local để khớp **[Cần xác minh phiên bản ElastiCache hiện có]**. Có thể đổi sang ElastiCache Valkey mà không phải sửa code |
 | Ảnh | **S3** + **CloudFront** | `django-storages` S3; ảnh public qua CloudFront `/media/*` |
 | Email | **Amazon SES** | Xác minh domain, SPF/DKIM/DMARC |
-| Bí mật | **Secrets Manager** | Khoá JWT, mật khẩu DB, secret VNPay/MoMo/GHN, `BFF_SHARED_SECRET`. Mỗi task (api, worker, beat, relay, storefront, back-office) chỉ nhận secret nó cần |
+| Bí mật | **Secrets Manager** | Khoá JWT, khoá mã hoá RefreshReplay riêng (32 byte + key ID), mật khẩu DB, secret VNPay/MoMo/GHN, `BFF_SHARED_SECRET`. Mỗi task (api, worker, beat, relay, storefront, back-office) chỉ nhận secret nó cần |
 | Log | **CloudWatch Logs** (log JSON từ structlog) | Giữ 30 ngày **[Giả định]** |
 | Lỗi, hiệu năng | **Sentry** | |
 | Bảo vệ | **WAF** trên CloudFront | Chặn bot, rate limit thô. Host back-office chỉ cho phép IP văn phòng hoặc VPN ([ADR 0004](../adr/0004-custom-nextjs-admin.md)). Webhook đi qua allow-list IP nếu nhà cung cấp công bố |
 | IP ra ngoài cố định | **NAT Gateway** có Elastic IP | Một số cổng thanh toán yêu cầu khai báo IP server **[Cần xác minh]** |
+
+STOREFRONT_ORIGIN production là origin HTTPS cấu hình cố định của storefront, không lấy từ request. Khoá RefreshReplay được cấp qua Secrets Manager; khi xoay giữ key cũ qua cửa sổ 10 giây và thời gian rolling deploy, mọi replica đọc cùng key ring. JWT signing key không dùng làm key mã hoá replay.
 
 ## 3. Môi trường
 

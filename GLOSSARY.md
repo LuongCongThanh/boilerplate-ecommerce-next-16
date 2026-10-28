@@ -199,5 +199,5 @@ _Avoid_: User, profile, login
 ## Dữ liệu cá nhân (Privacy)
 
 **Yêu cầu xoá dữ liệu (Erasure Request)**:
-Yêu cầu của Người mua xoá dữ liệu cá nhân của mình. Hệ thống thực hiện bằng cách ẩn danh, vẫn giữ dữ liệu đơn cần cho kế toán và thuế.
+Yêu cầu của Người mua xoá dữ liệu cá nhân của mình. Hệ thống thực hiện bằng cách ẩn danh, vẫn giữ dữ liệu đơn cần cho kế toán và thuế. Đang xử lý nghĩa là việc ẩn danh chưa hoàn tất; chỉ hoàn thành khi mọi phần dữ liệu thuộc phạm vi yêu cầu đã được xử lý thành công.
 _Avoid_: Delete account, xoá tài khoản
