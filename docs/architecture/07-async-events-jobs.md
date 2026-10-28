@@ -79,6 +79,7 @@ Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `ev
 | `shipping.shipment-creation-failed` v1 | shipping | `reference`, `reason` | ordering: gắn cờ `shipment_failed`, đơn giữ `PACKING` |
 | `shipping.shipment-delivered` v1 | shipping | `reference`, `delivered_at` | ordering: T11 |
 | `shipping.shipment-returned` v1 | shipping | `reference` | ordering: T12 |
+| `shipping.shipment-exception` v1 | shipping | `reference`, `provider_status` | GHN báo trạng thái chưa được ánh xạ, hoặc tự huỷ Vận đơn ([06](./06-integrations.md) mục 4.1). ordering: gắn cờ `shipment_exception`, đơn giữ nguyên trạng thái |
 
 T1 (đơn online vào `PENDING_PAYMENT`) không phát sự kiện nào; Người mua chỉ nhận email khi thanh toán thành công. Không còn sự kiện `ordering.order-paid`: `order-placed` của đơn online đã mang ý nghĩa này.
 
@@ -103,7 +104,7 @@ Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không g
 |---|---|---|---|
 | `ordering.cancel_expired_pending_orders` | Mỗi phút | ordering | T4. Bỏ qua lượt chạy (log `WARNING` `cancel_skipped_outbox_backlog`) khi outbox còn sự kiện chưa dispatch quá **60 giây** **[Giả định]**, đọc qua `shared.events.undispatched_lag()`. Lý do: sau khi Redis hoặc relay lỗi, sự kiện `payments.payment-succeeded` còn kẹt trong outbox; nếu T4 chạy trước thì đơn đã trả đúng hạn bị huỷ và phải Hoàn tiền ([01](./01-system-context.md) mục 4) |
 | `payments.reconcile_pending_payments` | Mỗi 5 phút | payments | T3, ADR 0005; Payment quá hạn link mà chưa thanh toán thì chuyển `expired` |
-| `shipping.reconcile_shipments` | Mỗi 15 phút | shipping | T11, T12; đẩy lại task cho Vận đơn kẹt ở `requested` hoặc `cancel_requested` quá 15 phút |
+| `shipping.reconcile_shipments` | Mỗi 15 phút | shipping | T11, T12; chỉ hỏi GHN về Vận đơn không có cập nhật trong 6 giờ, tối đa 500 mỗi vòng ([06](./06-integrations.md) mục 4); đẩy lại task cho Vận đơn kẹt ở `requested` hoặc `cancel_requested` quá 15 phút |
 | `ordering.complete_delivered_orders` | Mỗi giờ | ordering | T13 |
 | `ordering.compute_best_sellers` | Mỗi ngày 02:00 | ordering | BR-CAT-12; ghi kết quả vào `catalog` qua `catalog.contracts.set_best_seller_counts` |
 | `ordering.purge_expired_guest_carts` | Mỗi ngày 03:00 | ordering | BR-CRT-02 |

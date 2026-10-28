@@ -47,9 +47,9 @@ Xem [05-auth-security.md](./05-auth-security.md). Thêm:
 | Log | `structlog` → stdout (JSON) → CloudWatch | Mỗi dòng có `request_id`, `user_id` (nếu có), `order_code` (nếu có); che PII |
 | Lỗi | Sentry | API, Celery task, relay |
 | Health | `/healthz` (tiến trình sống), `/readyz` (kết nối được PostgreSQL) | Dùng cho ALB và ECS health check |
-| Chỉ số nghiệp vụ cần cảnh báo | Sentry / CloudWatch | Outbox tồn quá 1.000 sự kiện chưa gửi; Thanh toán `pending` quá 30 phút; tỉ lệ đơn dùng Phí ship dự phòng > 10%; có dòng trong `shared_failed_event` chưa chạy lại; Cờ cần xử lý mở quá 24 giờ **[Giả định]** |
+| Chỉ số nghiệp vụ cần cảnh báo | Sentry / CloudWatch | Outbox tồn quá 1.000 sự kiện chưa gửi, hoặc có sự kiện chưa dispatch quá 60 giây (lúc này job T4 bắt đầu bỏ qua lượt chạy, [07](./07-async-events-jobs.md) mục 3.2); Thanh toán `pending` quá 30 phút; tỉ lệ đơn dùng Phí ship dự phòng > 10%; có dòng trong `shared_failed_event` chưa chạy lại; Cờ cần xử lý mở quá 24 giờ **[Giả định]** |
 
-`request_id` lấy từ header `X-Request-ID` nếu có, ngược lại tự sinh; được đưa vào cả sự kiện outbox để lần theo một luồng từ API tới email.
+`request_id` lấy từ header `X-Request-ID` nếu có, ngược lại tự sinh. `shared.events.publish` chép giá trị này vào `correlation_id` của sự kiện, và consumer gắn lại vào context log khi chạy handler, để lần theo một luồng từ API tới email.
 
 ## 5. Khả năng mở rộng
 

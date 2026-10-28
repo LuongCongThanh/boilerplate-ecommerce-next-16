@@ -142,7 +142,7 @@ _Avoid_: COD cap, giới hạn COD
 
 **Đối soát (Reconciliation)**:
 Việc hệ thống chủ động hỏi Cổng thanh toán hoặc hãng vận chuyển về trạng thái của các Thanh toán và Vận đơn còn treo, để không phụ thuộc hoàn toàn vào thông báo từ họ.
-_Avoid_: Sync, polling, quyết toán
+_Avoid_: Sync, polling, quyết toán, đối soát COD (việc đối chiếu tiền thu hộ GHN chuyển về là nghiệp vụ kế toán ngoài hệ thống)
 
 ## Vận chuyển (Shipping)
 

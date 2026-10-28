@@ -169,7 +169,7 @@ backend/
 │   ├── tasks.py                    # enqueue_on_commit(task, **kwargs): đẩy Celery task sau khi transaction commit; purge_old_outbox_events (xoá cả ProcessedEvent cùng tuổi), purge_idempotency_keys
 │   ├── events/
 │   │   ├── __init__.py             # API công khai: publish(), handles(), undispatched_lag() (tuổi của sự kiện chưa dispatch lâu nhất, job T4 dùng)
-│   │   ├── base.py                 # DomainEvent (pydantic): event_id, event_type, schema_version, occurred_at. Payload không chứa secret hay PII
+│   │   ├── base.py                 # DomainEvent (pydantic): event_id, event_type, schema_version, occurred_at, correlation_id (request_id của request gốc). Payload không chứa secret hay PII
 │   │   ├── models.py               # OutboxEvent, ProcessedEvent, FailedEvent
 │   │   ├── publisher.py            # EventPublisher: ghi sự kiện vào outbox trong transaction hiện tại
 │   │   ├── registry.py             # decorator @handles(...) đăng ký handler cho từng loại sự kiện
@@ -262,7 +262,7 @@ modules/ordering/
 │   ├── __init__.py
 │   ├── cart.py           # get_cart_with_prices
 │   └── orders.py         # list_orders_for_customer, find_order_for_guest, list_orders_backoffice (lọc theo Cờ cần xử lý)
-├── handlers.py           # nghe sự kiện: payment-succeeded, payment-failed, refund-recorded, shipment-created, shipment-creation-failed, shipment-delivered, shipment-returned, email-verified, customer-erased
+├── handlers.py           # nghe sự kiện: payment-succeeded, payment-failed, refund-recorded, shipment-created, shipment-creation-failed, shipment-delivered, shipment-returned, shipment-exception, email-verified, customer-erased
 ├── tasks.py              # cancel_expired_pending_orders, complete_delivered_orders, purge_expired_guest_carts, compute_best_sellers
 ├── admin.py              # đăng ký Django Admin read-only (được modules/admin.py nạp)
 ├── api/
@@ -410,8 +410,8 @@ Các module con đều theo khuôn ở mục 6. Bảng dưới chỉ liệt kê 
 | `providers/ghn.py`, `fake.py` | Adapter GHN và Fake (Fake chỉ dùng được khi `FAKE_PROVIDERS_ENABLED`) |
 | `api/webhooks/` | `POST /api/v1/webhooks/ghn` |
 | `tasks.py` | `create_shipment` (queue `integrations`, có retry; thành công phát `ShipmentCreatedV1`, hết retry thì Vận đơn `failed` và phát `ShipmentCreationFailedV1`), `cancel_shipment` (queue `integrations`, có retry; thành công thì Vận đơn `cancelled`; hết retry thì giữ `cancel_requested` và báo Sentry, Staff xử lý tay theo Cờ cần xử lý `shipment_after_cancel`), `reconcile_shipments` (mỗi 15 phút; đẩy lại task cho Vận đơn kẹt ở `requested` hoặc `cancel_requested` quá 15 phút) |
-| `events.py` | `ShipmentCreatedV1`, `ShipmentCreationFailedV1`, `ShipmentDeliveredV1`, `ShipmentReturnedV1` |
-| `contracts.py` | `quote_fee(ward_code, weight_grams, value) -> ShippingQuoteDTO` (phí GHN thật, hoặc Phí ship dự phòng khi GHN lỗi; `ordering` tự áp ngưỡng miễn phí ship; gọi GHN trực tiếp nên phải gọi **ngoài** transaction), `request_shipment(ShipmentRequestDTO)` (tạo Vận đơn `requested`, hoặc dùng lại Vận đơn `failed` của cùng `reference`; đẩy task `create_shipment` sau commit), `request_shipment_cancellation(reference)` (ghi Vận đơn `cancel_requested`, đẩy task `cancel_shipment` sau commit), `get_shipment_status(reference) -> ShipmentStatusDTO \| None`, `redact_provider_payloads(reference)`. Trừ `quote_fee`, mọi hàm trong contracts chỉ đọc, ghi DB và đẩy task sau commit, nên gọi trong transaction (kể cả trong handler) là an toàn; HTTP tới GHN chỉ chạy trong task |
+| `events.py` | `ShipmentCreatedV1`, `ShipmentCreationFailedV1`, `ShipmentDeliveredV1`, `ShipmentReturnedV1`, `ShipmentExceptionV1` |
+| `contracts.py` | `quote_fee(ward_code, weight_grams) -> ShippingQuoteDTO` (báo giá với giá trị bảo hiểm bằng 0, xem [06](./06-integrations.md) mục 4; phí GHN thật, hoặc Phí ship dự phòng khi GHN lỗi; `ordering` tự áp ngưỡng miễn phí ship; gọi GHN trực tiếp nên phải gọi **ngoài** transaction), `request_shipment(ShipmentRequestDTO)` (tạo Vận đơn `requested`, hoặc dùng lại Vận đơn `failed` của cùng `reference`; đẩy task `create_shipment` sau commit), `request_shipment_cancellation(reference)` (ghi Vận đơn `cancel_requested`, đẩy task `cancel_shipment` sau commit), `get_shipment_status(reference) -> ShipmentStatusDTO \| None`, `redact_provider_payloads(reference)`. Trừ `quote_fee`, mọi hàm trong contracts chỉ đọc, ghi DB và đẩy task sau commit, nên gọi trong transaction (kể cả trong handler) là an toàn; HTTP tới GHN chỉ chạy trong task |
 
 ### 7.7. `ordering`
 
@@ -430,7 +430,7 @@ Xem ví dụ đầy đủ ở mục 6. Máy trạng thái của `Order.status` d
 | Bán chạy | Task `compute_best_sellers` chạy hằng đêm, tính BR-CAT-12 rồi gọi `catalog.contracts.set_best_seller_counts` |
 | Xoá dữ liệu | `complete_erasure_request` kiểm tra điều kiện của CMP-05 (đơn ở trạng thái cuối, `payments.contracts.has_pending_refunds`) rồi gọi `identity.contracts.complete_erasure_request`. Endpoint back-office `erasure-requests` nằm ở `ordering` |
 | Log truy cập | Chi tiết đơn và tìm đơn theo số điện thoại ở back-office gọi `identity.contracts.log_customer_data_access` (CMP-07) |
-| `handlers.py` | Mỗi handler gọi một service trong `services/` (các service này mới gọi `contracts` của module khác). `payment-succeeded`: service `mark_paid` (T3); nếu đơn không ở `PENDING_PAYMENT`, hoặc Giữ hàng đã quá hạn mà không đủ hàng để giữ lại, thì service `handle_unexpected_payment` tạo Hoàn tiền, gắn cờ `unexpected_payment` và phát `UnexpectedPaymentReceivedV1`. `payment-failed` với `amount_mismatch`: Hoàn tiền đúng `amount_received` + cờ `payment_amount_mismatch` (BR-PAY-04). `refund-recorded`: Đổi trả có `refund_id` khớp → `refunded`, không khớp thì bỏ qua. `shipment-created`: T10 (gọi `inventory.contracts.dispatch_stock`), hoặc `shipping.contracts.request_shipment_cancellation` + cờ `shipment_after_cancel` nếu đơn đã huỷ. `shipment-creation-failed`: cờ `shipment_failed`. `shipment-delivered`: T11. `shipment-returned`: T12. `email-verified`: `attach_guest_orders`. `customer-erased`: `anonymize_orders` và gọi `redact_provider_payloads` của `shipping`, `payments` |
+| `handlers.py` | Mỗi handler gọi một service trong `services/` (các service này mới gọi `contracts` của module khác). `payment-succeeded`: service `mark_paid` (T3); nếu đơn không ở `PENDING_PAYMENT`, hoặc Giữ hàng đã quá hạn mà không đủ hàng để giữ lại, thì service `handle_unexpected_payment` tạo Hoàn tiền, gắn cờ `unexpected_payment` và phát `UnexpectedPaymentReceivedV1`. `payment-failed` với `amount_mismatch`: Hoàn tiền đúng `amount_received` + cờ `payment_amount_mismatch` (BR-PAY-04). `refund-recorded`: Đổi trả có `refund_id` khớp → `refunded`, không khớp thì bỏ qua. `shipment-created`: T10 (gọi `inventory.contracts.dispatch_stock`), hoặc `shipping.contracts.request_shipment_cancellation` + cờ `shipment_after_cancel` nếu đơn đã huỷ. `shipment-creation-failed`: cờ `shipment_failed`. `shipment-delivered`: T11. `shipment-returned`: T12. `shipment-exception`: cờ `shipment_exception`. `email-verified`: `attach_guest_orders`. `customer-erased`: `anonymize_orders` và gọi `redact_provider_payloads` của `shipping`, `payments` |
 
 ### 7.8. `notifications`
 
