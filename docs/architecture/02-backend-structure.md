@@ -20,7 +20,7 @@
 | Framework | Django | 5.2 LTS (hỗ trợ tới 04/2028; nâng lên 6.2 LTS khoảng Q3/2027) |
 | API | Django REST Framework | 3.18 |
 | Database | PostgreSQL (extension `unaccent`, `pg_trgm`, `btree_gist`) | 18 |
-| Cache, broker | Redis (chạy bằng **Valkey**) | Cùng major version với ElastiCache for Valkey trên AWS **[Cần xác minh phiên bản ElastiCache hiện có]** (xem [09](./09-deployment-aws-target.md)). Tài liệu gọi chung là "Redis" vì đó là tên giao thức và thư viện (`redis-py`, broker `redis://`); Valkey tương thích giao thức nên không phải sửa code |
+| Cache, broker | Redis (chạy bằng **Valkey**) | Ghim **Valkey 8** cho cả local và ElastiCache for Valkey trên AWS (xem [09](./09-deployment-aws-target.md)). Tài liệu gọi chung là "Redis" vì đó là tên giao thức và thư viện (`redis-py`, broker `redis://`); Valkey tương thích giao thức nên không phải sửa code |
 | Background jobs | Celery + Celery Beat | 5.6 |
 | Quản lý package | uv | 0.13 |
 
@@ -443,7 +443,7 @@ Xem ví dụ đầy đủ ở mục 6. Máy trạng thái của `Order.status` d
 | Chủ đề | Nội dung |
 |---|---|
 | Mã đơn | `FS<YYMM>-` + 6 ký tự Crockford Base32 ngẫu nhiên, `UNIQUE`, trùng thì sinh lại. Không dùng sequence |
-| Hạn thanh toán | `Order.expires_at` = lúc đặt + `RESERVATION_TTL` (15 phút), là nguồn duy nhất, truyền xuống `reserve_stock`. Link thanh toán của mọi lần thử hết hạn ở lúc đặt + `PAYMENT_LINK_TTL` (phút thứ 10), sớm hơn Giữ hàng 5 phút. Từ lúc đặt + `PAYMENT_START_CUTOFF` (phút thứ 8) không bắt đầu Thanh toán mới được, vì link còn quá ít thời gian (`PaymentWindowClosed` → `PAYMENT_WINDOW_CLOSED`) |
+| Hạn thanh toán | `Order.expires_at` = lúc đặt + `RESERVATION_TTL` (15 phút), là nguồn duy nhất, truyền xuống `reserve_stock`. Link thanh toán của mọi lần thử hết hạn ở lúc đặt + `PAYMENT_LINK_TTL` (phút thứ 10), sớm hơn Giữ hàng 5 phút. Từ lúc đặt + `PAYMENT_START_CUTOFF` (phút thứ 7) không bắt đầu Thanh toán mới được, vì link còn quá ít thời gian (`PaymentWindowClosed` → `PAYMENT_WINDOW_CLOSED`) |
 | Cờ cần xử lý | `OrderFlag` được bật từ handler hoặc service (`raise_flag`), Staff gỡ qua back-office (`resolve_flag`, có ghi lịch sử). `raise_flag` gặp cờ cùng `kind` đang mở thì nối thêm vào `note` chứ không báo lỗi |
 | Cấu hình | `OrderingSettings`: ngưỡng miễn phí ship, hạn mức COD |
 | Khoá | Mọi transition khoá dòng Đơn hàng bằng `select_for_update` trước khi đọc trạng thái (thứ tự khoá ở mục 9.1). Hai transition cùng lúc trên một đơn, ví dụ T5 và T3, chạy lần lượt; transition sau thấy trạng thái mới và đi theo các nhánh bên dưới |
