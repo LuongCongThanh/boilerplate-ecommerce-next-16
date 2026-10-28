@@ -15,3 +15,5 @@ Return URL (trình duyệt quay về) không bao giờ được dùng để xác
 ## Hệ quả
 
 - Fake Gateway không kiểm tra được chữ ký thật của nhà cung cấp, nên việc kiểm tra chữ ký phải có unit test riêng với dữ liệu mẫu từ tài liệu của VNPay và MoMo.
+- Khởi tạo Thanh toán phải lưu thao tác trước khi gọi gateway và khôi phục cùng mã khi chưa rõ kết quả ([ADR 0013](./0013-recoverable-payment-initiation.md)). Fake Gateway cần mô phỏng cả trường hợp đã tạo giao dịch nhưng client bị timeout, và truy vấn lại theo mã cũ; không chỉ mô phỏng thành công/thất bại.
+- GHN tạo Vận đơn cũng có trạng thái chưa rõ kết quả: giữ cùng mã shop/snapshot, tra theo client_order_code trước khi retry. Timeout không phải failed; chỉ tự retry create khi cơ chế chống trùng đã được nghiệm thu. Cache báo giá hash toàn bộ request thực gửi, không chỉ địa chỉ và nhóm cân nặng (06 mục 4).

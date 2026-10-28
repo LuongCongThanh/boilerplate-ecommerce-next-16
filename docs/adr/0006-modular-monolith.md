@@ -4,7 +4,7 @@ Backend là một Django project duy nhất, deploy một lần. Toàn bộ nghi
 
 Ranh giới giữa các module được giữ bằng ba quy tắc:
 
-1. Module chỉ gọi nhau qua `contracts.py` của module kia, và chỉ được import thêm `events.py` của module lớp dưới để nghe sự kiện. `import-linter` kiểm tra quy tắc này trong CI.
+1. Module chỉ gọi nhau qua `contracts.py` của module kia; được import thêm `events.py` và `exceptions.py` của module lớp dưới. Ngoại lệ import model để khai báo FK được mô tả bên dưới. `import-linter` kiểm tra quy tắc này trong CI.
 2. Việc phụ, và mọi thông báo từ lớp dưới lên lớp trên, đi qua sự kiện phát sau khi transaction commit.
 3. Phụ thuộc chỉ đi một chiều, từ trên xuống:
    `notifications` → `ordering` → `inventory`, `promotions` → `identity`, `catalog`, `payments`, `shipping` → `shared`.

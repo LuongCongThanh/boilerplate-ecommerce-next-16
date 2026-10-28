@@ -155,7 +155,7 @@ sequenceDiagram
     Note over API: Ngoài transaction: tính lại tổng tiền, so với expected_total
     API->>DB: Một transaction: Giữ hàng 15 phút, lượt Voucher, Order PENDING_PAYMENT (chưa phát sự kiện)
     API-->>N: 201 {order_code, lookup_token}
-    N->>API: POST /store/orders/{code}/payments {gateway: vnpay, return_url} + Idempotency-Key + X-Lookup-Token
+    N->>API: POST /store/orders/{code}/payments {gateway: vnpay} + Idempotency-Key + X-Lookup-Token
     API->>DB: Tạo Payment pending, link hết hạn ở phút thứ 10 kể từ lúc đặt đơn
     API-->>N: {redirect_url}
     N-->>B: Chuyển sang trang VNPay

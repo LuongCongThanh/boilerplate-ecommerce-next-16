@@ -85,6 +85,8 @@ Cách xử lý chung (BR-PAY-05):
 2. Hệ thống tự tạo **yêu cầu Hoàn tiền** cho khoản tiền đó và gắn Cờ cần xử lý cho Staff.
 3. Gửi email cho Người mua báo tiền sẽ được hoàn, qua sự kiện `ordering.unexpected-payment-received` ([07-async-events-jobs.md](../architecture/07-async-events-jobs.md) mục 2). Với đơn đã huỷ, email báo thêm đơn đã hết hạn.
 
+Hoàn tiền gắn đúng Thanh toán từ thông báo, có định danh thao tác ổn định để xử lý lại không tạo thêm yêu cầu (BR-REF-06). Thông báo lặp của chính Thanh toán đã dùng để đưa đơn vào `PLACED` chỉ bị bỏ qua; không coi là khoản trả thêm.
+
 ### 4.2. Thông báo tới không theo thứ tự
 
 Các thông báo từ Cổng thanh toán và GHN có thể tới trễ hoặc lặp lại. Hệ thống **không dựa vào thứ tự tới**: mỗi thông báo được đối chiếu với trạng thái hiện tại của đơn, và chỉ áp dụng nếu chuyển trạng thái đó hợp lệ theo bảng ở mục 3. Cụ thể:
@@ -111,7 +113,7 @@ Yêu cầu Đổi trả **đang mở** là yêu cầu chưa bị Từ chối và
 
 Sau khi Staff bàn giao, việc tạo Vận đơn ở GHN chạy nền nên đơn vẫn ở `PACKING` trong lúc chờ. Nếu Staff huỷ đúng lúc này (T9) mà GHN vẫn tạo xong Vận đơn, shipper sẽ tới lấy hàng của một đơn đã huỷ. Vì vậy:
 
-1. T9 bị **từ chối** khi đơn có Vận đơn đang được tạo. Staff chờ kết quả rồi mới huỷ.
+1. T9 bị **từ chối** khi Vận đơn requested hoặc creation_unknown (chưa biết GHN đã tạo hay chưa). Staff chờ đối soát có kết quả chắc chắn rồi mới huỷ hoặc bàn giao lại; timeout không có nghĩa tạo thất bại.
 2. Nếu vẫn xảy ra (GHN báo tạo xong Vận đơn khi đơn đã `CANCELLED`), hệ thống tự yêu cầu GHN huỷ Vận đơn đó và gắn Cờ cần xử lý cho Staff kiểm tra.
 
 ### 4.6. Tiền về sai số tiền

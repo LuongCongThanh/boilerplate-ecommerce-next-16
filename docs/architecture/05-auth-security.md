@@ -32,7 +32,7 @@ Vì vậy Next.js là BFF cho **mọi** request tới Django, kể cả request 
 | Thuật toán | **EdDSA (Ed25519)**, khai báo cứng khi decode: `jwt.decode(token, key, algorithms=["EdDSA"], …)` |
 | Khoá | Khoá bí mật chỉ ở Django (biến môi trường / Secrets Manager). Header có `kid` để thay khoá: giữ song song khoá cũ và mới trong thời gian bằng tuổi thọ refresh token |
 | Access token | Sống **10 phút**. Claims: `iss`, `aud` (`store` hoặc `backoffice`), `sub` (account id), `kind`, `tv` (token_version), `jti`, `iat`, `exp` |
-| Refresh token | Sống **30 ngày** (storefront) / **12 giờ** (back-office) **[Giả định]**. Là JWT có `jti` và `fam` (family_id); DB chỉ lưu `sha256` của token |
+| Refresh token | Sống **30 ngày** (storefront) / **12 giờ** (back-office) **[Giả định]**. Là JWT có `jti` và `fam` (family_id); bảng RefreshToken chỉ lưu sha256; ngoại lệ có kiểm soát là response mã hoá trong RefreshReplay để trả lại cùng kết quả trong 10 giây (mục 2.1) |
 | Kiểm tra bắt buộc | Chữ ký, `exp`, `iat`, `iss`, `aud` đúng nhánh API, `tv` khớp `account.token_version`, Tài khoản `is_active` |
 | Lệch giờ cho phép | 30 giây |
 
@@ -42,12 +42,19 @@ Vì vậy Next.js là BFF cho **mọi** request tới Django, kể cả request 
 Đăng nhập        → cấp R1 (family F)
 Refresh bằng R1  → R1.used_at = now, cấp R2 (family F)
 Refresh bằng R2  → R2.used_at = now, cấp R3 (family F)
-Refresh bằng R1 lần nữa (R1 đã dùng!)
+Refresh bằng R1 lần nữa ngoài cửa sổ 10 giây (R1 đã dùng!)
                  → coi như bị đánh cắp: thu hồi TOÀN BỘ family F
                    → kẻ gian và người dùng thật đều phải đăng nhập lại
 ```
 
-Hai request refresh đồng thời hợp lệ từ cùng một client (ví dụ 2 tab) được chấp nhận trong cửa sổ **10 giây** để tránh đăng xuất nhầm **[Giả định]**. Request thứ hai trong cửa sổ này nhận một cặp token mới (R2') cùng family; R1 vẫn là đã dùng, còn R2 và R2' đều hợp lệ. Hệ thống không trả lại R2 được vì DB chỉ lưu hash. Quá 10 giây mà dùng lại R1 thì thu hồi cả family như trên.
+Trong cửa sổ **10 giây** từ used_at **[Giả định]**, request lặp bằng R1 chỉ nhận lại **chính cặp token đã cấp**, không tạo R2 thứ hai và không kéo dài cửa sổ ([ADR 0014](../adr/0014-refresh-single-successor.md)).
+
+- Trong transaction, khoá Account trước, rồi RefreshToken của R1. Kiểm tra chữ ký/claims/hash, account.is_active, token_version và family chưa thu hồi từ DB, không dựa vào cache tv. Lần đầu tạo R2 và access token, đánh dấu R1.used_at, lưu successor_jti và RefreshReplay cùng transaction; mọi token mới của một family phải đi qua đường này.
+- RefreshReplay lưu response đã mã hoá bằng thư viện cryptography AESGCM, có expires_at=used_at+10 giây, encryption_key_id và nonce ngẫu nhiên 12 byte mới cho mỗi lần encrypt. Key 32 byte độc lập khoá ký JWT; associated data gắn parent_jti, family_id và aud. Không tự viết thuật toán mật mã, không log response/nonce cùng secret. Tham khảo [API AEAD của cryptography](https://cryptography.io/en/latest/hazmat/primitives/aead/).
+- Request lặp trong cửa sổ, R2 chưa dùng và chưa thu hồi: kiểm tra lại các điều kiện trên rồi giải mã trả đúng response cũ. Không được làm mới hạn replay. Nếu R2 đã dùng để cấp R3, trả 409 REFRESH_SUPERSEDED, không trả token cũ và không thu hồi nhầm family trong cửa sổ. BFF không ghi đè cặp token mới hơn bằng response cũ.
+- Request dùng lại R1 ngoài cửa sổ: thu hồi family. Logout, đổi mật khẩu, vô hiệu hoá và ẩn danh đều khoá Account trước rồi token, đồng thời xoá/vô hiệu mọi replay liên quan; replay không được khôi phục phiên đã thu hồi. Mất/hỏng ciphertext hoặc thiếu key trong cửa sổ thì trả lỗi tạm thời, không cấp nhánh token khác.
+- Job purge_refresh_replays mỗi phút xoá bản ghi hết hạn; kiểm tra expires_at luôn áp dụng trước decrypt dù job chưa chạy. Không audit ciphertext; không đưa token vào sự kiện. Backup có thể còn ciphertext cũ, nhưng hạn replay và trạng thái thu hồi vẫn bắt buộc được kiểm tra.
+- BFF điều phối một lần refresh đang chạy cho mỗi phiên/aud (single-flight); nhiều replica phải dùng bộ điều phối chung, không chỉ biến trong bộ nhớ. Dùng ID phiên hoặc hash token cho khoá điều phối, không token thô. Backend vẫn là nơi bảo đảm một successor khi Redis/BFF coordinator lỗi; BFF phải xử lý retry/REFRESH_SUPERSEDED, không tự sinh cặp token hoặc ghi đè phiên mới bằng kết quả cũ.
 
 ### 2.2. Thu hồi tức thì
 
@@ -114,7 +121,8 @@ Dùng throttling của DRF, lưu đếm trong Redis. Khi Redis lỗi, throttle *
 - Xác thực chữ ký **trước khi** đọc nội dung; so sánh bằng `hmac.compare_digest`.
 - Lưu dữ liệu gốc vào `*_event`, chống trùng bằng ràng buộc `UNIQUE`.
 - Không tin số tiền trong IPN: so với `payments_payment.amount` (BR-PAY-04).
-- Return URL chỉ để hiển thị, không bao giờ đổi trạng thái thanh toán.
+- Return URL chỉ để hiển thị, không bao giờ đổi trạng thái thanh toán. Client không gửi return_url tuỳ ý: backend dựng từ STOREFRONT_ORIGIN đã cấu hình và path cố định /payment/return. Origin production phải là HTTPS, host/port được phép tường minh; local dùng origin localhost cấu hình riêng. Không lấy origin từ Host/X-Forwarded-Host/request body. Query phục vụ định tuyến chỉ chứa payment_id/order_code, không token hay PII; trang return đọc trạng thái đã xác thực qua API.
+- Giá trị return_url còn sót trong body bị từ chối 400 INVALID_RETURN_URL, không âm thầm dùng. redirect_url của gateway cũng phải qua parser và allowlist scheme/host cho đúng môi trường/adapter trước khi trả client; Fake Gateway có allowlist local riêng. Không kiểm tra host bằng startswith/endswith. Tham khảo [OWASP về redirect](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html).
 
 ## 7. Bảo vệ ứng dụng
 

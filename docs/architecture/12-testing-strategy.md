@@ -21,7 +21,7 @@ Xếp theo số lượng, từ nhiều đến ít. Hàm thuần không cần DB 
 |---|---|---|---|
 | 1 | Service | `modules/<module>/tests/test_services_<chủ đề>.py` | Business rule, chuyển trạng thái, sự kiện ghi vào outbox |
 | 2 | Concurrency | `modules/<module>/tests/test_concurrency_<chủ đề>.py` | Không bán vượt Tồn kho, không vượt lượt Voucher, không deadlock |
-| 3 | Handler và outbox | `modules/<module>/tests/test_handlers.py`, `shared/events/tests/` | Mỗi sự kiện chỉ xử lý một lần, sự kiện tới sai thứ tự, consumer xử lý đúng từng loại lỗi, relay gửi đúng và gửi lại được |
+| 3 | Handler và outbox | `modules/<module>/tests/test_handlers_<chủ đề>.py`, `shared/events/tests/` | Mỗi sự kiện chỉ xử lý một lần, sự kiện tới sai thứ tự, consumer xử lý đúng từng loại lỗi, relay gửi đúng và gửi lại được |
 | 4 | API | `modules/<module>/tests/test_api_<store\|backoffice\|webhooks>.py` | Phân quyền, `X-Lookup-Token`, định dạng lỗi, `Idempotency-Key`, throttle theo `X-Client-IP`, N+1 query |
 | 5 | Bảo mật auth/JWT | `modules/identity/tests/test_services_tokens.py` | Theo OWASP JWT Cheat Sheet |
 | 6 | Adapter nhà cung cấp | `modules/<payments\|shipping>/tests/test_providers_<tên>.py` | Chữ ký VNPay/MoMo, gọi HTTP lỗi, IPN bất thường |
@@ -50,7 +50,7 @@ Ngoài quy tắc chung, bắt buộc có các test service sau, vì đây là nh
 | Phân bổ Voucher về Dòng đơn hàng | Tổng `voucher_discount` của các dòng bằng đúng số giảm của Voucher; phần lẻ dồn vào dòng cuối |
 | Hoàn tiền khi Đổi trả một phần có Voucher (BR-RET-07) | Đơn 3 × 200.000đ, Voucher giảm 60.000đ, được miễn phí ship; trả 1 áo → hoàn 180.000đ, không truy thu phí ship |
 | Giới hạn lượt dùng Voucher mỗi người (BR-VCH-07) | Khách hàng đã dùng hết lượt rồi đặt tiếp như Khách vãng lai bằng cùng số điện thoại → Voucher bị từ chối |
-| Staff huỷ đơn `PACKING` khi Vận đơn đang `requested` (T9) | Ném lỗi `SHIPMENT_IN_PROGRESS`, đơn giữ nguyên `PACKING` |
+| Staff huỷ đơn PACKING khi Vận đơn requested hoặc creation_unknown (T9) | Ném SHIPMENT_IN_PROGRESS, giữ PACKING; không cho bàn giao lại để tạo mã mới |
 | Thanh toán của đơn COD | T2 tạo Thanh toán COD `pending`; T11 chuyển `succeeded`; huỷ đơn hoặc Hoàn hàng chuyển `cancelled`. Không thao tác nào ghi `payments.payment-succeeded` vào outbox, nên đơn COD giao xong không bị tạo Hoàn tiền |
 | Hàng chờ xuất (BR-INV-10) | Đặt đơn COD: Tồn kho giảm, Hàng chờ xuất tăng đúng số lượng; T10 xoá Hàng chờ xuất; huỷ trước Bàn giao (T7, T9) trả Hàng chờ xuất về Tồn kho |
 | Kiểm kê (BR-INV-12) | Tồn kho 7, Hàng chờ xuất 3, số đếm 10 → không điều chỉnh; số đếm 9 → điều chỉnh −1 loại `stock_count` |
@@ -61,33 +61,48 @@ Ngoài quy tắc chung, bắt buộc có các test service sau, vì đây là nh
 | Doanh thu khi Người mua trả tiền hai lần (BR-REV-01) | Hoàn tiền theo BR-PAY-05 không bị trừ; Doanh thu của đơn bằng Tổng tiền đơn |
 | Đặt đơn vãng lai bằng email của Tài khoản đã xác thực (BR-ORD-08) | Đơn có `customer_id` ngay khi tạo |
 | Hạ Giá bán xuống ≤ Giá khuyến mãi đang hoặc sắp hiệu lực (BR-PRC-05) | Ném `LIST_PRICE_BELOW_SALE_PRICE`; Giá bán không đổi |
+| Giá, snapshot, trạng thái bán hoặc SalePrice đổi sau lần đọc báo giá ngoài transaction | Checkout kiểm tra lại dưới khoá Variant; rollback Order, Giữ hàng và lượt Voucher; trả PRICE_CHANGED với quote mới dù tổng tiền tình cờ không đổi |
+| Xoá dữ liệu có một handler chưa xong, failed, rejected hoặc chưa có delivery | ErasureRequest giữ processing, completed_at null; không coi danh sách delivery rỗng là thành công |
+| Tất cả handler ẩn danh bắt buộc completed | Job hoàn tất một lần; gọi lại không phát thêm sự kiện; subject còn lấy được trong processing và được làm sạch sau hoàn tất |
 
 ### 2.2. Concurrency
 
 Test dùng `@pytest.mark.django_db(transaction=True)` và `@pytest.mark.concurrency`. Mỗi test chạy N thread, mỗi thread mở kết nối DB riêng, các thread xuất phát cùng lúc nhờ `threading.Barrier`, rồi kiểm tra bất biến sau khi tất cả kết thúc. Test chạy trong **mọi PR**, vì mỗi worker của `pytest-xdist` đã có DB riêng.
 
-Bắt buộc có 4 test:
+Bắt buộc có các test:
 
 | Kịch bản | Bất biến |
 |---|---|
 | N khách cùng Giữ hàng hoặc trừ Tồn kho cho K cái cuối cùng của một Biến thể (N > K) | Đúng K lần thành công, N − K lần ném `OUT_OF_STOCK`, Tồn kho không âm |
 | N khách cùng dùng một Voucher còn K lượt | Đúng K lượt được dùng, không vượt `usage_limit` |
-| Hai Đơn hàng cùng chứa 2 Biến thể nhưng thứ tự Dòng đơn hàng ngược nhau, cùng dùng một Voucher | Cả hai hoàn tất, không deadlock (khoá dòng Tồn kho theo thứ tự `variant_id`, rồi dòng Biến thể nếu trạng thái còn hàng đổi, rồi mới khoá Voucher) |
+| Hai Đơn hàng cùng chứa 2 Biến thể nhưng thứ tự Dòng đơn hàng ngược nhau, cùng dùng một Voucher | Cả hai hoàn tất, không deadlock (khoá dòng Tồn kho theo thứ tự `variant_id`, rồi toàn bộ Biến thể theo id để kiểm tra snapshot, rồi mới khoá Voucher) |
+| Hai yêu cầu hoàn khác key đồng thời trên một Payment, tổng vượt tiền thực nhận | Chỉ các yêu cầu trong hạn mức thành công; tổng requested + completed không vượt amount_received |
+| Hai yêu cầu hoàn cùng payment_id và request_key | Chỉ một Refund được tạo, cả hai trả cùng refund_id; khác tham số bị từ chối |
+| Checkout song song với đổi Giá bán hoặc thêm/sửa/xoá SalePrice | Writer và checkout đều khoá Variant; đơn dùng snapshot đã xác thực hoặc rollback PRICE_CHANGED, không lọt giá đọc trước khi writer commit |
+| Hai checkout chứa nhiều Biến thể, availability chỉ đổi ở các Biến thể khác nhau | Khoá toàn bộ StockItem rồi toàn bộ Variant theo id trước khi đổi availability; không có thứ tự khoá một phần Variant trước phần còn lại |
 | Người mua tự huỷ (T5) đúng lúc IPN thành công (T3) trên cùng một đơn | Chỉ một transition chạy trên trạng thái `PENDING_PAYMENT` (khoá dòng Đơn hàng); nếu T5 thắng thì tiền về được xử lý theo BR-PAY-05 |
 
 ### 2.3. Handler và outbox
 
 - Mỗi handler: gọi 2 lần với cùng một sự kiện thì chỉ xử lý 1 lần (`ProcessedEvent`).
-- Consumer ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 1.3), test trong `shared/events/tests/` bằng handler giả: ném `RetryLater` thì retry và không ghi `ProcessedEvent`; ném `DomainError` khác thì tác động của handler bị rollback, `ProcessedEvent` vẫn được ghi, không retry; ném exception khác thì retry.
-- Relay: chỉ đọc sự kiện chưa gửi, đánh dấu `dispatched_at` sau khi gửi, gửi lại được khi lần trước lỗi.
-- Handler hết retry: ghi một dòng vào `shared_failed_event`; `manage.py retry_failed_events` chạy lại được và ghi `retried_at`.
+- Consumer ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 1.3), test bằng handler giả: khoá delivery; thành công commit tác động, ProcessedEvent và completed cùng nhau. RetryLater/exception rollback savepoint handler, lưu bộ đếm và lịch DB, không ghi ProcessedEvent; DomainError khác rollback savepoint nhưng ghi ProcessedEvent và rejected, không retry.
+- Relay: tạo từng cặp event–handler và marker deliveries_created_at nguyên tử, không tạo trùng khi hai relay cùng chạy. Relay không phụ thuộc Beat. Chết sau khi lưu hạn giao lại nhưng trước enqueue: sau hạn, delivery được giao tiếp.
+- Redis đã nhận rồi mất task hoặc worker chết trước commit: relay giao lại delivery pending tới hạn; tác động cuối cùng chỉ commit một lần. Test task giao trùng chạy đồng thời trên PostgreSQL thật; consumer phải kiểm tra trạng thái và next_attempt_at.
+- Handler hết retry: delivery failed và FailedEvent ghi cùng transaction; retry_failed_events mở lại đúng cặp, reset lịch/bộ đếm và ghi retried_at; không mở lại completed/rejected. Retry dùng lịch DB, mất task không làm reset số lỗi handler.
+- Purge không xoá sự kiện có delivery pending/failed dù quá 90 ngày; chỉ xoá sự kiện đủ tuổi đã kết thúc mọi delivery. Replay không xoá dấu đã xử lý; thêm handler mới thì tạo delivery mới được.
+- Email: handler commit EmailLog queued rồi process chết trước enqueue; job quét tìm lại và gửi được dù ProcessedEvent đã tồn tại. Mất task quét thì lần Beat tiếp theo vẫn phục hồi.
+- Hai task cùng gửi một EmailLog: chỉ một task nhận lease; kết quả lease cũ không ghi đè lease mới. Nhà cung cấp nhận rồi worker chết trước lưu sent: cho phép gửi lại, không khẳng định chỉ gửi một email.
+- Email queued lỗi theo backoff, sending hết lease được khôi phục; quá giới hạn chuyển failed và cảnh báo; retry_failed_emails chỉ mở lại failed được chọn. Email sent/cancelled không gửi lại. Email xác thực/reset không còn hợp lệ bị bỏ qua; không lưu token/link bí mật trong outbox hay EmailLog.
+- customer-erased huỷ email chưa gửi, xoá người nhận và vô hiệu lease; worker đang giữ lease cũ không ghi đè kết quả sau đó.
 - Job Celery Beat ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 3.2): chạy 2 lần liên tiếp cho ra cùng kết quả.
 
 Bắt buộc có các test handler sau:
 
 | Kịch bản | Kỳ vọng |
 |---|---|
-| `payments.payment-succeeded` tới khi đơn đã `PLACED` (trả hai lần) hoặc đã `CANCELLED` (BR-PAY-05) | Đơn giữ nguyên trạng thái; tạo yêu cầu Hoàn tiền cho đúng Thanh toán đó; gắn Cờ cần xử lý `unexpected_payment`; ghi `ordering.unexpected-payment-received` vào outbox |
+| `payments.payment-succeeded` của khoản trả thêm tới khi đơn đã `PLACED`, hoặc tiền tới khi đơn đã `CANCELLED` (BR-PAY-05) | Đơn giữ nguyên; Hoàn tiền gắn đúng payment_id của sự kiện và key ổn định, không suy từ Mã đơn; gắn cờ unexpected_payment và phát sự kiện |
+| Sự kiện thành công mới mang cùng payment_id đã dùng đưa đơn vào PLACED | Không tạo Hoàn tiền, không phát thêm OrderPlaced hay UnexpectedPaymentReceived |
+| Một đơn có hai Thanh toán online cùng số tiền qua hai gateway | Lưu đúng payment_id dùng cho đơn; Hoàn tiền khoản trả thêm gắn đúng khoản và gateway, không hoàn nhầm khoản ban đầu |
 | `payments.payment-failed` với `reason = amount_mismatch` (BR-PAY-04) | Tạo yêu cầu Hoàn tiền đúng `amount_received`; gắn cờ `payment_amount_mismatch`; đơn giữ `PENDING_PAYMENT` |
 | `payments.refund-recorded` cho Hoàn tiền không gắn Đổi trả nào | Không Đổi trả nào đổi trạng thái |
 | `ordering.order-cancelled` với `previous_status = PENDING_PAYMENT` (T4, T5) | notifications không gửi email (BR-NTF-01) |
@@ -102,12 +117,18 @@ Bắt buộc có các test handler sau:
 
 **Payload sự kiện không chứa secret hay PII** ([07-async-events-jobs.md](./07-async-events-jobs.md)): `backend/tests/test_event_payloads.py` duyệt mọi class `DomainEvent` đã đăng ký và fail nếu tên field **chứa** một từ trong danh sách cấm (`email`, `phone`, `address`, `name`, `token`, `password`) hoặc kết thúc bằng `_url`, nên `contact_name` hay `reset_token` cũng bị chặn. Test này chỉ bắt lỗi theo tên field; reviewer vẫn phải đọc payload của mọi sự kiện mới. Test đặt ở `backend/tests/` (không thuộc `root_packages`) vì cần nhìn thấy sự kiện của mọi module.
 
+**Hoàn tiền và audit:** test BR-REF-06 cho gọi lại cùng key/cùng tham số, key trùng khác tham số, vượt tiền thực nhận và hoàn tất lặp không phát thêm RefundRecorded. Callback IPN/đối soát trùng không cộng amount_received lần nữa. Tracker audit phải đúng danh sách [03 mục 10.1](./03-data-model.md#101-các-field-được-ghi-lịch-sử); ghi rồi redaction raw_payload không tạo bản sao PII trong history. Kiểm tra schema history không có field bị cấm, kể cả khi model được thêm field mới.
+
 ### 2.4. API
 
 - **Phân quyền**: mỗi endpoint thử với Guest, Customer, Staff, Admin (theo cột quyền trong [04-api-contract.md](./04-api-contract.md)); Khách hàng này không xem được Đơn hàng của Khách hàng khác.
 - **`X-Lookup-Token`**: `GET orders/{code}`, `POST orders/{code}/payments`, `POST orders/{code}/cancel` của Khách vãng lai bị từ chối khi thiếu token, token hết hạn hoặc token của đơn khác. Checkout của Khách vãng lai trả về `lookup_token` dùng được ngay cho ba endpoint này.
 - **Lỗi**: đúng mã HTTP và đúng định dạng lỗi chuẩn (400, 401, 403, 404, 409, 429), gồm `409 PRICE_CHANGED` (có bảng tính mới trong `details`) và `409 SHIPMENT_IN_PROGRESS`.
-- **`Idempotency-Key`**: thiếu key; gửi lại cùng key thì nhận lại đúng kết quả cũ, kể cả phản hồi 4xx; cùng key nhưng body khác thì ra `IDEMPOTENCY_CONFLICT`; request trùng tới khi request đầu còn chạy thì ra `IDEMPOTENCY_IN_PROGRESS`; request đầu lỗi 5xx thì gửi lại cùng key được xử lý lại. Key lưu ở `shared_idempotency_key` (PostgreSQL), nên vẫn đúng khi Redis không chạy.
+- **`Idempotency-Key`**: thiếu key; gửi lại cùng key thì nhận lại đúng kết quả cũ; cùng key nhưng body khác thì ra `IDEMPOTENCY_CONFLICT`. Key lưu ở `shared_idempotency_key` (PostgreSQL), nên vẫn đúng khi Redis không chạy.
+- **Còn xử lý:** hai request đồng thời cùng key chỉ có một operation_id/Payment; request còn lại nhận 202 PAYMENT_INITIALIZING. Khác body luôn 409, kể cả khi key in_progress. Purge không xoá key chưa rõ kết quả. Checkout commit kết quả key cùng Order, rollback không để Order mồ côi.
+- **Phục hồi khởi tạo:** giả lập gateway đã tạo nhưng response timeout/process chết trước lưu; cùng key và job phục hồi phải giữ Payment, provider_txn_ref và provider_request_id. Query trước; chỉ retry create khi adapter có hợp đồng idempotency đã xác minh. Test fake provider đếm giao dịch ngoài DB để phát hiện tạo trùng; không chỉ đếm Payment.
+- **Kết quả tới muộn:** IPN succeeded đến trước response tạo link; lưu response không hạ status/amount_received. Lease cũ không ghi đè lease mới. Quá hạn link không tạo/gia hạn link; gateway không cung cấp lại link thì API trả đang xử lý hoặc trạng thái cuối, không bịa redirect_url.
+- **HTTP tích hợp ngoài transaction:** spy/mock transport xác nhận không có transaction atomic khi gọi gateway/GHN; lấy lại quote sau PRICE_CHANGED chỉ chạy sau rollback. Time-machine vượt lease rồi chạy job, không sleep trong test.
 - **Throttle**: endpoint có throttle chặt (ví dụ `orders/lookup`) trả `429` khi vượt ngưỡng. Throttle theo `X-Client-IP` chỉ khi `X-BFF-Secret` đúng; thiếu hoặc sai secret thì bỏ qua `X-Client-IP` và throttle theo IP của kết nối ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)).
 - **Redis lỗi**: cache và throttle fail-open, request vẫn được xử lý ([10-nfr.md](./10-nfr.md) mục 2).
 - **N+1 query**: `django-zeal` bật cho toàn bộ test; test fail nếu có N+1.
@@ -122,18 +143,26 @@ Thêm hai kịch bản về Tài khoản:
 
 - **Đăng nhập Google vào Tài khoản chưa xác thực email** (chiếm tài khoản trước): Tài khoản được đánh dấu đã xác thực, mật khẩu cũ không còn đăng nhập được, mọi refresh token cũ bị thu hồi và access token cũ sai `tv`.
 - **Một email một Tài khoản**: đăng ký Khách hàng bằng email của một Tài khoản Staff bị từ chối; đăng nhập storefront bằng Tài khoản Staff (mật khẩu hoặc Google) bị từ chối với lỗi chung.
+- **Một successor:** hai request đồng thời dùng R1 chỉ tạo R2 một lần. R1.used_at, successor_jti và ciphertext response commit cùng transaction. Mất response rồi retry trong 10 giây nhận đúng cặp cũ, không gia hạn replay; Redis tắt vẫn không tạo nhánh mới.
+- **Replay sau thu hồi:** logout/reset/Google takeover/ẩn danh/vô hiệu hoá giữa hai request → không trả lại token từ ciphertext. Kiểm tra trực tiếp account/tv/family từ DB dưới thứ tự khoá Account → Token; ciphertext liên quan được vô hiệu/xoá.
+- **R2 đã dùng:** R1 lặp trong cửa sổ trả REFRESH_SUPERSEDED, không thu hồi nhầm family hoặc trả token cũ. R1 lặp ngoài cửa sổ thu hồi family. Mất ciphertext hoặc thiếu key không được cấp successor thay thế.
+- **Mã hoá:** key khác, AAD sai, ciphertext bị sửa đều không decrypt được. Endpoint từ chối replay hết hạn dù job purge chưa chạy; purge/revoke xoá ciphertext. BFF multi-replica single-flight không dựa vào bộ nhớ một process; response cũ không ghi đè cặp mới hơn.
+- **Redirect:** body gửi return_url bị từ chối; Host/Forwarded/Origin giả không đổi callback server dựng. Production chỉ HTTPS origin/path cố định; local có origin riêng. redirect_url giả host, userinfo, scheme lạ hoặc host giống tiền tố bị chặn. Return page không xác nhận thanh toán từ query string. Cấu hình origin đổi giữa các retry không làm đổi URL trong creation_input đã lưu.
 
 ### 2.6. Adapter nhà cung cấp
 
 - **Chữ ký VNPay (HMAC-SHA512) và MoMo (HMAC-SHA256)**: unit test với dữ liệu mẫu lấy từ tài liệu của nhà cung cấp, gồm chữ ký đúng, sai một ký tự, thiếu field. Fake Gateway không kiểm tra chữ ký nên test này là nơi duy nhất bảo vệ phần đó.
-- **Gọi HTTP** bằng `respx`: timeout, lỗi 5xx, response sai định dạng; GHN lỗi khi báo giá thì dùng Phí ship dự phòng; tạo Vận đơn lỗi hết retry thì phát `shipping.shipment-creation-failed`; `cancel_shipment` của adapter GHN.
+- **Gọi HTTP** bằng respx: timeout, lỗi 5xx, response sai định dạng; GHN báo giá lỗi dùng fallback; chỉ phát shipment-creation-failed khi xác nhận bị từ chối/chưa tạo. Timeout tạo là creation_unknown và được đối soát; test cancel_shipment riêng.
+- **Tạo Vận đơn mất response:** FakeShippingProvider đếm Vận đơn bên ngoài DB. Query theo shop/client code tìm lại cùng Vận đơn; hai task claim cùng lease không gọi tạo song song; stale result không ghi đè lease mới hoặc trạng thái vận chuyển xa hơn. ShipmentCreatedV1 chỉ ghi một lần kể cả webhook/query phát hiện trước response tạo.
+- **Chưa rõ kết quả:** query timeout/not_found chưa chắc chắn giữ unknown, không đổi reference/payload và không tạo lại mù. Staff huỷ/bàn giao lại bị chặn. Sandbox phải kiểm tra trùng client code và độ trễ truy vấn trước khi bật retry tạo tự động; lỗi mạng hết retry không chuyển failed.
+- **Cache phí:** cùng request chuẩn hoá thì hit; đổi shop/nơi gửi, service, địa chỉ đã mapping, cân nặng/kích thước, giá trị khai báo/COD hoặc revision thì miss. Hai cân nặng cùng bucket cũ không tự dùng chung phí. Fallback không lấp cache GHN thật; GHN phục hồi thì request sau lấy được phí thật. Không có secret hay PII liên hệ trong cache key/log.
 - **IPN và webhook**: gọi trùng, sai chữ ký, sai số tiền, đến muộn sau khi đơn đã bị huỷ.
 
 ### 2.7. Flow xuyên module
 
 Flow test gọi qua **HTTP** (`api_client`, `staff_client`, endpoint IPN của Fake Gateway), để đi qua đúng auth, `X-Lookup-Token`, `Idempotency-Key` và serializer như thực tế. Các bước do Celery Beat kích hoạt thì dùng `time-machine` để vượt mốc thời gian, rồi gọi thẳng task (ví dụ `ordering.cancel_expired_pending_orders`, `ordering.complete_delivered_orders`). Đánh dấu bằng `@pytest.mark.flow`.
 
-Sau mỗi bước HTTP, flow test gọi `drain_events()` trong `shared/testing/events.py`. Hàm này chạy các callback `on_commit` đang chờ, chạy relay rồi handler (Celery chạy đồng bộ), và lặp lại cho tới khi outbox hết sự kiện chưa gửi. Ví dụ sau IPN thành công, `drain_events()` đưa `payments.payment-succeeded` tới handler của `ordering` để chạy T3; sau khi bàn giao, nó chạy task tạo Vận đơn và đưa `shipping.shipment-created` tới T10.
+Sau mỗi bước HTTP, flow test gọi `drain_events()` trong `shared/testing/events.py`. Hàm chạy các callback `on_commit` đang chờ, relay rồi handler (Celery chạy đồng bộ), và lặp tới khi không còn delivery tới hạn. Không chờ retry tương lai; test retry dùng time-machine tiến tới hạn rồi drain tiếp. Ví dụ sau IPN thành công, nó đưa `payments.payment-succeeded` tới handler của `ordering` để chạy T3; sau khi bàn giao, nó chạy task tạo Vận đơn và đưa `shipping.shipment-created` tới T10. Test riêng về mất task và worker dùng các điểm dừng/mô phỏng lỗi, không dựa vào eager mode để chứng minh broker bền vững.
 
 Bắt buộc có 6 flow:
 
@@ -159,6 +188,8 @@ Khai báo trong `pyproject.toml` (`--strict-markers`):
 `make br-report` liệt kê các mã `BR-xxx` trong `04-business-rules.md` chưa có test nào gắn marker `br`. Lệnh này chỉ để xem, **không** chặn CI, vì nhiều quy tắc chưa có code.
 
 ## 4. Dữ liệu test và ranh giới module
+
+Khi bootstrap, kiểm tra cấu hình import-linter bằng các package mẫu tạm: import contracts đúng chiều qua; service import model module khác fail; FK giữa model đúng chiều qua; import cùng lớp hoặc ngược chiều fail. Generator phải liệt kê đủ phần nội bộ thực sự tồn tại và bắt cấu hình cũ trong CI. Không coi việc lint-imports chạy qua trên package rỗng là đã chứng minh ranh giới.
 
 - Dữ liệu test tạo bằng `factory-boy`, không dùng fixture JSON.
 - Fixture không cần nghiệp vụ (ví dụ `api_client`) ở `shared/testing/fixtures.py`. Fixture phải tạo Tài khoản (`customer_client`, `staff_client`, `admin_client`) ở `backend/conftest.py`, vì `shared` không được import `modules.identity`.
