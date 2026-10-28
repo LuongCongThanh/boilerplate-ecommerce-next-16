@@ -15,6 +15,8 @@ Hệ thống phục vụ thị trường **Việt Nam**: thanh toán bằng VND 
 
 ## 2. Tầm nhìn
 
+Backend được thiết kế riêng cho Fashion Store theo phạm vi trong tài liệu này. Repo không đặt mục tiêu trở thành boilerplate ecommerce tổng quát; các quyết định kiến trúc ưu tiên nghiệp vụ của cửa hàng.
+
 > Một cửa hàng thời trang online nơi Người mua tìm được đúng size, đúng màu và đặt hàng trong vài phút, có hoặc không có tài khoản. Phía doanh nghiệp xử lý đơn nhanh, không bán vượt tồn kho.
 
 ## 3. Mục tiêu kinh doanh

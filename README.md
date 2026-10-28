@@ -2,6 +2,8 @@
 
 Website bán lẻ thời trang B2C cho thị trường Việt Nam. Backend là **Django + Django REST Framework** (modular monolith), phục vụ storefront và back-office Next.js (làm sau).
 
+Repo dành riêng cho **Fashion Store**, với nghiệp vụ thời trang, thanh toán VNPay/MoMo/COD và vận chuyển GHN; không đặt mục tiêu xây boilerplate ecommerce dùng chung cho nhiều dự án.
+
 > Trạng thái: **giai đoạn tài liệu**. Repo hiện chỉ chứa tài liệu; code Backend sẽ được khởi tạo theo [cấu trúc đã thiết kế](./docs/architecture/02-backend-structure.md).
 
 ## Tóm tắt
@@ -58,6 +60,10 @@ Thuật ngữ chung: **[GLOSSARY.md](./GLOSSARY.md)** — đọc trước tiên.
 | [0008](./docs/adr/0008-uuid-v7-primary-keys.md) | Khoá chính UUID v7, sinh qua hàm bọc `shared.models.uuid7` |
 | [0009](./docs/adr/0009-nextjs-bff-django-private.md) | Next.js là BFF cho mọi request, Django chỉ mở webhook ra internet |
 | [0010](./docs/adr/0010-stock-decremented-at-order-awaiting-dispatch.md) | Trừ Tồn kho khi bán, theo dõi Hàng chờ xuất tới lúc Bàn giao |
+| [0011](./docs/adr/0011-audit-field-allowlist.md) | Audit theo danh sách field, không sao chép raw payload chứa PII |
+| [0012](./docs/adr/0012-checkout-price-snapshot.md) | Kiểm tra lại giá và điều kiện bán dưới khoá Biến thể khi checkout |
+| [0013](./docs/adr/0013-recoverable-payment-initiation.md) | Khởi tạo Thanh toán có thể phục hồi bằng cùng Payment và mã nhà cung cấp |
+| [0014](./docs/adr/0014-refresh-single-successor.md) | Refresh chỉ có một successor, trả lại response mã hoá trong cửa sổ 10 giây |
 
 ### Cấu hình cho agent (`docs/agents/`)
 

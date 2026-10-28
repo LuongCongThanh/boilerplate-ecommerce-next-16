@@ -1,0 +1,5 @@
+# Mỗi refresh token có một successor, replay response mã hoá trong 10 giây
+
+Hai request refresh đồng thời hoặc mất response có thể khiến client dùng lại cùng refresh token. Chọn khoá Account rồi RefreshToken, tạo tối đa một successor và lưu nguyên response dưới dạng mã hoá trong RefreshReplay để trả lại trong cửa sổ 10 giây từ used_at. BFF phối hợp single-flight; backend vẫn giữ bất biến khi chạy nhiều replica hoặc coordinator lỗi. Chi tiết ở [05 mục 2.1](../architecture/05-auth-security.md#21-xoay-vòng-refresh-token-và-phát-hiện-dùng-lại).
+
+Đây là ngoại lệ có giới hạn so với chỉ lưu hash: thêm ciphertext, khoá mã hoá riêng và job purge, đổi lại không tạo hai nhánh token hay đăng xuất nhầm khi response bị mất. Không thể phân biệt request lặp hợp lệ và kẻ có cùng token trong cửa sổ đó; chấp nhận đánh đổi 10 giây, không gia hạn cửa sổ theo lần retry. Trước replay luôn kiểm tra account/token/family từ DB; logout/reset/ẩn danh phải vô hiệu replay. Successor đã dùng thì trả REFRESH_SUPERSEDED, không trả token cũ; dùng lại ngoài cửa sổ thì thu hồi family.

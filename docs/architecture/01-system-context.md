@@ -97,7 +97,7 @@ graph TB
 | Celery Beat | Đẩy job theo lịch (huỷ đơn hết hạn, Đối soát, chuyển đơn sang Hoàn tất). Lịch lưu trong PostgreSQL (`DatabaseScheduler`) | **Đúng 1** |
 | Outbox relay | Đọc bảng `shared_outbox_event` rồi đẩy sự kiện sang Celery | 1. Lúc deploy có thể chồng 2 bản, vẫn an toàn nhờ `FOR UPDATE SKIP LOCKED` |
 | PostgreSQL | Dữ liệu nghiệp vụ, outbox, `Idempotency-Key`, lịch job | 1 (Multi-AZ trên AWS) |
-| Redis | Broker Celery, cache, throttling, cache `token_version`. Đặt `noeviction`, mọi key cache có TTL. Redis lỗi thì API vẫn chạy, kể cả checkout (fail-open), nhưng xác nhận Thanh toán online bị dừng tới khi Redis hồi lại (xem [10](./10-nfr.md) mục 2) | 1 |
+| Redis | Broker Celery, cache, throttling, cache `token_version`. Đặt `noeviction`, mọi key cache có TTL. Redis lỗi thì API vẫn chạy, kể cả checkout (fail-open, xem [10](./10-nfr.md) mục 2) | 1 |
 
 API, Celery worker, Celery Beat và Outbox relay đều gửi lỗi về Sentry; sơ đồ không vẽ các mũi tên này cho gọn.
 
@@ -107,7 +107,7 @@ Chi tiết xem [02-backend-structure.md](./02-backend-structure.md).
 
 Cách đọc sơ đồ:
 
-- Mũi tên liền `A --> B`: A phụ thuộc trực tiếp vào B, tức là gọi `B/contracts.py`, nghe sự kiện trong `B/events.py` hoặc có FK tới model của B. Sơ đồ chỉ vẽ các phụ thuộc theo thiết kế hiện tại. Phụ thuộc nào hợp lệ do luật theo lớp quyết định, xem [02-backend-structure.md](./02-backend-structure.md) mục 4.
+- Mũi tên liền `A --> B`: A phụ thuộc trực tiếp vào B, tức là gọi `B/contracts.py`, nghe sự kiện trong `B/events.py` hoặc có FK tới model của B. Sơ đồ chỉ vẽ các phụ thuộc đang có. Phụ thuộc nào hợp lệ do luật theo lớp quyết định, xem [02-backend-structure.md](./02-backend-structure.md) mục 4.
 - Mũi tên đứt: chỉ minh hoạ hướng đi của sự kiện, từ module phát ở lớp dưới tới module nghe ở lớp trên. Đây không phải một loại phụ thuộc riêng: bên nghe đã có mũi tên liền tới bên phát. Tên sự kiện ghi tắt, bỏ tiền tố module. Sơ đồ chỉ nêu ví dụ, danh sách đầy đủ ở [07-async-events-jobs.md](./07-async-events-jobs.md) mục 2.
 - `shared` là app hạ tầng dùng chung, không phải module nghiệp vụ ([ADR 0006](../adr/0006-modular-monolith.md)).
 
@@ -123,6 +123,7 @@ graph TB
     ordering --> payments
     ordering --> shipping
     inventory --> catalog
+    inventory --> identity
     promotions --> identity
     identity --> shared
     catalog --> shared
@@ -132,7 +133,6 @@ graph TB
     payments -. "sự kiện: payment-succeeded, refund-recorded…" .-> ordering
     shipping -. "sự kiện: shipment-created, shipment-delivered…" .-> ordering
     ordering -. "sự kiện: order-placed, order-cancelled…" .-> notifications
-    payments -. "sự kiện: refund-recorded" .-> notifications
     identity -. "sự kiện: email-verified, customer-erased" .-> ordering
     identity -. "sự kiện: customer-registered, password-reset-requested" .-> notifications
 ```
@@ -155,8 +155,8 @@ sequenceDiagram
     Note over API: Ngoài transaction: tính lại tổng tiền, so với expected_total
     API->>DB: Một transaction: Giữ hàng 15 phút, lượt Voucher, Order PENDING_PAYMENT (chưa phát sự kiện)
     API-->>N: 201 {order_code, lookup_token}
-    N->>API: POST /store/orders/{code}/payments {gateway: vnpay, return_url} + Idempotency-Key + X-Lookup-Token
-    API->>DB: Tạo Payment pending, link hết hạn ở phút thứ 10 kể từ lúc đặt đơn (từ phút thứ 8 thì trả PAYMENT_WINDOW_CLOSED)
+    N->>API: POST /store/orders/{code}/payments {gateway: vnpay} + Idempotency-Key + X-Lookup-Token
+    API->>DB: Tạo Payment pending, link hết hạn ở phút thứ 10 kể từ lúc đặt đơn
     API-->>N: {redirect_url}
     N-->>B: Chuyển sang trang VNPay
     B->>V: Người mua thanh toán
@@ -180,4 +180,4 @@ Nếu IPN không tới, job Đối soát `payments.reconcile_pending_payments` (
 
 Tính từ lúc đặt đơn, link thanh toán hết hạn ở phút thứ 10, Giữ hàng hết hạn ở phút thứ 15. Khoảng đệm 5 phút dành cho IPN đến muộn. Đối soát chỉ là lưới an toàn: job chạy theo lịch cố định chứ không canh theo từng đơn, nên không bảo đảm kịp trước phút 15.
 
-Điều kiện của T3 (Giữ hàng còn hiệu lực) và T4 (đơn vẫn ở `PENDING_PAYMENT`) được xét **lúc handler hoặc job chạy**, không phải lúc tiền về. Vì vậy nếu tiền về sát phút 15 và job `ordering.cancel_expired_pending_orders` chạy trước handler T3, đơn vẫn bị huỷ (T4) dù Người mua đã trả trong hạn. Đây là đánh đổi có chủ ý: Giữ hàng quá `expires_at` luôn vô hiệu ([03](./03-data-model.md)), và cửa sổ rủi ro chỉ vài giây trễ của relay. Để cửa sổ này không phình ra khi relay bị tồn đọng (ví dụ sau khi Redis lỗi, Beat và relay cùng đẩy dồn task), job T4 bỏ qua lượt chạy khi outbox còn sự kiện chưa dispatch quá 60 giây ([07](./07-async-events-jobs.md) mục 3.2). Nếu tiền vẫn về khi Đơn hàng không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi một lần Thanh toán khác), hệ thống tự tạo Hoàn tiền và gắn Cờ cần xử lý `unexpected_payment` (BR-PAY-05).
+Điều kiện của T3 (Giữ hàng còn hiệu lực) và T4 (đơn vẫn ở `PENDING_PAYMENT`) được xét **lúc handler hoặc job chạy**, không phải lúc tiền về. Vì vậy nếu tiền về sát phút 15 và job `ordering.cancel_expired_pending_orders` chạy trước handler T3, đơn vẫn bị huỷ (T4) dù Người mua đã trả trong hạn. Đây là đánh đổi có chủ ý: Giữ hàng quá `expires_at` luôn vô hiệu ([03](./03-data-model.md)), và cửa sổ rủi ro chỉ vài giây trễ của relay. Nếu tiền vẫn về khi Đơn hàng không còn ở `PENDING_PAYMENT` (đã huỷ, hoặc đã được trả bởi một lần Thanh toán khác), hệ thống tự tạo Hoàn tiền và gắn Cờ cần xử lý `unexpected_payment` (BR-PAY-05).

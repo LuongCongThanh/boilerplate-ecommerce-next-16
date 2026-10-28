@@ -15,7 +15,7 @@ README chỉ là bản đồ để biết file nào trả lời câu hỏi nào.
 
 ## Trạng thái
 
-Mọi file đang ở trạng thái **Bản nháp chờ review**, trừ [11](./11-git-workflow.md) đã **Đang áp dụng** và [09](./09-deployment-aws-target.md) là **Target, chưa triển khai**: hạ tầng AWS chưa tồn tại, file đó chỉ để định hướng. Các con số có nhãn **[Giả định]** hoặc **[Cần xác minh]** chưa được chốt.
+Mọi file đang ở trạng thái **Bản nháp chờ review**, riêng [09](./09-deployment-aws-target.md) là **Target, chưa triển khai**: hạ tầng AWS chưa tồn tại, file đó chỉ để định hướng. Các con số có nhãn **[Giả định]** hoặc **[Cần xác minh]** chưa được chốt.
 
 ## Đọc gì trước
 
@@ -74,7 +74,7 @@ Liên quan: [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md), [ADR 00
 
 ### [06. Tích hợp bên ngoài](./06-integrations.md)
 
-Mô hình adapter tự viết bằng `httpx` cho VNPay, MoMo và GHN, vì các bên này không có SDK Python được duy trì. File còn mô tả cách ánh xạ trạng thái GHN (trạng thái lạ thì gắn Cờ cần xử lý), cách Đối soát chỉ hỏi lại Vận đơn lâu không có cập nhật, các rủi ro mở về địa chỉ 2 cấp và 3 cấp và về đối chiếu tiền COD, Google OAuth, email, Fake Gateway dùng ở local và test, và quy trình nghiệm thu với sandbox thật.
+Mô hình adapter tự viết bằng `httpx` cho VNPay, MoMo và GHN, vì các bên này không có SDK Python được duy trì. File còn mô tả cách ánh xạ trạng thái GHN, rủi ro về địa chỉ 2 cấp và 3 cấp, Google OAuth, email, Fake Gateway dùng ở local và test, và quy trình nghiệm thu với sandbox thật.
 Liên quan: [ADR 0005](../adr/0005-provider-adapters-fake-gateways.md).
 
 ### [07. Sự kiện và job chạy nền](./07-async-events-jobs.md)
@@ -86,11 +86,11 @@ Liên quan: [ADR 0003](../adr/0003-postgres-redis-celery.md), [ADR 0007](../adr/
 
 ### [08. Môi trường phát triển local](./08-local-development.md)
 
-Cách dựng môi trường trên macOS và trên Windows qua WSL2. Mọi dịch vụ, kể cả PostgreSQL và Redis (Valkey), chạy bằng Docker Compose. File hướng dẫn cài đặt lần đầu, đặt biến môi trường, các lệnh `Makefile` hằng ngày, debug, chạy test và cấu hình VS Code hoặc PyCharm.
+Cách dựng môi trường trên macOS và trên Windows qua WSL2. PostgreSQL cài trực tiếp trên máy, các thành phần còn lại chạy bằng Docker Compose. File hướng dẫn cài đặt lần đầu, đặt biến môi trường, các lệnh `Makefile` hằng ngày, debug, chạy test và cấu hình VS Code hoặc PyCharm.
 
 ### [09. Triển khai trên AWS (mục tiêu)](./09-deployment-aws-target.md)
 
-Kiến trúc đích ở region Singapore, **chưa triển khai**. Thành phần gồm CloudFront kèm WAF, ALB, ECS Fargate (chạy api, worker, beat, relay và Next.js), RDS PostgreSQL Multi-AZ, ElastiCache for Valkey, S3, SES, Secrets Manager. File còn mô tả các môi trường staging và production, quy trình deploy (migration chạy trước, phải tương thích ngược) và lý do beat và relay deploy theo hai cách khác nhau.
+Kiến trúc đích ở region Singapore, **chưa triển khai**. Thành phần gồm CloudFront kèm WAF, ALB, ECS Fargate (chạy api, worker, beat, relay và Next.js), RDS PostgreSQL Multi-AZ, ElastiCache Redis, S3, SES, Secrets Manager. File còn mô tả các môi trường staging và production, quy trình deploy (migration chạy trước, phải tương thích ngược) và lý do beat và relay deploy theo hai cách khác nhau.
 
 ### [10. Yêu cầu phi chức năng](./10-nfr.md)
 

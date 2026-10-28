@@ -31,7 +31,7 @@ Số lượng của một Biến thể trong một Kho chưa bán cho Đơn hàn
 _Avoid_: Inventory count, số lượng, tồn thực tế
 
 **Số lượng bán được (Available Quantity)**:
-Phần Tồn kho mà Người mua còn mua được, bằng Tồn kho trừ các Giữ hàng chưa được giải phóng và chưa quá hạn. Giữ hàng đã quá hạn không còn được trừ dù hệ thống chưa kịp giải phóng. Không bao giờ âm.
+Phần Tồn kho mà Người mua còn mua được, bằng Tồn kho trừ các Giữ hàng còn hiệu lực. Không bao giờ âm.
 _Avoid_: Sellable stock, tồn khả dụng
 
 **Giữ hàng (Stock Reservation)**:
@@ -142,7 +142,7 @@ _Avoid_: COD cap, giới hạn COD
 
 **Đối soát (Reconciliation)**:
 Việc hệ thống chủ động hỏi Cổng thanh toán hoặc hãng vận chuyển về trạng thái của các Thanh toán và Vận đơn còn treo, để không phụ thuộc hoàn toàn vào thông báo từ họ.
-_Avoid_: Sync, polling, quyết toán, đối soát COD (việc đối chiếu tiền thu hộ GHN chuyển về là nghiệp vụ kế toán ngoài hệ thống)
+_Avoid_: Sync, polling, quyết toán
 
 ## Vận chuyển (Shipping)
 
@@ -153,6 +153,10 @@ _Avoid_: Delivery, đơn GHN, tracking
 **Bàn giao (Hand-over)**:
 Việc Staff giao một Đơn hàng đã đóng gói cho hãng vận chuyển. Vận đơn được tạo khi Bàn giao, và đơn chỉ Đang giao khi Vận đơn tạo xong.
 _Avoid_: Dispatch, xuất kho, giao hàng
+
+**Sự cố Vận đơn (Shipment Exception)**:
+Tình trạng hãng vận chuyển báo mất hàng, hư hàng, sự cố, hoặc tự huỷ một Vận đơn mà cửa hàng không yêu cầu huỷ. Đơn Đang giao chỉ được Staff huỷ khi Vận đơn gặp sự cố.
+_Avoid_: Lỗi giao hàng, failed delivery, hoàn hàng
 
 **Phí ship (Shipping Fee)**:
 Số tiền Người mua trả cho việc giao một Đơn hàng, bằng 0 khi đơn đạt Ngưỡng miễn phí ship.
@@ -199,5 +203,5 @@ _Avoid_: User, profile, login
 ## Dữ liệu cá nhân (Privacy)
 
 **Yêu cầu xoá dữ liệu (Erasure Request)**:
-Yêu cầu của Người mua xoá dữ liệu cá nhân của mình. Hệ thống thực hiện bằng cách ẩn danh, vẫn giữ dữ liệu đơn cần cho kế toán và thuế.
+Yêu cầu của Người mua xoá dữ liệu cá nhân của mình. Hệ thống thực hiện bằng cách ẩn danh, vẫn giữ dữ liệu đơn cần cho kế toán và thuế. Đang xử lý nghĩa là việc ẩn danh chưa hoàn tất; chỉ hoàn thành khi mọi phần dữ liệu thuộc phạm vi yêu cầu đã được xử lý thành công.
 _Avoid_: Delete account, xoá tài khoản

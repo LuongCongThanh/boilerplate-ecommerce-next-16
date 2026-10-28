@@ -111,7 +111,7 @@
 - AC2: Thanh toán thành công thì đơn chuyển sang Chờ xác nhận **chỉ khi** hệ thống nhận IPN hoặc Đối soát thành công, không dựa vào việc Người mua quay lại trang (BR-PAY-02).
 - AC3: Người mua quay lại trang trước khi IPN tới thì thấy trạng thái "Đang xác nhận thanh toán" và trang tự cập nhật.
 - AC4: Quá 15 phút chưa thanh toán thì đơn bị huỷ và hàng được giải phóng (T4).
-- AC5: Thanh toán thất bại thì Người mua được thử lại, bằng cùng Cổng hoặc Cổng khác, nếu chưa tới phút thứ 8 kể từ khi đặt đơn (BR-PAY-01, BR-INV-05).
+- AC5: Thanh toán thất bại thì Người mua được thử lại, bằng cùng Cổng hoặc Cổng khác, cho tới phút thứ 10 kể từ khi đặt đơn (BR-PAY-01, BR-INV-05).
 - AC6: Đơn online chưa thanh toán không nhận email "Đặt đơn thành công"; thanh toán thành công thì nhận email "Thanh toán thành công" (BR-NTF-01).
 
 ### US-307 · Hết hàng khi đặt đơn · P1
@@ -207,6 +207,12 @@
 
 ### US-608 · Xử lý tiền về cho đơn không còn chờ thanh toán · P1
 - AC1: Có danh sách các yêu cầu Hoàn tiền do hệ thống tự tạo (BR-PAY-05) để Staff xử lý, gồm cả đơn đã huỷ và đơn được trả tiền hai lần.
+
+### US-609 · Xử lý Vận đơn gặp sự cố · P1
+- AC1: Đơn Đang giao mà GHN báo mất hàng, hư hàng, sự cố, hoặc tự huỷ Vận đơn thì được gắn Cờ cần xử lý và hiện trong bộ lọc cờ (BR-SHP-08).
+- AC2: Staff huỷ được đơn đó (T14), bắt buộc nhập lý do; đơn đã thanh toán online được tạo Hoàn tiền toàn bộ (BR-REF-05).
+- AC3: Hàng chưa rời Kho thì Staff xác nhận nhập lại Tồn kho như đơn Hoàn hàng (US-607).
+- AC4: Đơn Đang giao không có cờ này thì Staff không huỷ được.
 
 ---
 

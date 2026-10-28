@@ -23,7 +23,7 @@ graph TB
             beat[ECS Fargate: beat × 1]
             relay[ECS Fargate: relay × 1]
             rds[(RDS PostgreSQL 18<br/>Multi-AZ)]
-            redis[(ElastiCache for Valkey)]
+            redis[(ElastiCache Redis OSS)]
         end
         nat[NAT Gateway]
     end
@@ -57,8 +57,6 @@ graph TB
     sentry[Sentry] -.-> api
 ```
 
-Mọi task (api, worker, beat, relay, Next.js) đều gửi log về CloudWatch và lỗi về Sentry; sơ đồ chỉ vẽ cho `api` cho gọn.
-
 Từ internet chỉ vào được Django qua đúng một đường: `/api/v1/webhooks/*`. Mọi API còn lại (`/api/v1/store/`, `/api/v1/backoffice/`) chỉ nhận request từ Next.js qua ALB nội bộ.
 
 ## 2. Thành phần
@@ -67,22 +65,24 @@ Từ internet chỉ vào được Django qua đúng một đường: `/api/v1/we
 |---|---|---|
 | Storefront, back-office | **ECS Fargate**, image Next.js build từ repo frontend | Là BFF cho mọi request tới Django ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Gửi IP thật của người dùng trong `X-Client-IP` kèm `X-BFF-Secret` |
 | API, worker, beat, relay | **ECS Fargate**, cùng một image Django trên ECR, khác lệnh chạy | API scale theo CPU; beat luôn đúng 1 task; relay chạy 1 task, lúc deploy có thể chồng 2 (mục 4) |
-| Load balancer | **ALB public** sau CloudFront; **ALB nội bộ** cho Next.js gọi Django | ALB public chỉ nhận từ dải IP của CloudFront (security group dùng managed prefix list), chia theo host (storefront, back-office) và path (`/api/v1/webhooks/*` → api). ALB nội bộ không có địa chỉ public |
+| Load balancer | **ALB public** sau CloudFront; **ALB nội bộ** cho Next.js gọi Django | ALB public chỉ nhận từ dải IP của CloudFront (security group dùng managed prefix list), chia theo host (storefront, back-office) và path (`/api/v1/webhooks/*` → api). ALB nội bộ không có địa chỉ public, dùng HTTP và security group chỉ nhận từ task Next.js ([10-nfr.md](./10-nfr.md) mục 3) |
 | Database | **RDS for PostgreSQL 18**, Multi-AZ | Backup tự động 7 ngày, PITR; bật `unaccent`, `pg_trgm`, `btree_gist` **[Cần xác minh RDS đã hỗ trợ bản 18]**. Celery Beat đọc lịch job từ đây (`DatabaseScheduler`) |
-| Redis | **ElastiCache for Valkey** | Broker Celery, cache, throttle, cache `token_version`. `maxmemory-policy noeviction`, mọi key cache có TTL. `Idempotency-Key` **không** nằm ở Redis mà ở PostgreSQL. Chọn Valkey thay vì Redis OSS vì ElastiCache for Redis OSS dừng ở 7.1, bản mới chỉ có ở Valkey, và giá rẻ hơn. Local chạy image `valkey/valkey` cùng major version **[Cần xác minh phiên bản ElastiCache hiện có]** |
+| Redis | **ElastiCache for Redis OSS** | Broker Celery, cache, throttle, cache `token_version`. `maxmemory-policy noeviction`, mọi key cache có TTL. `Idempotency-Key` **không** nằm ở Redis mà ở PostgreSQL. Dùng Redis 7.2 ở local để khớp **[Cần xác minh phiên bản ElastiCache hiện có]**. Có thể đổi sang ElastiCache Valkey mà không phải sửa code |
 | Ảnh | **S3** + **CloudFront** | `django-storages` S3; ảnh public qua CloudFront `/media/*` |
 | Email | **Amazon SES** | Xác minh domain, SPF/DKIM/DMARC |
-| Bí mật | **Secrets Manager** | Khoá JWT, mật khẩu DB, secret VNPay/MoMo/GHN, `BFF_SHARED_SECRET`. Mỗi task (api, worker, beat, relay, storefront, back-office) chỉ nhận secret nó cần |
+| Bí mật | **Secrets Manager** | Khoá JWT, khoá mã hoá RefreshReplay riêng (32 byte + key ID), mật khẩu DB, secret VNPay/MoMo/GHN, `BFF_SHARED_SECRET`. Mỗi task (api, worker, beat, relay, storefront, back-office) chỉ nhận secret nó cần |
 | Log | **CloudWatch Logs** (log JSON từ structlog) | Giữ 30 ngày **[Giả định]** |
 | Lỗi, hiệu năng | **Sentry** | |
 | Bảo vệ | **WAF** trên CloudFront | Chặn bot, rate limit thô. Host back-office chỉ cho phép IP văn phòng hoặc VPN ([ADR 0004](../adr/0004-custom-nextjs-admin.md)). Webhook đi qua allow-list IP nếu nhà cung cấp công bố |
 | IP ra ngoài cố định | **NAT Gateway** có Elastic IP | Một số cổng thanh toán yêu cầu khai báo IP server **[Cần xác minh]** |
 
+STOREFRONT_ORIGIN production là origin HTTPS cấu hình cố định của storefront, không lấy từ request. Khoá RefreshReplay được cấp qua Secrets Manager; khi xoay giữ key cũ qua cửa sổ 10 giây và thời gian rolling deploy, mọi replica đọc cùng key ring. JWT signing key không dùng làm key mã hoá replay.
+
 ## 3. Môi trường
 
 | Môi trường | Mục đích | Adapter |
 |---|---|---|
-| `staging` | Nghiệm thu, dùng sandbox VNPay/MoMo/GHN; có đủ storefront và back-office Next.js | Sandbox |
+| `staging` | Nghiệm thu, dùng sandbox VNPay/MoMo/GHN; có đủ storefront và back-office Next.js | Sandbox; Fake chỉ bật tạm khi test tải ([06](./06-integrations.md) mục 1) |
 | `production` | Chạy thật | Thật |
 
 ## 4. Triển khai
