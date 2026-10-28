@@ -54,7 +54,7 @@ stateDiagram-v2
 |---|---|---|---|---|---|
 | T1 | — | `PENDING_PAYMENT` | Người mua đặt đơn online | Đủ hàng (BR-INV-06); tổng tiền khớp bước tính thử (BR-ORD-07) | Tạo Giữ hàng 15 phút; tính lượt Voucher. **Không** gửi email |
 | T2 | — | `PLACED` | Người mua đặt đơn COD | Đủ hàng; tổng tiền khớp bước tính thử (BR-ORD-07); tổng tiền ≤ hạn mức COD (BR-PAY-06) | Trừ Tồn kho, ghi Hàng chờ xuất; tính lượt Voucher; tạo khoản thu COD chờ thu; email "Đặt đơn thành công" |
-| T3 | `PENDING_PAYMENT` | `PLACED` | Hệ thống, khi nhận IPN hoặc Đối soát thành công | Số tiền khớp (BR-PAY-04); Giữ hàng còn hiệu lực. Link thanh toán hết hạn sau 10 phút, sớm hơn Giữ hàng 5 phút (BR-INV-05) | Chuyển Giữ hàng thành trừ Tồn kho và Hàng chờ xuất; email "Thanh toán thành công" |
+| T3 | `PENDING_PAYMENT` | `PLACED` | Hệ thống, khi nhận IPN hoặc Đối soát thành công | Số tiền khớp (BR-PAY-04); Giữ hàng còn hiệu lực, hoặc đã quá hạn nhưng Số lượng bán được vẫn đủ để giữ lại (mục 4.1). Link thanh toán hết hạn sau 10 phút, sớm hơn Giữ hàng 5 phút (BR-INV-05) | Chuyển Giữ hàng thành trừ Tồn kho và Hàng chờ xuất; email "Thanh toán thành công" |
 | T4 | `PENDING_PAYMENT` | `CANCELLED` | Hệ thống, khi hết 15 phút | Đơn vẫn ở `PENDING_PAYMENT` lúc job chạy. Tiền đã về nhưng chưa kịp xử lý T3 không chặn T4 (mục 4.1) | Giải phóng Giữ hàng; trả lượt Voucher. **Không** gửi email (BR-NTF-01) |
 | T5 | `PENDING_PAYMENT` | `CANCELLED` | Người mua | — | Như T4 |
 | T6 | `PLACED` | `CONFIRMED` | Staff | — | — |
@@ -75,9 +75,9 @@ Mọi chuyển trạng thái không có trong bảng đều bị **từ chối**
 
 Link thanh toán hết hạn sau 10 phút, còn Giữ hàng hết hạn sau 15 phút, nên thông báo thanh toán đến muộn vài phút vẫn kịp T3. Tiền vẫn có thể về cho một đơn không còn ở `PENDING_PAYMENT` trong hai trường hợp:
 
-- **Đơn đã bị huỷ**: thông báo thanh toán tới quá muộn, sau khi hệ thống đã huỷ đơn (T4), hoặc Người mua đã tự huỷ (T5) trong lúc đang trả tiền. Kể cả khi tiền về trước phút 15, nếu hệ thống chưa kịp xử lý T3 mà job huỷ đơn đã chạy thì đơn vẫn bị huỷ và tiền được hoàn.
+- **Đơn đã bị huỷ**: thông báo thanh toán tới quá muộn, sau khi hệ thống đã huỷ đơn (T4), hoặc Người mua đã tự huỷ (T5) trong lúc đang trả tiền. Kể cả khi tiền về trước phút 15, nếu hệ thống chưa kịp xử lý T3 mà job huỷ đơn đã chạy thì đơn vẫn bị huỷ và tiền được hoàn. Cửa sổ này chỉ vài giây: khi hệ thống xử lý thông báo bị dồn ứ, job huỷ đơn tạm dừng cho tới khi xử lý kịp.
 - **Đơn đã được thanh toán**: Người mua mở hai tab và trả tiền ở cả hai lần thử; lần thứ hai tới khi đơn đã `PLACED`.
-- **Đơn hết hạn nhưng chưa bị huỷ**: tiền về sau phút thứ 15 khi job huỷ đơn chưa kịp chạy. Hệ thống chạy T4 trước rồi xử lý như đơn đã huỷ.
+- **Đơn hết hạn nhưng chưa bị huỷ**: tiền về sau phút thứ 15 khi job huỷ đơn chưa kịp chạy. Hệ thống thử giữ lại hàng: còn đủ Số lượng bán được thì đơn vẫn vào `PLACED` (T3); không đủ thì chạy T4 rồi xử lý như đơn đã huỷ.
 
 Cách xử lý chung (BR-PAY-05):
 

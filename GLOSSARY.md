@@ -31,7 +31,7 @@ Số lượng của một Biến thể trong một Kho chưa bán cho Đơn hàn
 _Avoid_: Inventory count, số lượng, tồn thực tế
 
 **Số lượng bán được (Available Quantity)**:
-Phần Tồn kho mà Người mua còn mua được, bằng Tồn kho trừ các Giữ hàng còn hiệu lực. Không bao giờ âm.
+Phần Tồn kho mà Người mua còn mua được, bằng Tồn kho trừ các Giữ hàng chưa được giải phóng và chưa quá hạn. Giữ hàng đã quá hạn không còn được trừ khi bán hàng, dù hệ thống chưa kịp giải phóng. Không bao giờ âm.
 _Avoid_: Sellable stock, tồn khả dụng
 
 **Giữ hàng (Stock Reservation)**:

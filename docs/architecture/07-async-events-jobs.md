@@ -89,7 +89,7 @@ Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `ev
 | `ordering.unexpected-payment-received` v1 | ordering | `order_code`, `amount` | Phát cùng lúc gắn cờ `unexpected_payment` (BR-PAY-05). notifications: email báo tiền sẽ được hoàn; với đơn đã huỷ thì báo thêm đơn đã hết hạn ([05](../business/05-order-lifecycle.md) mục 4.1) |
 | `ordering.order-shipped` v1 | ordering | `order_code`, `tracking_code` | notifications: email "Đang giao" |
 | `ordering.order-delivered` v1 | ordering | `order_code` | notifications: email "Đã giao" |
-| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | Chỉ phát cho Thanh toán online. ordering: T3, lưu payment_id dưới khoá Order. Đơn còn `PENDING_PAYMENT` nhưng đã quá `expires_at` (job chưa kịp huỷ): chạy T4 trước rồi xử lý như đơn đã huỷ. Cùng payment_id đã dùng cho đơn thì bỏ qua; khoản trả thêm hoặc tiền tới sau huỷ: request_refund với payment_id từ sự kiện và request_key ổn định, gắn cờ unexpected_payment và phát ordering.unexpected-payment-received (BR-PAY-05) |
+| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | Chỉ phát cho Thanh toán online. ordering: T3, lưu payment_id dưới khoá Order. Đơn còn `PENDING_PAYMENT` nhưng đã quá `expires_at` (job chưa kịp huỷ): thử giữ lại hàng nếu Số lượng bán được còn đủ; không đủ thì chạy T4 rồi xử lý như đơn đã huỷ. Cùng payment_id đã dùng cho đơn thì bỏ qua; khoản trả thêm hoặc tiền tới sau huỷ: request_refund với payment_id từ sự kiện và request_key ổn định, gắn cờ unexpected_payment và phát ordering.unexpected-payment-received (BR-PAY-05) |
 | `payments.payment-failed` v1 | payments | `reference`, `payment_id`, `reason`, `amount_received` | ordering: ghi nhận, cho phép thử lại; `reason = amount_mismatch` thì request_refund với payment_id từ sự kiện, amount_received và key ổn định và gắn cờ `payment_amount_mismatch` (BR-PAY-04) |
 | `payments.refund-recorded` v1 | payments | `reference`, `refund_id`, `amount` | notifications: email "Đã hoàn tiền"; ordering: chuyển Đổi trả có `refund_id` khớp sang `refunded`, không khớp thì bỏ qua |
 | `shipping.shipment-created` v1 | shipping | `reference`, `provider_order_code` | ordering: T10, gọi `inventory.contracts.dispatch_stock` để xoá Hàng chờ xuất. Nếu đơn đã `CANCELLED`: gọi `shipping.contracts.request_shipment_cancellation` và gắn cờ `shipment_after_cancel` |
@@ -119,7 +119,7 @@ Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không g
 
 | Job | Tần suất | Module | Liên quan |
 |---|---|---|---|
-| `ordering.cancel_expired_pending_orders` | Mỗi phút | ordering | T4 |
+| `ordering.cancel_expired_pending_orders` | Mỗi phút | ordering | T4. Bỏ qua lượt chạy (log `WARNING` `cancel_skipped_delivery_backlog`) khi `shared.events.delivery_lag()` quá **60 giây** **[Giả định]**. Lý do: sau khi Redis, relay hoặc worker lỗi, `payments.payment-succeeded` còn chờ giao; nếu T4 chạy trước thì đơn đã trả đúng hạn bị huỷ và phải Hoàn tiền ([01](./01-system-context.md) mục 4) |
 | `payments.reconcile_pending_payments` | Mỗi 5 phút | payments | T3, ADR 0005; Payment quá hạn link mà chưa thanh toán thì chuyển `expired` |
 | `shipping.reconcile_shipments` | Mỗi 15 phút | shipping | T11, T12; query mã shop cho requested/creation_unknown hết lease, không retry create mù; thử huỷ lại cancel_requested quá 15 phút |
 | `ordering.complete_delivered_orders` | Mỗi giờ | ordering | T13 |
