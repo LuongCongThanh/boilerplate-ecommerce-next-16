@@ -68,6 +68,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `coverage` | 7.17.0 | Đo độ phủ test |
 | `pytest-cov` | — | Đo coverage khi chạy song song bằng `pytest-xdist` |
 | `respx` | — | Giả lập API bên ngoài khi test `httpx` |
+| `django-test-migrations` | — | Test data migration (`RunPython`) trên dữ liệu mẫu ([12-testing-strategy.md](./12-testing-strategy.md) mục 6) |
 | `time-machine` | — | Cố định thời gian khi test (Giữ hàng 15 phút, Hoàn tất sau 7 ngày) |
 | `django-zeal` | 2.3.0 | Phát hiện lỗi N+1 query khi chạy test |
 | `debugpy` | — | Debug từ IDE vào container |

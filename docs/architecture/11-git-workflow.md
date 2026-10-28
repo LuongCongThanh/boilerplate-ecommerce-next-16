@@ -1,6 +1,6 @@
 # 11. Quy ước Git
 
-> Trạng thái: **Bản nháp chờ review**. Sau khi duyệt, sẽ tạo `.gitignore`, `.github/pull_request_template.md` và `CONTRIBUTING.md` theo tài liệu này.
+> Trạng thái: **Đang áp dụng**. `main`, `dev`, ruleset của `main`, `.gitignore`, `.gitattributes`, `.editorconfig`, PR template, `CONTRIBUTING.md` và cấu hình IDE dùng chung đã có trong repo.
 > Ngôn ngữ: tên nhánh, commit message, tiêu đề PR viết **tiếng Anh**; mô tả PR có thể viết tiếng Việt.
 
 ## 1. Mô hình nhánh
@@ -274,11 +274,3 @@ Hook `pre-commit` (`.pre-commit-config.yaml`) chặn commit nhầm bằng:
 - `check-added-large-files`: file lớn.
 
 Repo là public, nên dữ liệu mẫu trong test và fixture phải là giá trị giả rõ ràng (ví dụ `test-hash-secret`), không bao giờ là secret hay dữ liệu khách hàng thật. Không thêm allowlist rộng cho `gitleaks`; nếu bị báo nhầm thì đổi giá trị mẫu.
-
-## 9. Việc cần làm một lần khi áp dụng
-
-1. Gộp nội dung `master` vào `main`, đặt `main` làm nhánh mặc định trên GitHub, rồi xoá `master` (**sẽ hỏi lại trước khi thao tác trên remote**).
-2. Tạo `dev` từ `main`.
-3. Xử lý hai nhánh cũ `feature/create-header` và `feature/setup-method-api-and-error` (thuộc Frontend cũ): giữ lại để tham khảo hay xoá.
-4. Cấu hình bảo vệ nhánh như mục 6.
-5. Tạo `.gitignore`, `.gitattributes`, `.editorconfig`, PR template, `CONTRIBUTING.md`, cấu hình IDE dùng chung (`.vscode/launch.json`, `.vscode/extensions.json`, `.run/*.run.xml`), và thêm hook `commitizen` vào `.pre-commit-config.yaml`.

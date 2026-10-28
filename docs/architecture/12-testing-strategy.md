@@ -37,7 +37,7 @@ Ngoài pytest, CI còn có các **cổng kiểm tra tĩnh** (mục 8).
 - Mốc thời gian (Giữ hàng 15 phút, Hoàn tất sau 7 ngày, Đổi trả trong 7 ngày) dùng `time-machine`, test cả hai phía của mốc.
 
 ```python
-@pytest.mark.br("BR-INV-03")
+@pytest.mark.br("BR-INV-02")
 def test_reserve_stock_fails_when_stock_is_insufficient(stock_item_factory):
     ...
 ```
@@ -59,18 +59,25 @@ Ngoài quy tắc chung, bắt buộc có các test service sau, vì đây là nh
 | Doanh thu khi Người mua trả tiền hai lần (BR-REV-01) | Hoàn tiền theo BR-PAY-05 không bị trừ; Doanh thu của đơn bằng Tổng tiền đơn |
 | Đặt đơn vãng lai bằng email của Tài khoản đã xác thực (BR-ORD-08) | Đơn có `customer_id` ngay khi tạo |
 | Hạ Giá bán xuống ≤ Giá khuyến mãi đang hoặc sắp hiệu lực (BR-PRC-05) | Ném `LIST_PRICE_BELOW_SALE_PRICE`; Giá bán không đổi |
+| Số lượng bán được khi có Giữ hàng đã quá hạn mà chưa giải phóng (BR-INV-02) | Phần Giữ hàng quá hạn không bị trừ; người khác đặt được phần đó |
+| T3 tới muộn: Giữ hàng quá hạn, đơn vẫn `PENDING_PAYMENT`, Số lượng bán được còn đủ | Đơn vào `PLACED`; Tồn kho giảm và Hàng chờ xuất tăng đúng số lượng |
+| T3 tới muộn: Giữ hàng quá hạn, Số lượng bán được không đủ | Ném `ReservationExpired`, xử lý như BR-PAY-05: tạo Hoàn tiền, gắn cờ `unexpected_payment`, ghi `ordering.unexpected-payment-received`; đơn giữ `PENDING_PAYMENT` để T4 huỷ |
+| Job T4 khi outbox còn sự kiện chưa dispatch quá 60 giây | Không huỷ đơn nào, log `cancel_skipped_outbox_backlog`; outbox hết tồn đọng thì lượt sau huỷ bình thường |
+| Bắt đầu Thanh toán online ở phút 7:59 và phút 8:00 kể từ khi đặt đơn (BR-INV-05) | 7:59 tạo được Thanh toán; 8:00 ném `PaymentWindowClosed` (`PAYMENT_WINDOW_CLOSED`) |
+| `raise_flag` khi đơn đã có cờ cùng `kind` đang mở | Không tạo cờ thứ hai, `note` được nối thêm |
 
 ### 2.2. Concurrency
 
 Test dùng `@pytest.mark.django_db(transaction=True)` và `@pytest.mark.concurrency`. Mỗi test chạy N thread, mỗi thread mở kết nối DB riêng, các thread xuất phát cùng lúc nhờ `threading.Barrier`, rồi kiểm tra bất biến sau khi tất cả kết thúc. Test chạy trong **mọi PR**, vì mỗi worker của `pytest-xdist` đã có DB riêng.
 
-Bắt buộc có 3 test:
+Bắt buộc có 4 test:
 
 | Kịch bản | Bất biến |
 |---|---|
 | N khách cùng Giữ hàng hoặc trừ Tồn kho cho K cái cuối cùng của một Biến thể (N > K) | Đúng K lần thành công, N − K lần ném `OUT_OF_STOCK`, Tồn kho không âm |
 | N khách cùng dùng một Voucher còn K lượt | Đúng K lượt được dùng, không vượt `usage_limit` |
 | Hai Đơn hàng cùng chứa 2 Biến thể nhưng thứ tự Dòng đơn hàng ngược nhau, cùng dùng một Voucher | Cả hai hoàn tất, không deadlock (khoá dòng Tồn kho theo thứ tự `variant_id`, rồi dòng Biến thể nếu trạng thái còn hàng đổi, rồi mới khoá Voucher) |
+| T3 tới muộn của đơn có Giữ hàng vừa quá hạn và checkout của người khác cùng tranh phần hàng đó | Đúng một bên được hàng, Tồn kho không âm, bên còn lại nhận `OUT_OF_STOCK` hoặc đi nhánh Hoàn tiền |
 
 ### 2.3. Handler và outbox
 
@@ -94,6 +101,7 @@ Bắt buộc có các test handler sau:
 | `shipping.shipment-delivered` tới khi đơn đã `RETURNED_TO_SENDER` | Ném `InvalidTransition`; đơn giữ nguyên |
 | `identity.email-verified` | Chỉ gắn các đơn có `contact_email` khớp (không phân biệt hoa thường) và chưa có `customer_id`; đơn đã thuộc Tài khoản khác không bị đổi |
 | Đặt đơn online (T1) rồi IPN thành công (T3) | T1 không ghi sự kiện nào vào outbox; T3 ghi đúng một `ordering.order-placed` |
+| `shipping.shipment-exception` | Gắn cờ `shipment_exception`; đơn giữ nguyên trạng thái |
 
 **Payload sự kiện không chứa secret hay PII** ([07-async-events-jobs.md](./07-async-events-jobs.md)): `backend/tests/test_event_payloads.py` duyệt mọi class `DomainEvent` đã đăng ký và fail nếu có field tên thuộc danh sách cấm (`email`, `phone`, `address`, `name`, `token`, `password`, `*_url`). Test này chỉ bắt lỗi theo tên field; reviewer vẫn phải đọc payload của mọi sự kiện mới. Test đặt ở `backend/tests/` (không thuộc `root_packages`) vì cần nhìn thấy sự kiện của mọi module.
 
@@ -102,7 +110,7 @@ Bắt buộc có các test handler sau:
 - **Phân quyền**: mỗi endpoint thử với Guest, Customer, Staff, Admin (theo cột quyền trong [04-api-contract.md](./04-api-contract.md)); Khách hàng này không xem được Đơn hàng của Khách hàng khác.
 - **`X-Lookup-Token`**: `GET orders/{code}`, `POST orders/{code}/payments`, `POST orders/{code}/cancel` của Khách vãng lai bị từ chối khi thiếu token, token hết hạn hoặc token của đơn khác. Checkout của Khách vãng lai trả về `lookup_token` dùng được ngay cho ba endpoint này.
 - **Lỗi**: đúng mã HTTP và đúng định dạng lỗi chuẩn (400, 401, 403, 404, 409, 429), gồm `409 PRICE_CHANGED` (có bảng tính mới trong `details`) và `409 SHIPMENT_IN_PROGRESS`.
-- **`Idempotency-Key`**: thiếu key; gửi lại cùng key thì nhận lại đúng kết quả cũ; cùng key nhưng body khác thì ra `IDEMPOTENCY_CONFLICT`. Key lưu ở `shared_idempotency_key` (PostgreSQL), nên vẫn đúng khi Redis không chạy.
+- **`Idempotency-Key`** cho `checkout`, `orders/{code}/payments`, `stock/inbound`, `stock/adjust`, `stock/count`: thiếu key; gửi lại cùng key thì nhận lại đúng kết quả cũ; cùng key nhưng body khác thì ra `IDEMPOTENCY_CONFLICT`. Key lưu ở `shared_idempotency_key` (PostgreSQL), nên vẫn đúng khi Redis không chạy.
 - **Throttle**: endpoint có throttle chặt (ví dụ `orders/lookup`) trả `429` khi vượt ngưỡng. Throttle theo `X-Client-IP` chỉ khi `X-BFF-Secret` đúng; thiếu hoặc sai secret thì bỏ qua `X-Client-IP` và throttle theo IP của kết nối ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)).
 - **Redis lỗi**: cache và throttle fail-open, request vẫn được xử lý ([10-nfr.md](./10-nfr.md) mục 2).
 - **N+1 query**: `django-zeal` bật cho toàn bộ test; test fail nếu có N+1.
@@ -111,9 +119,11 @@ Bắt buộc có các test handler sau:
 
 Theo [05-auth-security.md](./05-auth-security.md) mục 9 và [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md): sai thuật toán, `alg: none`, sai `aud`, hết hạn, sai `kid`, dùng lại refresh token (phải thu hồi cả chuỗi), đổi `token_version`, thu hồi qua `jti`, token storefront không dùng được cho back-office.
 
-Thêm hai kịch bản về Tài khoản:
+Thêm các kịch bản sau:
 
 - **Đăng nhập Google vào Tài khoản chưa xác thực email** (chiếm tài khoản trước): Tài khoản được đánh dấu đã xác thực, mật khẩu cũ không còn đăng nhập được, mọi refresh token cũ bị thu hồi và access token cũ sai `tv`.
+- **Refresh đồng thời**: refresh token đã dùng bị dùng lại trong 10 giây thì nhận cặp mới cùng family, không thu hồi gì; quá 10 giây thì cả family bị thu hồi.
+- **`lookup_token`**: token có `aud` khác `order_lookup` (ví dụ access token `store`), token của đơn khác và token hết hạn đều bị từ chối.
 - **Một email một Tài khoản**: đăng ký Khách hàng bằng email của một Tài khoản Staff bị từ chối; đăng nhập storefront bằng Tài khoản Staff (mật khẩu hoặc Google) bị từ chối với lỗi chung.
 
 ### 2.6. Adapter nhà cung cấp
