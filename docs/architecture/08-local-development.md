@@ -252,7 +252,7 @@ x-app: &app
   environment:
     # PostgreSQL cài trên máy (mục 2.2); trong container, localhost là chính container
     DATABASE_URL: postgres://fashion:fashion@host.docker.internal:${PG_PORT:-5432}/fashion
-  extra_hosts: ["host.docker.internal:host-gateway"]   # cần trên Linux; Docker Desktop đã có sẵn
+  extra_hosts: ["host.docker.internal:host-gateway"]   # Docker Desktop đã có sẵn; Docker Engine trên Linux không được hỗ trợ (PostgreSQL chỉ nghe localhost)
   volumes: [".:/app"]
   depends_on:
     redis: {condition: service_started}

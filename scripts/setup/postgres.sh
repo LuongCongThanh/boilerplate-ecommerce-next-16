@@ -76,7 +76,8 @@ port_in_use() {
   if command -v ss >/dev/null 2>&1; then
     ss -ltnH "sport = :$1" 2>/dev/null | grep -q .
   else
-    lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+    # macOS: netstat thấy socket của mọi user, lsof không sudo thì chỉ thấy của user hiện tại.
+    netstat -an -p tcp 2>/dev/null | awk -v p=".$1" '$6 == "LISTEN" && substr($4, length($4) - length(p) + 1) == p' | grep -q .
   fi
 }
 
@@ -126,6 +127,12 @@ debian_install() {
   fi
   PG_PORT="$(pg_lsclusters -h | awk -v v="$PG_MAJOR" '$1 == v && $2 == "main" {print $3}')"
   if ! pg_lsclusters -h | awk -v v="$PG_MAJOR" '$1 == v && $2 == "main" {print $4}' | grep -q online; then
+    # Cluster chưa chạy: nếu cổng của nó đã bị tiến trình khác giữ thì chuyển sang cổng trống.
+    if port_in_use "$PG_PORT"; then
+      PG_PORT="$(free_port_from "$PG_PORT")"
+      info "Cổng cũ đang bận, đặt cluster $PG_MAJOR/main chạy ở cổng $PG_PORT"
+      sudo pg_conftool "$PG_MAJOR" main set port "$PG_PORT"
+    fi
     sudo pg_ctlcluster "$PG_MAJOR" main start
   fi
 }
@@ -203,6 +210,9 @@ END
 SQL
   if [ "$(admin_psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'")" != 1 ]; then
     admin_psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER"
+  else
+    # Database có sẵn (vd. tạo tay bằng user postgres): migration cần chủ database để tạo extension.
+    admin_psql -c "ALTER DATABASE $DB_NAME OWNER TO $DB_USER"
   fi
 }
 
