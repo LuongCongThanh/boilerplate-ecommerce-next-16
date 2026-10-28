@@ -155,6 +155,16 @@ Không dùng **rebase merge** trên GitHub.
   - Checklist: có test; có migration (nếu đổi model); đã chạy `make lint` và `make test`; đã cập nhật tài liệu, GLOSSARY hoặc ADR nếu cần; không lộ secret.
 - PR nên nhỏ: **dưới khoảng 400 dòng thay đổi**, không tính migration và file sinh tự động.
 
+Các mục ở sidebar PR trên GitHub:
+
+| Mục | Quy ước |
+|---|---|
+| Reviewers | Không gắn khi mới có một người làm. Tự review bằng `/code-review` trước khi merge. Có người thứ hai thì gắn họ và nâng số người duyệt lên 1 (mục 6) |
+| Assignees | Luôn gán người mở PR: `gh pr create --assignee @me` |
+| Labels | Không dùng. Loại PR nằm ở tiêu đề, trạng thái ticket nằm ở dòng `Status:` trong `.scratch/` |
+| Projects, Milestone | Không dùng. Phiên bản theo tag và `CHANGELOG.md` (mục 7) |
+| Development | Để trống vì ticket không nằm trong GitHub Issues. Liên kết ticket bằng đường dẫn `.scratch/` trong mô tả PR và footer `Refs:` của commit |
+
 ### 4.3. PR release `dev` → `main`
 
 - Tiêu đề: `chore(release): v0.2.0`. Không dùng `release: …` vì `release` không phải `type` hợp lệ (mục 3.1), job `pr-title` sẽ chặn.
@@ -231,6 +241,15 @@ git merge --no-ff main -m "chore: back-merge v0.2.1 into dev"
 git push
 ```
 
+### 5.5. PR xếp chồng
+
+Khi một PR mới cần dựa trên một PR khác chưa merge (ví dụ PR B sửa tiếp các file của PR A):
+
+1. Tạo nhánh B từ nhánh A, mở PR B với base là nhánh A, để reviewer chỉ thấy phần của B. Ghi "Merge sau #<A>" trong mô tả.
+2. Sau khi PR A được squash merge vào `dev`, chạy `git rebase --onto origin/dev <nhánh A> <nhánh B>`, `push --force-with-lease`, rồi đổi base của PR B sang `dev`.
+
+Phải dùng `--onto` vì squash merge tạo trên `dev` một commit mới, nên các commit cũ của nhánh A không có trong lịch sử của `dev`.
+
 ## 6. Bảo vệ nhánh (GitHub)
 
 | Thiết lập | `main` | `dev` |
@@ -239,11 +258,11 @@ git push
 | Cần ít nhất 1 người duyệt | ⏳ Tạm để 0 vì mới có một người làm; nâng lên 1 khi có người thứ hai | — |
 | Bắt buộc CI xanh trước khi merge (các check ở mục 3.5) | ✅ | — (CI vẫn chạy sau khi push) |
 | Nhánh phải cập nhật với nhánh đích trước khi merge | ✅ | — |
-| Chỉ cho phép merge commit (cho PR release) và squash (cho hotfix) | ✅ | Chỉ squash (cho PR thường) |
+| Chỉ cho phép merge commit (cho PR release) và squash (cho hotfix) | ✅ | — (quy ước: chỉ squash cho PR thường, mục 4.1; ruleset không ép để giữ quyền push gấp) |
 | Cấm force-push | ✅ | ✅ |
 | Cấm xoá nhánh | ✅ | ✅ |
 
-`main` được bảo vệ bằng ruleset tên `main` (Settings → Rules → Rulesets), không ai được bypass. `dev` **chưa** có ruleset.
+`main` được bảo vệ bằng ruleset tên `main` (Settings → Rules → Rulesets), không ai được bypass. `dev` có ruleset tên `dev` chỉ gồm cấm force-push và cấm xoá nhánh; push thẳng vẫn được phép (mục 5.2).
 
 ## 7. Phiên bản và CHANGELOG
 
@@ -275,7 +294,9 @@ Hook `pre-commit` (`.pre-commit-config.yaml`) chặn commit nhầm bằng:
 
 Repo là public, nên dữ liệu mẫu trong test và fixture phải là giá trị giả rõ ràng (ví dụ `test-hash-secret`), không bao giờ là secret hay dữ liệu khách hàng thật. Không thêm allowlist rộng cho `gitleaks`; nếu bị báo nhầm thì đổi giá trị mẫu.
 
-## 9. Việc cần làm một lần khi áp dụng
+## 9. Việc làm một lần khi áp dụng (đã xong)
+
+Các việc dưới đây đã làm xong: không còn nhánh `master` và hai nhánh Frontend cũ, `main` có ruleset, các file cấu hình đã có trong repo. Giữ lại để biết repo đã được thiết lập thế nào.
 
 1. Gộp nội dung `master` vào `main`, đặt `main` làm nhánh mặc định trên GitHub, rồi xoá `master` (**sẽ hỏi lại trước khi thao tác trên remote**).
 2. Tạo `dev` từ `main`.

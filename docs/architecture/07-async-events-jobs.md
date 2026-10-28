@@ -46,7 +46,7 @@ sequenceDiagram
 - `ProcessedEvent` và trạng thái delivery `completed`/`rejected` được ghi cùng transaction với kết quả xử lý. Retry dùng `attempts`, `next_attempt_at` trong PostgreSQL; không dùng bộ đếm Celery làm nguồn quyết định. `last_dispatched_at` chỉ phục vụ quan sát. Broker không hoạt động thì relay giữ công việc trong DB và thử tiếp, không tính là handler thất bại.
 - Chỉ purge sự kiện quá 90 ngày đã có `deliveries_created_at` và mọi delivery đã `completed` hoặc `rejected`, cùng delivery, ProcessedEvent và FailedEvent liên quan; giữ cả sự kiện và delivery `pending`/`failed` cho tới khi được xử lý. Cảnh báo công việc tồn đọng; không âm thầm xoá khi hết thời gian lưu thông thường.
 - API công khai `shared.events.get_delivery_outcomes(event_id, handler_names)` trả trạng thái từng handler được yêu cầu: missing/pending/completed/rejected/failed. Không suy thành công từ danh sách rỗng. Ẩn danh dùng required_handlers đã chốt trên ErasureRequest; replay không tự mở rộng yêu cầu đã hoàn tất.
-- `replay_events` bảo đảm delivery tồn tại cho handler được chọn, có thể thêm handler mới vào sự kiện cũ; không xoá dấu đã xử lý hay chạy lại cặp đã hoàn tất. Cặp `failed` cần lệnh `retry_failed_events` để mở lại có chủ đích.
+- `replay_events` bảo đảm delivery tồn tại cho handler được chọn, có thể thêm handler mới vào sự kiện cũ; không xoá dấu đã xử lý hay chạy lại cặp đã hoàn tất. Cặp `failed` cần lệnh `retry_failed_events` để mở lại có chủ đích. Thêm handler mới cho một loại sự kiện đã có: sau deploy chạy `replay_events --type <sự kiện> --since <lúc bắt đầu deploy>`, vì trong lúc deploy relay bản cũ có thể đã lập danh sách delivery mà không biết handler mới.
 
 ### 1.2. Không bảo đảm
 
@@ -74,6 +74,8 @@ Handler báo kết quả cho consumer bằng cách kết thúc bình thường h
 
 Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `events.py` của module phát.
 
+**Nâng version.** Thêm field tuỳ chọn thì giữ version. Đổi tên, bỏ field hoặc đổi nghĩa một field thì tạo class `V2`, và publisher chỉ phát V2. Handler giữ cả `@handles(..., version=1)` và `version=2` cho tới khi outbox không còn sự kiện V1 (sau 90 ngày), rồi mới bỏ handler V1.
+
 **Payload không chứa secret hay PII.** Payload chỉ mang ID, Mã đơn, số tiền và mã trạng thái. Handler cần dữ liệu nhạy cảm thì hỏi `contracts` của module sở hữu ngay lúc xử lý, ví dụ `identity.contracts.issue_password_reset_link(account_id)`. Lý do: outbox giữ sự kiện 90 ngày, có thể bị phát lại, và nằm trong mọi bản backup; token hay số điện thoại để ở đây sẽ sống lâu hơn và lộ rộng hơn bản gốc.
 
 | Sự kiện | Phát bởi | Dữ liệu chính | Handler |
@@ -87,13 +89,14 @@ Tên theo dạng `<module>.<event>`, có `schema_version`. Class nằm trong `ev
 | `ordering.unexpected-payment-received` v1 | ordering | `order_code`, `amount` | Phát cùng lúc gắn cờ `unexpected_payment` (BR-PAY-05). notifications: email báo tiền sẽ được hoàn; với đơn đã huỷ thì báo thêm đơn đã hết hạn ([05](../business/05-order-lifecycle.md) mục 4.1) |
 | `ordering.order-shipped` v1 | ordering | `order_code`, `tracking_code` | notifications: email "Đang giao" |
 | `ordering.order-delivered` v1 | ordering | `order_code` | notifications: email "Đã giao" |
-| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | Chỉ phát cho Thanh toán online. ordering: T3, lưu payment_id dưới khoá Order. Cùng payment_id đã dùng cho đơn thì bỏ qua; khoản trả thêm hoặc tiền tới sau huỷ: request_refund với payment_id từ sự kiện và request_key ổn định, gắn cờ unexpected_payment và phát ordering.unexpected-payment-received (BR-PAY-05) |
+| `payments.payment-succeeded` v1 | payments | `reference`, `payment_id`, `amount`, `gateway` | Chỉ phát cho Thanh toán online. ordering: T3, lưu payment_id dưới khoá Order. Đơn còn `PENDING_PAYMENT` nhưng đã quá `expires_at` (job chưa kịp huỷ): chạy T4 trước rồi xử lý như đơn đã huỷ. Cùng payment_id đã dùng cho đơn thì bỏ qua; khoản trả thêm hoặc tiền tới sau huỷ: request_refund với payment_id từ sự kiện và request_key ổn định, gắn cờ unexpected_payment và phát ordering.unexpected-payment-received (BR-PAY-05) |
 | `payments.payment-failed` v1 | payments | `reference`, `payment_id`, `reason`, `amount_received` | ordering: ghi nhận, cho phép thử lại; `reason = amount_mismatch` thì request_refund với payment_id từ sự kiện, amount_received và key ổn định và gắn cờ `payment_amount_mismatch` (BR-PAY-04) |
 | `payments.refund-recorded` v1 | payments | `reference`, `refund_id`, `amount` | notifications: email "Đã hoàn tiền"; ordering: chuyển Đổi trả có `refund_id` khớp sang `refunded`, không khớp thì bỏ qua |
 | `shipping.shipment-created` v1 | shipping | `reference`, `provider_order_code` | ordering: T10, gọi `inventory.contracts.dispatch_stock` để xoá Hàng chờ xuất. Nếu đơn đã `CANCELLED`: gọi `shipping.contracts.request_shipment_cancellation` và gắn cờ `shipment_after_cancel` |
 | `shipping.shipment-creation-failed` v1 | shipping | `reference`, `reason` | ordering: gắn cờ `shipment_failed`, đơn giữ `PACKING` |
 | `shipping.shipment-delivered` v1 | shipping | `reference`, `delivered_at` | ordering: T11 |
 | `shipping.shipment-returned` v1 | shipping | `reference` | ordering: T12 |
+| `shipping.shipment-exception` v1 | shipping | `reference`, `provider_status` | ordering: gắn cờ `shipment_exception`, đơn giữ `SHIPPING` cho tới khi Staff xử lý (T14) |
 
 T1 (đơn online vào `PENDING_PAYMENT`) không phát sự kiện nào; Người mua chỉ nhận email khi thanh toán thành công. Không còn sự kiện `ordering.order-paid`: `order-placed` của đơn online đã mang ý nghĩa này.
 
@@ -108,7 +111,7 @@ Thanh toán COD (`start_cod_payment`, `record_cod_collected`, `cancel_cod_paymen
 | `default` | Job theo lịch | Chung |
 | `events` | `dispatch_event` | Chung |
 | `emails` | Gửi email | Chung; tách riêng khi tải lớn |
-| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo và huỷ Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Chung; giới hạn số chạy đồng thời để không vượt rate limit của nhà cung cấp |
+| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo và huỷ Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Chung; giới hạn tần suất bằng `rate_limit` của từng task để không vượt rate limit của nhà cung cấp (một worker nghe cả 4 queue nên không giới hạn được theo queue) |
 
 Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không gọi `.delay()` trực tiếp ([02-backend-structure.md](./02-backend-structure.md) mục 9.1).
 
@@ -131,6 +134,8 @@ Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không g
 | `payments.recover_payment_initializations` | Mỗi phút **[Giả định]** | payments | Khôi phục prepared/unknown hết lease bằng cùng Payment và mã nhà cung cấp; không ghi đè IPN (06 mục 3.1) |
 
 Mọi job đều **idempotent** và xử lý theo lô (ví dụ 200 đơn mỗi lần) để chạy lại an toàn.
+
+Job Đối soát (`reconcile_pending_payments`, `reconcile_shipments`) chỉ quét rồi đẩy mỗi Thanh toán hoặc Vận đơn một task con lên queue `integrations`, không tự gọi nhà cung cấp trong task của job. Một lô 200 lần gọi, mỗi lần tới 13 giây (06 mục 1), sẽ vượt `task_time_limit` 120 giây.
 
 ### 3.3. Cấu hình quan trọng
 

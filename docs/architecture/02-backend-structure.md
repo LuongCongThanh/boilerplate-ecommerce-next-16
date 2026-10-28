@@ -7,8 +7,8 @@
 
 - **Một Django project**, deploy một lần, chạy thành nhiều tiến trình: API, Celery worker, Celery Beat, Outbox relay.
 - Backend dành riêng cho **Fashion Store**, theo [phạm vi nghiệp vụ](../business/01-vision-scope.md); không đặt mục tiêu xây boilerplate ecommerce tổng quát.
-- **8 Django app nghiệp vụ và một app hạ tầng** (ngoài các app Django và thư viện):
-  - `modules.identity`, `modules.catalog`, `modules.inventory`, `modules.promotions`, `modules.payments`, `modules.shipping`, `modules.ordering`, `modules.notifications`: mỗi module là một app riêng. `modules` chỉ là package nhóm.
+- **Hai Django app**:
+  - `modules`: toàn bộ nghiệp vụ, chia thành 8 module con.
   - `shared`: hạ tầng dùng chung (sự kiện, dữ liệu địa giới hành chính, các lớp API cơ sở). `shared` **không chứa nghiệp vụ** và **không bao giờ import `modules`**.
 - Cách viết code theo **HackSoft Django Styleguide**: model giữ dữ liệu và ràng buộc, `services` lo nghiệp vụ ghi, `selectors` lo truy vấn đọc, view chỉ nhận request và gọi service hoặc selector.
 
@@ -36,10 +36,10 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `djangorestframework` | 3.18.3 | REST API | Phổ biến nhất, team đã quen |
 | `drf-spectacular` | 0.30.0 | Sinh OpenAPI 3 và Swagger UI | Chuẩn de facto cho DRF; OpenAPI dùng để sinh TS client cho Frontend |
 | `django-filter` | 26.2 | Lọc danh sách (size, màu, giá, trạng thái) | Tích hợp sẵn với DRF |
-| `psycopg[binary,pool]` | — | Driver PostgreSQL | psycopg 3, wheel binary và connection pool; khớp uv sync --locked --no-build (không build C extension tại lúc cài) |
+| `psycopg[binary,pool]` | — | Driver PostgreSQL | psycopg 3, wheel binary và connection pool; khớp `uv sync --locked --no-build` (không build C extension lúc cài). Dùng connection pool có sẵn của Django 5.2 (`OPTIONS["pool"]`, `CONN_MAX_AGE = 0`) |
 | `redis` | 8.1.0 | Client Redis | Dùng cho cache, throttling, Celery |
 | `celery` | 5.6.3 | Worker chạy job | Có retry, định tuyến queue, hệ sinh thái lớn |
-| `django-celery-beat` | 2.9.0 | Lịch job lưu trong DB | Sửa lịch không cần deploy lại |
+| `django-celery-beat` | 2.9.0 | Lịch job lưu trong DB (`DatabaseScheduler`) | Beat trên ECS không cần ổ đĩa để ghi file lịch. Lịch vẫn khai báo trong code (`beat_schedule`) và được đồng bộ vào DB khi beat khởi động, nên muốn đổi lịch thì sửa code |
 | `uuid-utils` | — | Sinh UUID v7 cho khoá chính, chỉ được gọi trong `shared.models.uuid7()` | Python 3.13 chưa có `uuid.uuid7()`; bỏ khi lên Python 3.14 ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
 | `pydantic` | 2.14.1 | Định nghĩa schema sự kiện, DTO của `contracts.py` | Có type, validate, sinh JSON Schema (chuẩn bị cho Schema Registry) |
 | `pydantic-settings` | 2.16.1 | Đọc biến môi trường có kiểu | Sai cấu hình thì báo lỗi ngay khi khởi động |
@@ -72,6 +72,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `respx` | — | Giả lập API bên ngoài khi test `httpx` |
 | `time-machine` | — | Cố định thời gian khi test (Giữ hàng 15 phút, Hoàn tất sau 7 ngày) |
 | `django-zeal` | 2.3.0 | Phát hiện lỗi N+1 query khi chạy test |
+| `django-test-migrations` | — | Test data migration có `RunPython` ([12-testing-strategy.md](./12-testing-strategy.md) mục 6) |
 | `debugpy` | — | Debug từ IDE vào container |
 | `pip-audit` | 2.10.1 | Kiểm tra lỗ hổng đã công bố trong dependency (chạy trong CI) |
 | `pre-commit` | 4.7.0 | Chạy ruff, mypy, import-linter và các hook `pre-commit-hooks` (`check-yaml`, `check-toml`, `end-of-file-fixer`, `trailing-whitespace`) trước khi commit |
@@ -88,6 +89,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `django-health-check` 4.x | Yêu cầu Python 3.14 và Django 6; tự viết `/healthz`, `/readyz` |
 | MinIO | Ngừng bảo trì từ 04/2026 |
 | Kafka, Schema Registry | Chưa cần ở quy mô MVP ([ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md)) |
+| `uvicorn-worker`, chạy ASGI | Mọi view đồng bộ; chạy dưới ASGI chỉ thêm bước chuyển qua thread pool và phải tắt `CONN_MAX_AGE`. Tính lại khi cần websocket hoặc streaming |
 
 ## 4. Module và thứ tự phụ thuộc
 
@@ -108,6 +110,7 @@ graph TB
     identity[identity] --> shared
     catalog[catalog] --> shared
     inventory[inventory] --> catalog
+    inventory --> identity
     promotions[promotions] --> identity
     payments[payments] --> shared
     shipping[shipping] --> shared
@@ -142,35 +145,39 @@ backend/
 ├── uv.lock                         # khoá phiên bản chính xác của mọi package
 ├── manage.py
 ├── .env.example                    # mẫu biến môi trường (file .env thật không commit)
-├── .pre-commit-config.yaml
 ├── .python-version                 # 3.13
 ├── Dockerfile                      # 1 image dùng chung cho api, worker, beat, relay
 ├── docker-compose.yml              # api, worker, beat, relay, redis, mailpit (PostgreSQL cài trên máy, xem 08)
 ├── Makefile                        # lệnh tắt: make up, make test, make lint, make migrate…
+├── openapi.yaml                    # schema OpenAPI đã commit; CI so với bản sinh lại ([12](./12-testing-strategy.md) mục 5)
+├── CHANGELOG.md                    # sinh bằng commitizen ([11](./11-git-workflow.md) mục 7)
 ├── conftest.py                     # fixture cần Tài khoản: customer_client, staff_client, admin_client (dùng factory của identity)
 ├── scripts/
 │   └── gen_importlinter.py         # sinh các contract "forbidden" của import-linter cho từng module (mục 8)
 │
+├── scripts/
+│   └── gen_importlinter.py         # sinh các contract forbidden của import-linter (mục 8)
+│
 ├── config/                         # cấu hình project, KHÔNG chứa nghiệp vụ
 │   ├── __init__.py                 # nạp Celery app khi Django khởi động
-│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường
+│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production)
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường
 │   │   ├── local.py                # DEBUG, Django Admin read-only, FAKE_PROVIDERS_ENABLED, Mailpit
 │   │   ├── test.py                 # DB test, Celery chạy đồng bộ, hash mật khẩu nhanh, FAKE_PROVIDERS_ENABLED
 │   │   └── production.py           # bảo mật, S3, SES, Sentry, log JSON
-│   ├── urls.py                     # gốc URL: /api/v1/store, /api/v1/backoffice, /api/v1/webhooks, /api/docs, /healthz
-│   ├── celery.py                   # khởi tạo Celery, định nghĩa queue, autodiscover task của các app
-│   └── wsgi.py                     # điểm vào của gunicorn
+│   ├── urls.py                     # gốc URL: /api/v1/store, /api/v1/backoffice, /api/v1/webhooks, /api/schema, /api/docs, /healthz, /readyz; chỉ local và test: /admin, /dev/fake-gateway. Include api/<nhánh>/urls.py của từng module con
+│   ├── celery.py                   # khởi tạo Celery, định nghĩa queue; autodiscover_tasks(["shared", "shared.events", "modules.identity", …]) vì mặc định Celery chỉ tìm <app>.tasks
+│   └── wsgi.py                     # gunicorn chạy WSGI, worker gthread
 │
 ├── shared/                         # Django app "shared": hạ tầng dùng chung
 │   ├── __init__.py
 │   ├── apps.py
-│   ├── models.py                   # uuid7(), BaseModel; IdempotencyKey; nạp model từ events và geo để Django nhận ra
+│   ├── models.py                   # uuid7(), BaseModel: id UUID v7, created_at, updated_at; IdempotencyKey; import model của events/ và geo/ để Django nhận ra
 │   ├── money.py                    # value object Money(amount: int, currency="VND")
 │   ├── exceptions.py               # DomainError(code, message, details), RetryLater (handler báo consumer thử lại sau, không kế thừa DomainError) và các lỗi chung
-│   ├── tasks.py                    # enqueue_on_commit(task, **kwargs): đẩy Celery task sau khi transaction commit; purge_old_outbox_events (chỉ xoá sự kiện đã kết thúc mọi delivery cùng ProcessedEvent tương ứng), purge_idempotency_keys
+│   ├── tasks.py                    # enqueue_on_commit(task_name, **kwargs): đẩy Celery task theo tên sau khi transaction commit (on_commit robust=True: broker lỗi thì chỉ log); purge_old_outbox_events (chỉ xoá sự kiện đã kết thúc mọi delivery, cùng ProcessedEvent tương ứng), purge_idempotency_keys
 │   ├── events/
 │   │   ├── __init__.py             # API công khai: publish(), handles()
 │   │   ├── base.py                 # DomainEvent (pydantic): event_id, event_type, schema_version, occurred_at. Payload không chứa secret hay PII
@@ -183,7 +190,7 @@ backend/
 │   ├── geo/
 │   │   ├── models.py               # Province, Ward (2 cấp, theo vietnam-provinces)
 │   │   ├── selectors.py            # tra cứu tỉnh/thành, phường/xã
-│   │   └── api.py                  # GET /api/v1/store/geo/provinces, /wards
+│   │   └── api.py                  # GET /api/v1/store/geo/provinces, /geo/provinces/{code}/wards
 │   ├── api/
 │   │   ├── exception_handler.py    # chuyển mọi lỗi sang định dạng lỗi chuẩn (xem 04-api-contract)
 │   │   ├── pagination.py           # phân trang chuẩn
@@ -206,60 +213,46 @@ backend/
 │       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (api_client…); fixture cần Tài khoản nằm ở backend/conftest.py
 │       └── events.py               # drain_events(): chạy callback on_commit, relay và handler tới khi không còn delivery tới hạn; không chờ retry tương lai
 │
-├── modules/                        # package nhóm 8 Django app nghiệp vụ; không đăng ký thành app
+├── modules/                        # Django app "modules": toàn bộ nghiệp vụ
 │   ├── __init__.py
-│   ├── identity/                   # app; management/commands/create_staff.py
-│   ├── catalog/                    # app; management/commands/seed_catalog.py
+│   ├── apps.py                     # ModulesConfig.ready(): nạp handlers.py của mọi module con
+│   ├── models.py                   # import model của mọi module con để Django nhận ra
+│   ├── admin.py                    # Django Admin read-only, chỉ bật ở local
+│   ├── migrations/                 # MỘT chuỗi migrations cho mọi module con
+│   ├── management/commands/
+│   │   ├── seed_catalog.py         # tạo dữ liệu mẫu cho local
+│   │   └── create_staff.py         # tạo Tài khoản Staff/Admin
+│   ├── templates/
+│   │   └── emails/                 # template email theo ngôn ngữ (vi, en)
+│   ├── identity/
+│   ├── catalog/
 │   ├── inventory/
 │   ├── promotions/
 │   ├── payments/
 │   ├── shipping/
 │   ├── ordering/
-│   └── notifications/              # app; templates/notifications/emails/ theo ngôn ngữ vi, en
+│   └── notifications/
 │
 ├── locale/
 │   ├── vi/LC_MESSAGES/django.po    # thông báo lỗi và email tiếng Việt
 │   └── en/LC_MESSAGES/django.po
 │
 └── tests/
+    ├── test_event_payloads.py      # payload mọi sự kiện không chứa PII ([12](./12-testing-strategy.md) mục 2.3)
     └── flows/                      # test xuyên module: checkout → thanh toán → giao → hoàn tất
 ```
 
-Mỗi app sở hữu `apps.py`, `models/`, `migrations/`, `admin.py` và các commands/template của mình ([ADR 0006](../adr/0006-modular-monolith.md)). `models/__init__.py` export model của chính app; không cần điểm nạp model chung ở `modules/`. Migration giữa các app khai báo dependency theo FK; số migration giống nhau ở hai app khác nhau là hợp lệ.
+> **Lưu ý của cách A (một app `modules`)**: Django chỉ tìm `migrations/`, `management/commands/`, `templates/` và `admin.py` ở **gốc app**. Vì vậy các thư mục này nằm ở `modules/` chứ không nằm trong từng module con ([ADR 0006](../adr/0006-modular-monolith.md)). Hai chỗ khác cũng chỉ tìm ở gốc app: Django chỉ nhận model qua `<app>/models.py` (nên `modules/models.py` và `shared/models.py` phải import model của package con), và `autodiscover_tasks()` của Celery chỉ tìm `<app>/tasks.py` (nên `config/celery.py` liệt kê từng package).
 
-Đăng ký từng app trong `config/settings/base.py` (bên cạnh các app Django và thư viện):
-
-```python
-INSTALLED_APPS = [
-    # Các app Django và thư viện…
-    "shared.apps.SharedConfig",
-    "modules.identity.apps.IdentityConfig",
-    "modules.catalog.apps.CatalogConfig",
-    "modules.inventory.apps.InventoryConfig",
-    "modules.promotions.apps.PromotionsConfig",
-    "modules.payments.apps.PaymentsConfig",
-    "modules.shipping.apps.ShippingConfig",
-    "modules.ordering.apps.OrderingConfig",
-    "modules.notifications.apps.NotificationsConfig",
-]
-
-AUTH_USER_MODEL = "identity.Account"
-```
-
-`AppConfig.name` là đường dẫn đầy đủ, ví dụ `modules.ordering`; `label` là tên module, ví dụ `ordering`. Giữ ổn định label khi đã có migration. `ready()` chỉ nạp handler của chính app nếu có, không truy vấn DB. Ranh giới import ở mục 8 vẫn dùng đường dẫn Python `modules.<module>`.
-
-Trong `config/celery.py`, `app.autodiscover_tasks()` nạp `tasks.py` ở gốc từng app đã đăng ký. Khai báo thêm `app.conf.imports = ("shared.events.tasks",)` cho task dispatch nằm trong package con; không dựa vào việc nạp handler để đăng ký task. `shared/models.py` cũng phải nạp model ở `shared/events/models.py` và `shared/geo/models.py`, vì các package này không phải app riêng.
+> **Gốc repo** (ngoài `backend/`) chứa `docs/`, `.github/`, `.scratch/` và `.pre-commit-config.yaml`. pre-commit chỉ đọc file cấu hình ở gốc repo, nên hook cho backend (ruff, mypy, import-linter) khai báo ở đó với `files: ^backend/`, không có file `.pre-commit-config.yaml` riêng trong `backend/`.
 
 ## 6. Khuôn mẫu của một module con
 
-Mỗi module nghiệp vụ là một Django app, theo cùng một khuôn. Ví dụ với `ordering`:
+Mọi module con đều theo cùng một khuôn. Ví dụ với `ordering`:
 
 ```
 modules/ordering/
 ├── __init__.py
-├── apps.py               # OrderingConfig: name="modules.ordering", label="ordering"; ready() nạp handlers
-├── migrations/           # migration riêng của ordering, có dependency tới app được tham chiếu
-│   └── __init__.py
 ├── contracts.py          # ⭐ public API của module: hàm + DTO mà module khác được gọi (cùng events.py, exceptions.py)
 ├── events.py             # sự kiện module này phát ra (class pydantic, có version)
 ├── constants.py          # enum: OrderStatus, PaymentMethod, OrderFlagKind, CancelReason…; RESERVATION_TTL, PAYMENT_LINK_TTL
@@ -275,7 +268,7 @@ modules/ordering/
 │   ├── __init__.py
 │   ├── cart.py           # add_item, update_quantity, merge_guest_cart
 │   ├── checkout.py       # place_order: báo giá ngoài transaction; trong transaction khoá StockItem, kiểm tra lại snapshot dưới khoá Variant rồi Giữ hàng hoặc trừ Tồn kho, dùng Voucher, tạo đơn, gắn Tài khoản nếu email đã xác thực
-│   ├── transitions.py    # Staff/Người mua: confirm, start_packing, hand_over, cancel, receive_returned_shipment; do sự kiện (mục 7.7): mark_paid, mark_shipped, mark_delivered, mark_returned; do job: complete
+│   ├── transitions.py    # Staff/Người mua: confirm, start_packing, hand_over, cancel (T5, T7, T9, T14), receive_returned_shipment; do sự kiện (mục 7.7): mark_paid, mark_shipped, mark_delivered, mark_returned; do job: complete
 │   ├── flags.py          # raise_flag, resolve_flag
 │   ├── accounts.py       # attach_guest_orders (khi email đã xác thực), anonymize_orders, complete_erasure_request (kiểm tra điều kiện và bắt đầu processing, chưa đánh dấu completed)
 │   └── returns.py        # record_return, receive_return_items, accept (theo từng dòng), reject, mark_refunded
@@ -285,9 +278,9 @@ modules/ordering/
 │   └── orders.py         # list_orders_for_customer, find_order_for_guest, list_orders_backoffice (lọc theo Cờ cần xử lý)
 ├── handlers.py           # nghe sự kiện: payment-succeeded, payment-failed, refund-recorded, shipment-created, shipment-creation-failed, shipment-delivered, shipment-returned, email-verified, customer-erased
 ├── tasks.py              # cancel_expired_pending_orders, complete_delivered_orders, purge_expired_guest_carts, compute_best_sellers
-├── admin.py              # Django autodiscover; chỉ đăng ký Admin read-only ở local
+├── admin.py              # đăng ký Django Admin read-only (được modules/admin.py nạp)
 ├── api/
-│   ├── permissions.py    # IsOrderOwner: JWT của Khách hàng chủ đơn, hoặc X-Lookup-Token hợp lệ cho đúng đơn
+│   ├── permissions.py    # IsOrderOwner: JWT của Khách hàng chủ đơn, hoặc X-Lookup-Token hợp lệ cho đúng đơn (token ký bằng TimestampSigner, không lưu DB; 04 mục 4.1)
 │   ├── store/
 │   │   ├── serializers.py    # dữ liệu vào/ra cho storefront
 │   │   ├── views.py          # view mỏng: validate → gọi service/selector → trả kết quả
@@ -313,10 +306,10 @@ modules/ordering/
 | `constants.py` | `TextChoices` và hằng số | — | Import model |
 | `exceptions.py` | Lỗi nghiệp vụ, kế thừa `shared.exceptions.DomainError`, mỗi lỗi có `code` tiếng Anh, ví dụ `OUT_OF_STOCK`. Riêng lỗi báo consumer thử lại sau (ví dụ `TransitionNotYetValid`) kế thừa `shared.exceptions.RetryLater`. Lỗi thuộc module ném ra nó: `OutOfStock` thuộc `inventory`, module lớp trên import `inventory.exceptions` để bắt, không khai báo lại | `shared.exceptions` | Import model |
 | `models/` | Field, ràng buộc DB (`UniqueConstraint`, `CheckConstraint`), index, `Meta.db_table` có tiền tố module (ví dụ `ordering_order`), property đơn giản | `shared.models`, `models/` của module lớp dưới (chỉ để khai báo FK, mục 6.3) | Logic nghiệp vụ, gọi API ngoài, gửi email, override `save()` để làm việc phụ, tự khai báo `id` (phải kế thừa `shared.models.BaseModel`) |
-| `services/` | Mỗi nghiệp vụ ghi là một hàm có tham số keyword; phần ghi DB chạy trong `transaction.atomic`, phát sự kiện qua `shared.events.publish`. Hàm điều phối tích hợp chia thành các transaction ngắn, không bọc toàn hàm khi có HTTP | Model của chính module, `contracts` của module lớp dưới | Nhận `request`; import `api/`; gọi HTTP ra ngoài bên trong `transaction.atomic`; đẩy Celery task trực tiếp (phải qua `shared.tasks.enqueue_on_commit`); truy vấn đi vào model của module khác (mục 6.3) |
+| `services/` | Mỗi nghiệp vụ ghi là một hàm có tham số keyword; phần ghi DB chạy trong `transaction.atomic`, phát sự kiện qua `shared.events.publish`. Hàm điều phối tích hợp chia thành các transaction ngắn, không bọc toàn hàm khi có HTTP | Model của chính module, `contracts` của module lớp dưới | Nhận `request`; import `api/`; gọi HTTP ra ngoài bên trong `transaction.atomic`; đẩy Celery task trực tiếp (phải qua `shared.tasks.enqueue_on_commit`); import `tasks.py` (đẩy task theo tên, để không có vòng import `services` ↔ `tasks`); truy vấn đi vào model của module khác (mục 6.3) |
 | `selectors/` | Hàm truy vấn đọc, tối ưu bằng `select_related`, `prefetch_related` | Model của chính module; hàm **chỉ đọc** trong `contracts` của module lớp dưới (mục 6.3) | Ghi dữ liệu; gọi hàm ghi trong `contracts`; truy vấn đi vào model của module khác (mục 6.3) |
 | `handlers.py` | Hàm `@handles("payments.payment-succeeded", version=1)`, nhận sự kiện rồi gọi **một** service của chính module. Không cần tự chống xử lý trùng: consumer ghi `ProcessedEvent` cùng transaction với handler. Sự kiện tới sớm hoặc không áp dụng được thì báo bằng exception ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 1.3) | `services` của chính module, `events` của module lớp dưới | Logic nghiệp vụ (phải đưa vào service); gọi `contracts` của module khác (service làm việc này); gọi HTTP hay đẩy Celery task trực tiếp, vì handler chạy trong transaction của consumer |
-| `tasks.py` | Celery task mỏng, chỉ gọi service | `services` | Logic nghiệp vụ |
+| `tasks.py` | Celery task mỏng, chỉ gọi service. Mỗi task khai báo `name="<module>.<task>"` cố định | `services` | Logic nghiệp vụ |
 | `api/*/serializers.py` | Validate dữ liệu vào, định dạng dữ liệu ra | — | Gọi `.save()` lên model, logic nghiệp vụ |
 | `api/*/views.py` | `APIView` hoặc `GenericAPIView`: phân quyền, gọi serializer, gọi service/selector | `services`, `selectors`, `serializers` | `ModelViewSet` tự động CRUD; truy vấn ORM trực tiếp |
 | `api/*/urls.py` | Khai báo route | `views` | — |
@@ -360,7 +353,7 @@ Giá chốt trong transaction sau khi khoá toàn bộ StockItem rồi toàn b�
 
 FK tới model của module lớp dưới được phép ([ADR 0006](../adr/0006-modular-monolith.md)), nhưng **chỉ để database giữ toàn vẹn dữ liệu**, không để truy vấn xuyên module:
 
-- Khai báo FK bằng class được import (`models.ForeignKey(Variant, …)`), kể cả FK tới `Account`. Không dùng chuỗi (`"catalog.Variant"`, `settings.AUTH_USER_MODEL`): có import thật thì contract `layers` (mục 8) mới kiểm tra được chiều của FK.
+- Khai báo FK bằng class được import (`models.ForeignKey(Variant, …)`), kể cả FK tới `Account`. Không dùng chuỗi (`"modules.Variant"`, `settings.AUTH_USER_MODEL`): có import thật thì contract `layers` (mục 8) mới kiểm tra được chiều của FK.
 - Trong `services/` và `selectors/`, không dùng lookup `__`, `select_related` hay `prefetch_related` để đi vào model của module khác. ORM đi qua FK mà không cần import nên `import-linter` không thấy. Nếu cho phép, schema của module kia (tên field, quan hệ) sẽ ngầm thành một phần interface của nó: đổi tên một field có thể làm hỏng module khác trong khi CI vẫn xanh.
 - Đọc cột FK của chính bảng mình (ví dụ `stock_item.variant_id`) thì được, vì không chạm vào bảng của module kia.
 - Cần dữ liệu của module khác thì gọi `contracts` của module đó với **danh sách id**, một lần cho cả trang, để không sinh N+1. Ví dụ danh sách Tồn kho ở back-office lấy SKU và tên Sản phẩm từ `catalog.contracts` theo các `variant_id` của trang đó.
@@ -375,7 +368,7 @@ Các module con đều theo khuôn ở mục 6. Bảng dưới chỉ liệt kê 
 
 | File | Nội dung |
 |---|---|
-| `models/account.py` | `Account` (custom user, `AUTH_USER_MODEL = "identity.Account"`): email (duy nhất cho mọi `kind`: một email = một Tài khoản), `kind` (`customer` / `staff` / `admin`), `language`, `token_version`, `is_active`, `email_verified`, `anonymized_at`. Model này phải nằm trong migration đầu tiên của app `identity` |
+| `models/account.py` | `Account` (custom user, `AUTH_USER_MODEL = "modules.Account"`): email (duy nhất cho mọi `kind`: một email = một Tài khoản), `kind` (`customer` / `staff` / `admin`), `language`, `token_version`, `is_active`, `email_verified`, `anonymized_at`. Model này phải nằm trong migration đầu tiên của chuỗi `modules/migrations/` |
 | `models/address.py` | `Address`: sổ địa chỉ của Khách hàng, FK tới `shared.geo.Ward` |
 | `models/auth.py` | `RefreshToken`: `jti`, `family_id`, `token_hash`, `expires_at`, `used_at`, `successor_jti`, `revoked_at`; `RefreshReplay` response mã hoá có hạn 10 giây, không audit; `PasswordResetToken`, `EmailVerificationToken` (chỉ lưu hash) |
 | `models/privacy.py` | `Consent` (phiên bản chính sách, kênh, thời điểm), `ErasureRequest`, `CustomerDataAccessLog` |
@@ -402,7 +395,7 @@ Job `identity.reconcile_erasure_requests` chạy mỗi phút, gọi finalize_era
 | File | Nội dung |
 |---|---|
 | `models/` | `Warehouse`, `StockItem` (`variant`, `warehouse`, `on_hand`, `reserved`, `awaiting_dispatch`), `StockReservation` (`reference`, `stock_item`, `quantity`, `expires_at`, `status`), `StockAllocation` (Hàng chờ xuất: `reference`, `stock_item`, `quantity`, `status`), `StockMovement` (lịch sử) |
-| `services/` | `reserve_stock`, `commit_reservation`, `release_reservation`, `decrement_stock`, `dispatch_stock`, `release_allocation`, `restock`, `adjust_stock`, `count_stock` (Kiểm kê). `decrement_stock` và `commit_reservation` tạo Hàng chờ xuất theo `reference` ([ADR 0010](../adr/0010-stock-decremented-at-order-awaiting-dispatch.md)). `adjust_stock` và `count_stock` từ chối điều chỉnh giảm vượt Số lượng bán được (BR-INV-11). Đều khoá toàn bộ StockItem của thao tác bằng select_for_update theo variant_id trước khi chạm catalog. Checkout đã khoá đủ Variant để kiểm tra giá; luồng khác gom tất cả Variant cần đổi availability, khoá theo id tăng dần rồi mới cập nhật. Khi Số lượng bán được chuyển giữa 0 và lớn hơn 0 thì gọi `catalog.contracts.set_variant_availability` |
+| `services/` | `reserve_stock`, `commit_reservation`, `release_reservation`, `decrement_stock`, `dispatch_stock`, `release_allocation`, `restock`, `adjust_stock`, `count_stock` (Kiểm kê). `decrement_stock` và `commit_reservation` tạo Hàng chờ xuất theo `reference` ([ADR 0010](../adr/0010-stock-decremented-at-order-awaiting-dispatch.md)). `adjust_stock` và `count_stock` từ chối điều chỉnh giảm vượt Số lượng bán được (BR-INV-11). `reserve_stock` và `decrement_stock`, sau khi khoá dòng `StockItem`, tự giải phóng các Giữ hàng đã quá `expires_at` của dòng đó trước khi kiểm tra; `release_reservation` idempotent nên job huỷ đơn gọi lại vẫn an toàn. Đều khoá toàn bộ StockItem của thao tác bằng select_for_update theo variant_id trước khi chạm catalog. Checkout đã khoá đủ Variant để kiểm tra giá; luồng khác gom tất cả Variant cần đổi availability, khoá theo id tăng dần rồi mới cập nhật. Khi Số lượng bán được chuyển giữa 0 và lớn hơn 0 thì gọi `catalog.contracts.set_variant_availability` |
 | `contracts.py` | `lock_stock_items(items)` (chỉ khoá toàn bộ StockItem theo variant_id, không cập nhật catalog; gọi trong transaction checkout trước kiểm tra giá), `reserve_stock(reference, items, expires_at)` (`expires_at` lấy từ Đơn hàng), `commit_reservation`, `release_reservation`, `decrement_stock`, `dispatch_stock(reference)` (T10), `release_allocation(reference)` (huỷ trước Bàn giao), `restock`, `get_available(variant_ids)`. Hàm ghi gọi được trong transaction của bên gọi và trở thành một phần của transaction đó; `reserve_stock`, `decrement_stock` ném `OutOfStock` |
 
 ### 7.4. `promotions`
@@ -440,7 +433,7 @@ Hoàn tiền luôn gắn đúng Thanh toán: khoá Payment, kiểm tra `request_
 | `providers/ghn.py`, `fake.py` | Adapter GHN và Fake (Fake chỉ dùng được khi `FAKE_PROVIDERS_ENABLED`) |
 | `api/webhooks/` | `POST /api/v1/webhooks/ghn` |
 | `tasks.py` | `create_shipment` (queue integrations, claim lease, query theo mã shop trước retry; kết quả chắc chắn mới phát ShipmentCreatedV1 hoặc ShipmentCreationFailedV1; timeout giữ creation_unknown), `cancel_shipment` (queue `integrations`, có retry; thành công thì Vận đơn `cancelled`; hết retry thì giữ `cancel_requested` và báo Sentry, Staff xử lý tay theo Cờ cần xử lý `shipment_after_cancel`), `reconcile_shipments` (mỗi 15 phút; quét requested/creation_unknown hết lease để query theo mã shop, cancel_requested quá 15 phút để thử huỷ lại (06 mục 4.3)) |
-| `events.py` | `ShipmentCreatedV1`, `ShipmentCreationFailedV1`, `ShipmentDeliveredV1`, `ShipmentReturnedV1` |
+| `events.py` | `ShipmentCreatedV1`, `ShipmentCreationFailedV1`, `ShipmentDeliveredV1`, `ShipmentReturnedV1`, `ShipmentExceptionV1` (`reference`, `provider_status`: GHN báo mất hàng, hư hàng, sự cố, hoặc tự huỷ Vận đơn mà hệ thống không yêu cầu) |
 | `contracts.py` | `quote_fee(ward_code, weight_grams, value) -> ShippingQuoteDTO` (cache hash toàn bộ request chuẩn hoá, gồm cấu hình shop/service/kích thước/mapping; không cache fallback chung với GHN thật; `ordering` tự áp ngưỡng miễn phí ship; gọi GHN trực tiếp nên phải gọi **ngoài** transaction), `request_shipment(ShipmentRequestDTO)` (tạo requested với snapshot/mã shop ổn định; dùng lại failed chỉ khi chắc chắn chưa có Vận đơn bên ngoài; creation_unknown không tạo lại; enqueue sau commit), `request_shipment_cancellation(reference)` (ghi Vận đơn `cancel_requested`, đẩy task `cancel_shipment` sau commit), `get_shipment_status(reference) -> ShipmentStatusDTO \| None`, `redact_provider_payloads(reference)`. Trừ `quote_fee`, mọi hàm trong contracts chỉ đọc, ghi DB và đẩy task sau commit, nên gọi trong transaction (kể cả trong handler) là an toàn; HTTP tới GHN chỉ chạy trong task |
 
 ### 7.7. `ordering`
@@ -453,6 +446,7 @@ Xem ví dụ đầy đủ ở mục 6. Máy trạng thái của `Order.status` d
 | Hạn thanh toán | `Order.expires_at` = lúc đặt + `RESERVATION_TTL` (15 phút), là nguồn duy nhất, truyền xuống `reserve_stock`. Link thanh toán của mọi lần thử hết hạn ở lúc đặt + `PAYMENT_LINK_TTL` (phút thứ 10), sớm hơn Giữ hàng 5 phút; quá mốc này không bắt đầu Thanh toán mới được (`PaymentWindowClosed` → `PAYMENT_WINDOW_CLOSED`) |
 | Cờ cần xử lý | `OrderFlag` được bật từ handler hoặc service (`raise_flag`), Staff gỡ qua back-office (`resolve_flag`, có ghi lịch sử) |
 | Cấu hình | `OrderingSettings`: ngưỡng miễn phí ship, hạn mức COD |
+| Khoá | Mọi transition khoá dòng Đơn hàng bằng `select_for_update` trước khi đọc trạng thái (thứ tự khoá ở mục 9.1). Hai transition cùng lúc trên một đơn, ví dụ T5 và T3, chạy lần lượt; transition sau thấy trạng thái mới và đi theo các nhánh bên dưới |
 | Transition do sự kiện | T3, T10, T11, T12 (`mark_paid`, `mark_shipped`, `mark_delivered`, `mark_returned`) tự đối chiếu trạng thái hiện tại với sơ đồ ở [05-order-lifecycle.md](../business/05-order-lifecycle.md) mục 2, nên handler không cần tự kiểm tra thứ tự. Đơn **đã ở hoặc đã qua** trạng thái đích: không làm gì (sự kiện trùng hoặc tới muộn). Đơn **chưa tới** trạng thái nguồn nhưng còn đi tới được: ném `TransitionNotYetValid` (kế thừa `RetryLater`, consumer thử lại sau). Còn lại, ví dụ GHN báo đã giao khi đơn đã `RETURNED_TO_SENDER`: ném `InvalidTransition`, consumer bỏ qua và ghi log. Các tình huống có cách xử lý riêng (05 mục 4.1 và 4.5) được kiểm tra trước ba nhánh này |
 | `contracts.py` | Chỉ phục vụ `notifications`: đọc dữ liệu Đơn hàng để gửi email. Checkout và các transition không nằm ở đây vì chỉ API của chính `ordering` gọi chúng |
 | `events.py` | `OrderPlacedV1`, `OrderCancelledV1` (có `previous_status`), `OrderShippedV1`, `OrderDeliveredV1`, `UnexpectedPaymentReceivedV1` |
@@ -461,7 +455,7 @@ Xem ví dụ đầy đủ ở mục 6. Máy trạng thái của `Order.status` d
 | Hoàn hàng | `receive_returned_shipment`: Staff xác nhận hàng của đơn `RETURNED_TO_SENDER` đã về Kho (BR-INV-08, US-607); ghi `returned_to_warehouse_at`, gọi `inventory.contracts.restock`. Không đổi trạng thái đơn |
 | Xoá dữ liệu | `complete_erasure_request` kiểm tra điều kiện của CMP-05 (đơn ở trạng thái cuối, `payments.contracts.has_pending_refunds`) rồi gọi `identity.contracts.apply_erasure_request` để bắt đầu processing. Endpoint complete trả 202 khi chưa xong; job identity đối chiếu delivery của các handler bắt buộc qua shared rồi mới ghi completed_at (03 mục 10). Endpoint back-office `erasure-requests` nằm ở `ordering` |
 | Log truy cập | Chi tiết đơn và tìm đơn theo số điện thoại ở back-office gọi `identity.contracts.log_customer_data_access` (CMP-07) |
-| `handlers.py` | Mỗi handler gọi một service; việc gọi `contracts` của module khác nằm trong service. `payment-succeeded` → `mark_paid`: T3 và lưu payment_id; cùng payment_id đã dùng cho đơn thì bỏ qua, khoản trả thêm hoặc tới sau huỷ thì Hoàn tiền + cờ `unexpected_payment` + phát `UnexpectedPaymentReceivedV1`. `payment-failed` với `amount_mismatch` → service gọi `payments.contracts.request_refund` đúng `amount_received` + cờ `payment_amount_mismatch` (BR-PAY-04). `refund-recorded` → `mark_refunded`: Đổi trả có `refund_id` khớp → `refunded`, không khớp thì bỏ qua. `shipment-created` → `mark_shipped`: T10 (gọi `inventory.contracts.dispatch_stock`), hoặc `shipping.contracts.request_shipment_cancellation` + cờ `shipment_after_cancel` nếu đơn đã huỷ. `shipment-creation-failed` → `raise_flag` cờ `shipment_failed`. `shipment-delivered` → `mark_delivered`: T11 (COD: gọi `payments.contracts.record_cod_collected`). `shipment-returned` → `mark_returned`: T12. `email-verified` → `attach_guest_orders`. `customer-erased` → `anonymize_orders`, service này gọi `redact_provider_payloads` của `shipping`, `payments` |
+| `handlers.py` | Mỗi handler gọi một service; việc gọi `contracts` của module khác nằm trong service. `payment-succeeded` → `mark_paid`: T3 và lưu payment_id; đơn còn `PENDING_PAYMENT` nhưng đã quá `expires_at` thì chạy T4 trước rồi xử lý như đơn đã huỷ; cùng payment_id đã dùng cho đơn thì bỏ qua, khoản trả thêm hoặc tới sau huỷ thì Hoàn tiền + cờ `unexpected_payment` + phát `UnexpectedPaymentReceivedV1`. `payment-failed` với `amount_mismatch` → service gọi `payments.contracts.request_refund` đúng `amount_received` + cờ `payment_amount_mismatch` (BR-PAY-04). `refund-recorded` → `mark_refunded`: Đổi trả có `refund_id` khớp → `refunded`, không khớp thì bỏ qua. `shipment-created` → `mark_shipped`: T10 (gọi `inventory.contracts.dispatch_stock`), hoặc `shipping.contracts.request_shipment_cancellation` + cờ `shipment_after_cancel` nếu đơn đã huỷ. `shipment-creation-failed` → `raise_flag` cờ `shipment_failed`. `shipment-delivered` → `mark_delivered`: T11 (COD: gọi `payments.contracts.record_cod_collected`). `shipment-returned` → `mark_returned`: T12. `shipment-exception` → `raise_flag` cờ `shipment_exception`, đơn giữ `SHIPPING` cho tới khi Staff xử lý (T14). `email-verified` → `attach_guest_orders`. `customer-erased` → `anonymize_orders`, service này gọi `redact_provider_payloads` của `shipping`, `payments` |
 
 Order lưu `payment_id` của khoản dùng để thanh toán đơn: COD từ T2, online tại T3 dưới khoá Order. Huỷ, Hoàn hàng và Đổi trả truyền ID này vào `request_refund`; khoản trả thêm hoặc sai số tiền truyền `payment_id` từ sự kiện. `mark_paid` nhận lại chính `payment_id` đã gắn thì không làm gì; khoản khác mới tạo Hoàn tiền theo BR-PAY-05. Mỗi yêu cầu hoàn truyền `request_key` ổn định theo thao tác nguồn (03 mục 6).
 
@@ -537,11 +531,11 @@ CI phải chạy generator ở chế độ kiểm tra cấu hình không bị c�
 |---|---|
 | Ngôn ngữ | Tên biến, hàm, bảng, field, enum, error code: **tiếng Anh**. Comment và docstring: **tiếng Việt**, giữ nguyên thuật ngữ kỹ thuật tiếng Anh. Chuỗi hiển thị cho người dùng: bọc `gettext` để dịch vi/en |
 | Tiền | `BigIntegerField` lưu số đồng VND; trong code dùng `shared.money.Money`; API trả `{"amount": 250000, "currency": "VND"}` |
-| Khoá chính | UUID v7 cho mọi bảng, `default` là hàm bọc `shared.models.uuid7` (không trỏ thẳng vào `uuid_utils`, để migration không phụ thuộc package ngoài), khai báo trong `shared.models.BaseModel` (cùng `created_at`, `updated_at`). Model không tự khai báo `id` ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
+| Khoá chính | UUID v7 cho mọi bảng (ngoại lệ duy nhất: `shared_province`, `shared_ward` dùng mã chính thức; khoá tự nhiên khác giữ bằng `UNIQUE`, [03](./03-data-model.md)), `default` là hàm bọc `shared.models.uuid7` (không trỏ thẳng vào `uuid_utils`, để migration không phụ thuộc package ngoài), khai báo trong `shared.models.BaseModel` (cùng `created_at`, `updated_at`). Model không tự khai báo `id` ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
 | Thời gian | Lưu UTC (`USE_TZ = True`); hiển thị theo `Asia/Ho_Chi_Minh`. Lấy thời điểm hiện tại bằng `django.utils.timezone.now()` |
 | Xoá dữ liệu | Không xoá cứng dữ liệu đã có đơn; dùng `status` / `archived` |
-| Transaction | Chỉ mở ở tầng `services` (và trong consumer của `shared.events`); sự kiện ghi vào outbox trong cùng transaction. Khoá dòng theo thứ tự cố định: dòng Tồn kho (theo `variant_id`), rồi toàn bộ dòng Biến thể trong checkout (qua validate_checkout_snapshot; luồng tồn kho khác khoá Variant cần cập nhật availability theo id tăng dần), rồi dòng Voucher |
-| Việc ra ngoài DB | **Không gọi HTTP ra ngoài** (GHN, VNPay, MoMo, gửi email) bên trong `transaction.atomic`: gọi trước khi mở transaction (như `quote_fee` khi checkout), hoặc đưa vào Celery task. Code nghiệp vụ (`services`, `handlers.py`) **không đẩy Celery task trực tiếp** (`.delay()`, `.apply_async()`) mà dùng `shared.tasks.enqueue_on_commit`, để task chỉ chạy khi dữ liệu đã commit và không chạy khi transaction rollback. Đánh đổi: task có thể mất nếu process dừng ngay sau commit hoặc broker lỗi; lỗi enqueue broker được log mà không làm request đã commit trả lỗi API. Việc bắt buộc phải xảy ra phải có bản ghi DB và job quét lại (EventDelivery được relay giao lại; `recover_pending_emails` quét EmailLog và `reconcile_shipments` quét Vận đơn bị kẹt) |
+| Transaction | Chỉ mở ở tầng `services` (và trong consumer của `shared.events`); sự kiện ghi vào outbox trong cùng transaction. Khoá dòng theo thứ tự cố định: dòng Đơn hàng (mọi transition `select_for_update` dòng `ordering_order` trước khi đọc trạng thái), rồi dòng Tồn kho (theo `variant_id`), rồi toàn bộ dòng Biến thể trong checkout (qua validate_checkout_snapshot; luồng tồn kho khác khoá Variant cần cập nhật availability theo id tăng dần), rồi dòng Voucher |
+| Việc ra ngoài DB | **Không gọi HTTP ra ngoài** (GHN, VNPay, MoMo, gửi email) bên trong `transaction.atomic`: gọi trước khi mở transaction (như `quote_fee` khi checkout), hoặc đưa vào Celery task. Code nghiệp vụ (`services`, `handlers.py`) **không đẩy Celery task trực tiếp** (`.delay()`, `.apply_async()`) mà dùng `shared.tasks.enqueue_on_commit(task_name, …)`, để task chỉ chạy khi dữ liệu đã commit và không chạy khi transaction rollback. Đánh đổi: task có thể mất nếu process dừng ngay sau commit hoặc broker lỗi; `enqueue_on_commit` dùng `transaction.on_commit(..., robust=True)`, nên lỗi enqueue broker chỉ được log mà không làm request đã commit trả lỗi API. Việc bắt buộc phải xảy ra phải có bản ghi DB và job quét lại (EventDelivery được relay giao lại; `recover_pending_emails` quét EmailLog và `reconcile_shipments` quét Vận đơn bị kẹt) |
 | Kiểu dữ liệu | Mọi hàm trong `services`, `selectors`, `contracts` có type hints đầy đủ; `mypy --strict` cho `modules/*/services`, `modules/*/selectors` và `contracts`. Dùng cú pháp mới: `list[X]`, `X \| None`, không dùng `List`, `Optional` |
 
 ### 9.2. Đặt tên
@@ -558,6 +552,7 @@ Theo PEP 8 (`snake_case` cho hàm/biến/module, `PascalCase` cho class, `UPPER_
 | `event_type` | `<module>.<kebab-case>` | `ordering.order-placed` |
 | Lỗi nghiệp vụ | Class `PascalCase` mô tả tình huống, `code` dạng `UPPER_SNAKE_CASE` | `OutOfStock` → `OUT_OF_STOCK` |
 | Bảng DB | `Meta.db_table = "<module>_<model>"` | `ordering_order` |
+| Tên Celery task | `name="<module>.<snake_case>"`, khai báo cố định trên decorator; đổi tên file không đổi tên task | `shipping.create_shipment` |
 | File service/selector | Theo chủ đề nghiệp vụ, không theo tên model | `services/checkout.py`, `selectors/orders.py` |
 | File test trong module | `test_<tầng>_<chủ đề>.py` | `test_services_checkout.py`, `test_api_store.py`, `test_handlers_payments.py` |
 | Test xuyên module | Đặt ở `backend/tests/flows/` | `tests/flows/test_cod_checkout_flow.py` |

@@ -97,6 +97,7 @@
 | BR-SHP-05 | Khi Staff bàn giao đơn cho GHN, hệ thống tự tạo Vận đơn ở GHN. Đơn chỉ chuyển sang Đang giao khi GHN tạo Vận đơn thành công; tạo thất bại thì đơn vẫn Đang đóng gói và được gắn Cờ cần xử lý. Staff bàn giao lại thì hệ thống dùng lại Vận đơn đó. |
 | BR-SHP-06 | Trạng thái giao hàng được cập nhật từ GHN qua webhook và job Đối soát định kỳ. |
 | BR-SHP-07 | Với đơn COD, số tiền thu hộ = tổng tiền đơn. |
+| BR-SHP-08 | Khi Vận đơn gặp sự cố (GHN báo mất hàng, hư hàng, sự cố, hoặc tự huỷ Vận đơn mà hệ thống không yêu cầu), đơn được gắn Cờ cần xử lý. Staff được huỷ đơn đang giao chỉ trong trường hợp này, bắt buộc nhập lý do ([05-order-lifecycle.md](./05-order-lifecycle.md) mục 4.7). |
 
 ## 7. Thanh toán
 

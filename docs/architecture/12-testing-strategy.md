@@ -6,7 +6,7 @@ Quy ước viết code test (factory, mock, thời gian) nằm ở [02-backend-s
 
 ## 1. Nguyên tắc
 
-- Test chạy trên **PostgreSQL thật** (`fashion_test`), không dùng SQLite và không mock ORM. Lý do: nghiệp vụ dựa vào `select_for_update`, `EXCLUDE`, `unaccent`.
+- Test chạy trên **PostgreSQL thật** (`test_fashion`, do pytest-django tự tạo), không dùng SQLite và không mock ORM. Lý do: nghiệp vụ dựa vào `select_for_update`, `EXCLUDE`, `unaccent`.
 - Chỉ giả lập **hệ thống bên ngoài**: Fake Gateway cho thanh toán và vận chuyển ([ADR 0005](../adr/0005-provider-adapters-fake-gateways.md)), `respx` cho `httpx`. Fake Gateway và `FakeShippingProvider` được bật bằng `FAKE_PROVIDERS_ENABLED=true` trong `settings/test.py` (cùng cờ với local), nên flow test gọi được trang và endpoint IPN của Fake Gateway. CI không gọi sandbox thật của VNPay, MoMo, GHN (mục 7).
 - Celery chạy đồng bộ (`CELERY_TASK_ALWAYS_EAGER=True` trong `settings/test.py`); thời gian cố định bằng `time-machine`.
 - Test chạy trong transaction không bao giờ commit, nên task đẩy bằng `shared.tasks.enqueue_on_commit` không tự chạy, và relay (một tiến trình riêng) không tự gửi sự kiện. Test service cần task chạy thì dùng `django_capture_on_commit_callbacks(execute=True)`; flow test dùng `drain_events()` (mục 2.7).
@@ -55,6 +55,8 @@ Ngoài quy tắc chung, bắt buộc có các test service sau, vì đây là nh
 | Hàng chờ xuất (BR-INV-10) | Đặt đơn COD: Tồn kho giảm, Hàng chờ xuất tăng đúng số lượng; T10 xoá Hàng chờ xuất; huỷ trước Bàn giao (T7, T9) trả Hàng chờ xuất về Tồn kho |
 | Kiểm kê (BR-INV-12) | Tồn kho 7, Hàng chờ xuất 3, số đếm 10 → không điều chỉnh; số đếm 9 → điều chỉnh −1 loại `stock_count` |
 | Điều chỉnh giảm vượt Số lượng bán được (BR-INV-11) | Ném `INSUFFICIENT_AVAILABLE`; Tồn kho không đổi |
+| Giữ hàng đã quá `expires_at` nhưng job chưa giải phóng | `reserve_stock` của Người mua khác thành công; Giữ hàng cũ chuyển `released`, `reserved` giảm tương ứng |
+| Staff huỷ đơn `SHIPPING` (T14) | Chỉ được khi đơn có cờ `shipment_exception` và bắt buộc lý do; Hoàn tiền toàn bộ nếu đã thanh toán online; không trả lượt Voucher |
 | Chấp nhận Đổi trả một phần (BR-RET-08) | Chỉ phần `accepted_quantity` của dòng `restock = true` được cộng lại Tồn kho; Hoàn tiền tính trên số lượng được chấp nhận; không dòng nào được chấp nhận thì yêu cầu `rejected` |
 | Doanh thu khi Người mua trả tiền hai lần (BR-REV-01) | Hoàn tiền theo BR-PAY-05 không bị trừ; Doanh thu của đơn bằng Tổng tiền đơn |
 | Đặt đơn vãng lai bằng email của Tài khoản đã xác thực (BR-ORD-08) | Đơn có `customer_id` ngay khi tạo |
@@ -78,6 +80,7 @@ Bắt buộc có các test:
 | Hai yêu cầu hoàn cùng payment_id và request_key | Chỉ một Refund được tạo, cả hai trả cùng refund_id; khác tham số bị từ chối |
 | Checkout song song với đổi Giá bán hoặc thêm/sửa/xoá SalePrice | Writer và checkout đều khoá Variant; đơn dùng snapshot đã xác thực hoặc rollback PRICE_CHANGED, không lọt giá đọc trước khi writer commit |
 | Hai checkout chứa nhiều Biến thể, availability chỉ đổi ở các Biến thể khác nhau | Khoá toàn bộ StockItem rồi toàn bộ Variant theo id trước khi đổi availability; không có thứ tự khoá một phần Variant trước phần còn lại |
+| Người mua tự huỷ (T5) đúng lúc IPN thành công (T3) trên cùng một đơn | Chỉ một transition chạy trên trạng thái `PENDING_PAYMENT` (khoá dòng Đơn hàng); nếu T5 thắng thì tiền về được xử lý theo BR-PAY-05 |
 
 ### 2.3. Handler và outbox
 
@@ -107,10 +110,12 @@ Bắt buộc có các test handler sau:
 | `shipping.shipment-delivered` tới khi đơn còn `PACKING` (T10 chưa chạy) | Ném `TransitionNotYetValid`; đơn giữ nguyên |
 | `shipping.shipment-delivered` tới khi đơn đã `DELIVERED` hoặc `COMPLETED` | Không làm gì, không ném lỗi |
 | `shipping.shipment-delivered` tới khi đơn đã `RETURNED_TO_SENDER` | Ném `InvalidTransition`; đơn giữ nguyên |
+| `payments.payment-succeeded` tới khi đơn còn `PENDING_PAYMENT` nhưng đã quá `expires_at` | Chạy T4 (đơn `CANCELLED`, giải phóng Giữ hàng) rồi tạo Hoàn tiền và gắn cờ `unexpected_payment` |
+| `shipping.shipment-exception` | Gắn cờ `shipment_exception`; đơn giữ `SHIPPING` |
 | `identity.email-verified` | Chỉ gắn các đơn có `contact_email` khớp (không phân biệt hoa thường) và chưa có `customer_id`; đơn đã thuộc Tài khoản khác không bị đổi |
 | Đặt đơn online (T1) rồi IPN thành công (T3) | T1 không ghi sự kiện nào vào outbox; T3 ghi đúng một `ordering.order-placed` |
 
-**Payload sự kiện không chứa secret hay PII** ([07-async-events-jobs.md](./07-async-events-jobs.md)): `backend/tests/test_event_payloads.py` duyệt mọi class `DomainEvent` đã đăng ký và fail nếu có field tên thuộc danh sách cấm (`email`, `phone`, `address`, `name`, `token`, `password`, `*_url`). Test này chỉ bắt lỗi theo tên field; reviewer vẫn phải đọc payload của mọi sự kiện mới. Test đặt ở `backend/tests/` (không thuộc `root_packages`) vì cần nhìn thấy sự kiện của mọi module.
+**Payload sự kiện không chứa secret hay PII** ([07-async-events-jobs.md](./07-async-events-jobs.md)): `backend/tests/test_event_payloads.py` duyệt mọi class `DomainEvent` đã đăng ký và fail nếu tên field **chứa** một từ trong danh sách cấm (`email`, `phone`, `address`, `name`, `token`, `password`) hoặc kết thúc bằng `_url`, nên `contact_name` hay `reset_token` cũng bị chặn. Test này chỉ bắt lỗi theo tên field; reviewer vẫn phải đọc payload của mọi sự kiện mới. Test đặt ở `backend/tests/` (không thuộc `root_packages`) vì cần nhìn thấy sự kiện của mọi module.
 
 **Hoàn tiền và audit:** test BR-REF-06 cho gọi lại cùng key/cùng tham số, key trùng khác tham số, vượt tiền thực nhận và hoàn tất lặp không phát thêm RefundRecorded. Callback IPN/đối soát trùng không cộng amount_received lần nữa. Tracker audit phải đúng danh sách [03 mục 10.1](./03-data-model.md#101-các-field-được-ghi-lịch-sử); ghi rồi redaction raw_payload không tạo bản sao PII trong history. Kiểm tra schema history không có field bị cấm, kể cả khi model được thêm field mới.
 
@@ -131,6 +136,8 @@ Bắt buộc có các test handler sau:
 ### 2.5. Bảo mật auth/JWT
 
 Theo [05-auth-security.md](./05-auth-security.md) mục 9 và [ADR 0002](../adr/0002-auth-nextauth-session-django-jwt.md): sai thuật toán, `alg: none`, sai `aud`, hết hạn, sai `kid`, dùng lại refresh token (phải thu hồi cả chuỗi), đổi `token_version`, thu hồi qua `jti`, token storefront không dùng được cho back-office.
+
+Thêm kịch bản refresh đồng thời: hai request refresh cùng dùng R1 trong 10 giây đều nhận cặp token hợp lệ và family không bị thu hồi; dùng lại R1 sau 10 giây thì thu hồi cả family.
 
 Thêm hai kịch bản về Tài khoản:
 
@@ -200,7 +207,7 @@ Khi bootstrap, kiểm tra cấu hình import-linter bằng các package mẫu t�
 
 ## 6. Migration
 
-- Migration chỉ đổi schema: không cần test; `makemigrations --check` và kiểm tra xung đột migration trong từng app ở CI là đủ. Hai app có cùng số migration là hợp lệ.
+- Migration chỉ đổi schema: không cần test; `makemigrations --check` và kiểm tra trùng số trong CI là đủ.
 - Data migration (có `RunPython`): bắt buộc có test bằng `django-test-migrations`, chạy migration trên dữ liệu mẫu rồi kiểm tra kết quả.
 
 ## 7. Sandbox thật của nhà cung cấp
@@ -218,7 +225,7 @@ Job `backend` trong `.github/workflows/ci.yml`:
 | `lint-imports` | Không vi phạm ranh giới module, kể cả quy tắc factory (mục 4) |
 | `pytest` | Toàn bộ test qua, kể cả `concurrency` và `flow`. Chạy `pytest -n auto --cov=modules --cov-report=` (`pytest-cov` gom coverage từ các worker của `pytest-xdist`) |
 | Coverage | ≥ 80% **branch coverage** (`[tool.coverage.run] branch = true`) cho `services/` và `handlers.py`, tính **riêng từng module**: mỗi module chạy `coverage report --include="modules/<module>/services/*,modules/<module>/handlers.py" --fail-under=80`; module chưa có cả hai thì bỏ qua. **Không** đặt ngưỡng cho toàn repo, để không ai phải viết test chỉ để lấp số |
-| Migration | `makemigrations --check`, không có nhánh migration xung đột trong cùng app; số migration được lặp giữa các app |
+| Migration | `makemigrations --check`, không trùng số |
 | OpenAPI | Schema sinh ra trùng với `backend/openapi.yaml` |
 | `pip-audit` | Không có lỗ hổng |
 

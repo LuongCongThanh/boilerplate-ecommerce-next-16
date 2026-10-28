@@ -14,7 +14,7 @@ Repo dành riêng cho **Fashion Store**, với nghiệp vụ thời trang, thanh
 | Thanh toán | VNPay, MoMo, COD |
 | Vận chuyển | GHN |
 | Backend | Python 3.13, Django 5.2 LTS, DRF, PostgreSQL 18, Redis, Celery |
-| Kiến trúc | Modular monolith: 8 Django app nghiệp vụ trong package `modules`, app `shared` hạ tầng |
+| Kiến trúc | Modular monolith: app `modules` với 8 module con, app `shared` hạ tầng |
 | Local | PostgreSQL cài trên máy; API, Celery, Redis, Mailpit chạy bằng Docker Compose |
 | Production (mục tiêu) | AWS Singapore: ECS Fargate (Django và Next.js BFF, cùng VPC), RDS, ElastiCache, S3, SES |
 
@@ -55,7 +55,7 @@ Thuật ngữ chung: **[GLOSSARY.md](./GLOSSARY.md)** — đọc trước tiên.
 | [0003](./docs/adr/0003-postgres-redis-celery.md) | PostgreSQL, Redis và Celery làm runtime |
 | [0004](./docs/adr/0004-custom-nextjs-admin.md) | Back-office tự xây bằng Next.js thay vì Django Admin |
 | [0005](./docs/adr/0005-provider-adapters-fake-gateways.md) | Adapter cho nhà cung cấp, cổng giả lập và job đối soát |
-| [0006](./docs/adr/0006-modular-monolith.md) | Modular monolith: mỗi module nghiệp vụ là một Django app |
+| [0006](./docs/adr/0006-modular-monolith.md) | Modular monolith: một app `modules` chia module con |
 | [0007](./docs/adr/0007-events-outbox-celery-no-kafka.md) | Sự kiện qua Outbox + Celery, chưa dùng Kafka |
 | [0008](./docs/adr/0008-uuid-v7-primary-keys.md) | Khoá chính UUID v7, sinh qua hàm bọc `shared.models.uuid7` |
 | [0009](./docs/adr/0009-nextjs-bff-django-private.md) | Next.js là BFF cho mọi request, Django chỉ mở webhook ra internet |

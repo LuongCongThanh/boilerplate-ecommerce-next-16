@@ -36,9 +36,9 @@ Chọn adapter bằng cấu hình:
 | `PAYMENT_PROVIDER_VNPAY` | `fake` | `vnpay` (sandbox) | `vnpay` |
 | `PAYMENT_PROVIDER_MOMO` | `fake` | `momo` (sandbox) | `momo` |
 | `SHIPPING_PROVIDER` | `fake` hoặc `ghn` (sandbox, gọi ra được từ local) | `ghn` (sandbox) | `ghn` |
-| `FAKE_PROVIDERS_ENABLED` | `true` | `false` | `false` |
+| `FAKE_PROVIDERS_ENABLED` | `true` | `false` | `false` (staging bật tạm khi test tải) |
 
-`FAKE_PROVIDERS_ENABLED` quyết định có đăng ký trang Fake Gateway và lệnh giả lập GHN hay không. Cờ này bật ở local và trong `settings/test.py` (flow test gọi IPN qua Fake Gateway), không phụ thuộc vào việc đang dùng `settings.local`. Chọn adapter `fake` khi cờ tắt thì Django báo lỗi ngay lúc khởi động.
+`FAKE_PROVIDERS_ENABLED` quyết định có đăng ký trang Fake Gateway và lệnh giả lập GHN hay không. Cờ này bật ở local và trong `settings/test.py` (flow test gọi IPN qua Fake Gateway), không phụ thuộc vào việc đang dùng `settings.local`. Chọn adapter `fake` khi cờ tắt thì Django báo lỗi ngay lúc khởi động. Trên staging, cờ chỉ bật tạm trong lúc test tải bằng k6 ([12-testing-strategy.md](./12-testing-strategy.md) mục 9). `settings/production.py` từ chối khởi động nếu cờ bật khi `APP_ENV = production`.
 
 Mọi adapter thật đều có: timeout (kết nối 3 giây, đọc 10 giây), retry có giới hạn cho lỗi mạng (không retry thao tác tạo giao dịch nếu không chắc là idempotent), log có `request_id`, và che dữ liệu nhạy cảm.
 
@@ -103,7 +103,8 @@ MoMo mô tả requestId dùng cho idempotency và API query tra theo orderId: [i
 | `delivered` | `delivered` | `ShipmentDeliveredV1` |
 | `return`, `returning` | `returning` | — |
 | `returned` | `returned` | `ShipmentReturnedV1` |
-| `cancel` | `cancelled` | — |
+| `cancel`, khi Vận đơn đang `cancel_requested` | `cancelled` | — |
+| `cancel` mà hệ thống không yêu cầu, `lost`, `damage`, `exception` | `exception` | `ShipmentExceptionV1` (`provider_status` giữ mã gốc của GHN); `ordering` gắn cờ `shipment_exception`, Staff xử lý theo [05](../business/05-order-lifecycle.md) mục 4.7 |
 
 Danh sách mã trạng thái đầy đủ lấy theo tài liệu GHN khi code.
 

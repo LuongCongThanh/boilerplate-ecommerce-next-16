@@ -39,6 +39,7 @@ stateDiagram-v2
 
     SHIPPING --> DELIVERED: GHN báo giao thành công
     SHIPPING --> RETURNED_TO_SENDER: GHN báo hoàn hàng
+    SHIPPING --> CANCELLED: Staff huỷ khi Vận đơn gặp sự cố
 
     DELIVERED --> COMPLETED: Sau 7 ngày (tự động)
 
@@ -64,6 +65,7 @@ stateDiagram-v2
 | T11 | `SHIPPING` | `DELIVERED` | Hệ thống, khi GHN báo giao thành công | — | Ghi thời điểm giao; email "Đã giao"; với COD: ghi nhận khoản thu COD đã thu |
 | T12 | `SHIPPING` | `RETURNED_TO_SENDER` | Hệ thống, khi GHN báo hoàn hàng | — | Chờ Staff xác nhận nhận hàng về Kho để cộng lại Tồn kho (BR-INV-08); tạo Hoàn tiền toàn bộ Tổng tiền đơn nếu đã thanh toán online (BR-REF-05); huỷ khoản thu COD nếu là đơn COD |
 | T13 | `DELIVERED` | `COMPLETED` | Hệ thống, job định kỳ | Đã qua 7 ngày (đủ 7 × 24 giờ) kể từ Đã giao và không có yêu cầu Đổi trả đang mở (mục 4.4) | Chốt Doanh thu (BR-REV-01) |
+| T14 | `SHIPPING` | `CANCELLED` | Chỉ Staff | Vận đơn gặp sự cố (mục 4.7); bắt buộc nhập lý do | Hoàn tiền toàn bộ Tổng tiền đơn nếu đã thanh toán online (BR-REF-05); huỷ khoản thu COD nếu là đơn COD; **không** trả lượt Voucher (BR-VCH-08); hàng chưa rời Kho thì chờ Staff xác nhận nhập lại Tồn kho như đơn Hoàn hàng; email "Đơn đã huỷ" |
 
 Mọi chuyển trạng thái không có trong bảng đều bị **từ chối**.
 
@@ -75,6 +77,7 @@ Link thanh toán hết hạn sau 10 phút, còn Giữ hàng hết hạn sau 15 p
 
 - **Đơn đã bị huỷ**: thông báo thanh toán tới quá muộn, sau khi hệ thống đã huỷ đơn (T4), hoặc Người mua đã tự huỷ (T5) trong lúc đang trả tiền. Kể cả khi tiền về trước phút 15, nếu hệ thống chưa kịp xử lý T3 mà job huỷ đơn đã chạy thì đơn vẫn bị huỷ và tiền được hoàn.
 - **Đơn đã được thanh toán**: Người mua mở hai tab và trả tiền ở cả hai lần thử; lần thứ hai tới khi đơn đã `PLACED`.
+- **Đơn hết hạn nhưng chưa bị huỷ**: tiền về sau phút thứ 15 khi job huỷ đơn chưa kịp chạy. Hệ thống chạy T4 trước rồi xử lý như đơn đã huỷ.
 
 Cách xử lý chung (BR-PAY-05):
 
@@ -94,7 +97,7 @@ Các thông báo từ Cổng thanh toán và GHN có thể tới trễ hoặc l�
 
 ### 4.3. Huỷ khi đơn Đang giao
 
-Đơn đã ở `SHIPPING` thì **không huỷ được** trực tiếp. Nếu Người mua từ chối nhận hàng, GHN sẽ báo hoàn hàng và đơn chuyển sang `RETURNED_TO_SENDER` (T12) **[Giả định]**.
+Đơn đã ở `SHIPPING` thì **không huỷ được** trực tiếp, trừ khi Vận đơn gặp sự cố (T14, mục 4.7). Nếu Người mua từ chối nhận hàng, GHN sẽ báo hoàn hàng và đơn chuyển sang `RETURNED_TO_SENDER` (T12) **[Giả định]**.
 
 ### 4.4. Đổi trả sau khi Đã giao
 
@@ -120,6 +123,15 @@ Số tiền Cổng thanh toán báo về khác Tổng tiền đơn (BR-PAY-04):
 1. Thanh toán **không** được xác nhận; đơn giữ `PENDING_PAYMENT`.
 2. Hệ thống tự tạo yêu cầu Hoàn tiền đúng số tiền đã nhận và gắn Cờ cần xử lý `payment_amount_mismatch`.
 3. Người mua trả lại đúng số tiền được nếu link còn hạn (phút thứ 10). Nếu không, đơn bị huỷ khi Giữ hàng hết hạn (T4).
+
+### 4.7. Vận đơn gặp sự cố
+
+GHN báo mất hàng, hư hàng, sự cố, hoặc tự huỷ một Vận đơn mà hệ thống không yêu cầu huỷ (BR-SHP-08). Nếu không xử lý riêng, đơn sẽ kẹt ở `SHIPPING`, vì từ đây chỉ đi được sang `DELIVERED` hoặc `RETURNED_TO_SENDER`.
+
+1. Đơn **giữ nguyên** `SHIPPING` và được gắn Cờ cần xử lý `shipment_exception`.
+2. Staff liên hệ GHN và Người mua. Nếu GHN tiếp tục giao, đơn đi tiếp như bình thường và Staff gỡ cờ.
+3. Nếu không giao được nữa, Staff huỷ đơn (T14) và bắt buộc nhập lý do. Đơn đã thanh toán online được Hoàn tiền toàn bộ.
+4. Hàng chưa rời Kho (GHN huỷ trước khi lấy hàng) thì Staff xác nhận nhập lại Tồn kho như đơn Hoàn hàng. Hàng mất hoặc hư thì không nhập lại; việc đòi GHN bồi thường làm ngoài hệ thống.
 
 ## 5. Thời gian và job tự động
 
