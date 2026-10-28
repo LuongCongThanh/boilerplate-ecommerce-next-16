@@ -24,15 +24,21 @@ gitGraph
     merge fix/ipn-amount id: "squash: fix(payments)…" type: HIGHLIGHT
     commit id: "chore(release): v0.2.0"
     checkout main
-    merge dev id: "release v0.2.0" tag: "v0.2.0"
+    branch uat
+    checkout uat
+    merge dev id: "promote v0.2.0 lên uat"
+    checkout main
+    merge uat id: "release v0.2.0" tag: "v0.2.0"
     branch hotfix/vnpay-signature
     checkout hotfix/vnpay-signature
     commit id: "hotfix"
     commit id: "chore(release): v0.2.1"
     checkout main
     merge hotfix/vnpay-signature id: "squash: fix(payments)… " tag: "v0.2.1"
+    checkout uat
+    merge main id: "back-merge v0.2.1 vào uat"
     checkout dev
-    merge main id: "back-merge v0.2.1"
+    merge uat id: "back-merge v0.2.1 vào dev"
 ```
 
 > Trong sơ đồ, các merge có nhãn "squash" được vẽ như merge thường vì Mermaid không vẽ được squash. Trên thực tế, squash tạo **một commit mới** trên nhánh đích và không nối với nhánh nguồn.
@@ -40,9 +46,12 @@ gitGraph
 | Nhánh | Vai trò | Tách từ | Merge vào | Triển khai tới |
 |---|---|---|---|---|
 | `main` | Code đang chạy production. Mỗi release có một tag | — | — | production |
-| `dev` | Nơi gom các tính năng đã xong, chuẩn bị release | `main` (tạo một lần) | `main` | staging |
+| `uat` | Bản ứng viên release đang được nghiệm thu (UAT): người của doanh nghiệp kiểm tra nghiệp vụ trước khi lên production. Chỉ nhận merge từ `dev` và back-merge từ `main`, không commit thẳng | `main` (tạo một lần) | `main` | staging ([09](./09-deployment-aws-target.md) mục 3) |
+| `dev` | Nơi gom các tính năng đã xong, chuẩn bị đưa lên `uat` | `main` (tạo một lần) | `uat` | — (chỉ CI; chưa có môi trường riêng) |
 | `feat/*`, `fix/*`, `refactor/*`, `docs/*`, `chore/*`, `test/*` | Một tính năng, một lỗi hoặc một việc | `dev` | `dev` | — |
-| `hotfix/*` | Sửa lỗi gấp trên production | `main` | `main`, sau đó back-merge về `dev` | production |
+| `hotfix/*` | Sửa lỗi gấp trên production | `main` | `main`, sau đó back-merge về `uat` rồi `dev` | production |
+
+Lỗi phát hiện khi nghiệm thu trên `uat` được sửa bằng nhánh `fix/*` vào `dev` như bình thường, rồi đưa `dev` lên `uat` lần nữa. Không sửa thẳng trên `uat`, để `uat` luôn là một phiên bản đã có trên `dev`.
 
 ## 2. Đặt tên nhánh
 
@@ -125,6 +134,8 @@ docs(adr): add 0007 events via outbox and celery
 | | `pr-title` | Tiêu đề PR đúng Conventional Commits (chỉ chạy trên PR) |
 | | `backend` | `ruff`, `mypy`, `lint-imports`, `pytest`, coverage, kiểm tra OpenAPI lệch, `pip-audit` ([12-testing-strategy.md](./12-testing-strategy.md) mục 8). Tự bỏ qua khi chưa có `backend/pyproject.toml` |
 | `.github/workflows/codeql.yml` | `codeql (actions)`, `codeql (python)` | CodeQL bộ `security-extended`, chạy trên PR, push lên `main` và mỗi thứ Hai |
+
+`ci.yml` chạy khi push lên `main`, `uat`, `dev` và trên mọi PR.
 | `.github/dependabot.yml` | — | Cập nhật `github-actions`, `uv`, `docker` hằng tuần, chỉ đề xuất bản đã phát hành ít nhất 7 ngày |
 
 Quy tắc cho mọi workflow, vì repo là public:
@@ -141,9 +152,10 @@ Quy tắc cho mọi workflow, vì repo là public:
 | Chặng | Cách merge | Lý do |
 |---|---|---|
 | `feat/*`, `fix/*`… → `dev` | **Squash merge** | Gộp các commit lặt vặt ("wip", "fix typo") thành **một commit** có tiêu đề chuẩn. Lịch sử `dev` sạch, dễ revert và dễ `git bisect` |
-| `dev` → `main` (release) | **Merge commit**, **không squash** | Squash sẽ tạo trên `main` một commit mà `dev` không có, khiến hai nhánh **lệch nhau** và sinh conflict ở mọi lần release sau |
+| `dev` → `uat` (đưa lên nghiệm thu) | **Merge commit**, **không squash** | Squash sẽ tạo trên `uat` một commit mà `dev` không có, khiến hai nhánh **lệch nhau** và sinh conflict ở mọi lần đưa lên sau |
+| `uat` → `main` (release) | **Merge commit**, **không squash** | Cùng lý do; `main` chỉ nhận đúng bản đã được nghiệm thu trên `uat` |
 | `hotfix/*` → `main` | **Squash merge** | Giống nhánh tính năng |
-| `main` → `dev` (back-merge sau hotfix) | **Merge commit** | Đưa bản sửa về `dev` mà không làm lệch lịch sử |
+| `main` → `uat` → `dev` (back-merge sau hotfix) | **Merge commit** | Đưa bản sửa về `uat` và `dev` mà không làm lệch lịch sử |
 
 Không dùng **rebase merge** trên GitHub.
 
@@ -165,11 +177,15 @@ Các mục ở sidebar PR trên GitHub:
 | Projects, Milestone | Không dùng. Phiên bản theo tag và `CHANGELOG.md` (mục 7) |
 | Development | Để trống vì ticket không nằm trong GitHub Issues. Liên kết ticket bằng đường dẫn `.scratch/` trong mô tả PR và footer `Refs:` của commit |
 
-### 4.3. PR release `dev` → `main`
+### 4.3. PR đưa lên nghiệm thu `dev` → `uat` và PR release `uat` → `main`
 
-- Tiêu đề: `chore(release): v0.2.0`. Không dùng `release: …` vì `release` không phải `type` hợp lệ (mục 3.1), job `pr-title` sẽ chặn.
-- Nội dung: danh sách thay đổi (lấy từ phần mới của `CHANGELOG.md` vừa cập nhật trên `dev`, mục 5.3), migration cần chạy, cấu hình hoặc biến môi trường mới.
-- Chỉ mở khi staging đã được kiểm tra.
+| PR | Tiêu đề | Khi nào mở |
+|---|---|---|
+| `dev` → `uat` | `chore(uat): promote v0.2.0` (có version) hoặc `chore(uat): promote <mô tả>` (khi chưa có version, ví dụ chỉ có tài liệu) | Khi `dev` đã gom đủ việc cho một bản và CI xanh |
+| `uat` → `main` | `chore(release): v0.2.0` | Chỉ khi bản trên `uat` đã được nghiệm thu trên staging |
+
+- Không dùng `release: …` vì `release` không phải `type` hợp lệ (mục 3.1), job `pr-title` sẽ chặn.
+- Nội dung: danh sách thay đổi (lấy từ phần mới của `CHANGELOG.md` vừa cập nhật trên `dev`, mục 5.3), migration cần chạy, cấu hình hoặc biến môi trường mới. PR release ghi thêm ai đã nghiệm thu và lúc nào.
 
 ## 5. Quy trình làm việc hằng ngày
 
@@ -191,7 +207,7 @@ git push -u origin feat/checkout-cod  # mở PR vào dev
 
 Được phép push thẳng vào `dev` khi **cả hai** điều kiện sau đều đúng:
 
-1. Thay đổi **nhỏ và gấp**, ví dụ sửa cấu hình làm staging không chạy, hoặc sửa một test hỏng đang chặn người khác.
+1. Thay đổi **nhỏ và gấp**, ví dụ sửa một test hỏng đang chặn người khác.
 2. Đã chạy `make lint` và `make test` ở máy local.
 
 Commit vẫn phải đúng Conventional Commits. CI vẫn chạy sau khi push; nếu CI đỏ thì người push phải sửa ngay.
@@ -200,7 +216,7 @@ Commit `chore(release): vX.Y.Z` ở mục 5.3 cũng được push thẳng vào `
 
 ### 5.3. Release
 
-`main` cấm push thẳng, nên version và CHANGELOG được cập nhật trên `dev` **trước** khi mở PR release. Tag chỉ gắn sau khi merge, trên commit merge của `main`.
+`uat` và `main` cấm push thẳng, nên version và CHANGELOG được cập nhật trên `dev` **trước** khi đưa lên `uat`. Bản đi qua `uat` và vào `main` là đúng bản đó. Tag chỉ gắn sau khi merge, trên commit merge của `main`.
 
 ```bash
 # 1. Trên dev: cập nhật version và CHANGELOG, KHÔNG tạo tag
@@ -211,8 +227,10 @@ cz changelog --incremental --unreleased-version "v$(cz version --project)"
 git add pyproject.toml CHANGELOG.md
 git commit -m "chore(release): v0.2.0"
 git push
-# 2. Mở PR dev → main, tiêu đề "chore(release): v0.2.0", merge bằng merge commit
-# 3. Gắn tag trên commit merge của main
+# 2. Mở PR dev → uat, tiêu đề "chore(uat): promote v0.2.0", merge bằng merge commit
+#    → triển khai lên staging, người của doanh nghiệp nghiệm thu
+# 3. Mở PR uat → main, tiêu đề "chore(release): v0.2.0", merge bằng merge commit
+# 4. Gắn tag trên commit merge của main
 git switch main && git pull
 git tag -a v0.2.0 -m "v0.2.0"
 git push origin v0.2.0
@@ -235,9 +253,10 @@ git commit -m "chore(release): v0.2.1"
 # mở PR vào main, squash merge
 git switch main && git pull
 git tag -a v0.2.1 -m "v0.2.1" && git push origin v0.2.1
-# back-merge về dev
+# back-merge về uat qua PR main → uat (merge commit), vì uat cấm push thẳng; rồi về dev
+gh pr create --base uat --head main --title "chore: back-merge v0.2.1 into uat"
 git switch dev && git pull
-git merge --no-ff main -m "chore: back-merge v0.2.1 into dev"
+git merge --no-ff origin/uat -m "chore: back-merge v0.2.1 into dev"
 git push
 ```
 
@@ -252,22 +271,23 @@ Phải dùng `--onto` vì squash merge tạo trên `dev` một commit mới, nê
 
 ## 6. Bảo vệ nhánh (GitHub)
 
-| Thiết lập | `main` | `dev` |
-|---|---|---|
-| Cấm push thẳng, bắt buộc qua PR | ✅ | — (cho phép push gấp, mục 5.2) |
-| Cần ít nhất 1 người duyệt | ⏳ Tạm để 0 vì mới có một người làm; nâng lên 1 khi có người thứ hai | — |
-| Bắt buộc CI xanh trước khi merge (các check ở mục 3.5) | ✅ | — (CI vẫn chạy sau khi push) |
-| Nhánh phải cập nhật với nhánh đích trước khi merge | ✅ | — |
-| Chỉ cho phép merge commit (cho PR release) và squash (cho hotfix) | ✅ | — (quy ước: chỉ squash cho PR thường, mục 4.1; ruleset không ép để giữ quyền push gấp) |
-| Cấm force-push | ✅ | ✅ |
-| Cấm xoá nhánh | ✅ | ✅ |
+| Thiết lập | `main` | `uat` | `dev` |
+|---|---|---|---|
+| Cấm push thẳng, bắt buộc qua PR | ✅ | ✅ | — (cho phép push gấp, mục 5.2) |
+| Cần ít nhất 1 người duyệt | ⏳ Tạm để 0 vì mới có một người làm; nâng lên 1 khi có người thứ hai | ⏳ Như `main` | — |
+| Bắt buộc CI xanh trước khi merge (các check ở mục 3.5) | ✅ | ✅ | — (CI vẫn chạy sau khi push) |
+| Nhánh phải cập nhật với nhánh đích trước khi merge | ✅ | ✅ | — |
+| Cách merge được phép | Merge commit (PR release) và squash (hotfix) | Chỉ merge commit | — (quy ước: chỉ squash cho PR thường, mục 4.1; ruleset không ép để giữ quyền push gấp) |
+| Cấm force-push | ✅ | ✅ | ✅ |
+| Cấm xoá nhánh | ✅ | ✅ | ✅ |
 
-`main` được bảo vệ bằng ruleset tên `main` (Settings → Rules → Rulesets), không ai được bypass. `dev` có ruleset tên `dev` chỉ gồm cấm force-push và cấm xoá nhánh; push thẳng vẫn được phép (mục 5.2).
+Mỗi nhánh có một ruleset cùng tên (Settings → Rules → Rulesets), không ai được bypass. Ruleset `dev` chỉ gồm cấm force-push và cấm xoá nhánh; push thẳng vẫn được phép (mục 5.2).
 
 ## 7. Phiên bản và CHANGELOG
 
 - **SemVer** `vMAJOR.MINOR.PATCH`. Giữ `0.x.y` cho tới khi go-live; bản go-live là `v1.0.0`.
-- Tag chỉ gắn trên `main`, trên commit merge của PR release (hoặc commit squash của PR hotfix), và chỉ gắn **sau** khi merge.
+- Tag chỉ gắn trên `main`, trên commit merge của PR release `uat` → `main` (hoặc commit squash của PR hotfix), và chỉ gắn **sau** khi merge.
+- Bản chỉ có tài liệu, trước khi có `backend/pyproject.toml`, đi qua `uat` và `main` như bình thường nhưng **không** gắn tag và không bump version; tag `v0.1.0` dành cho release đầu tiên có code.
 - `backend/CHANGELOG.md` sinh bằng `commitizen` từ các commit Conventional Commits, cập nhật trên `dev` (release) hoặc trong nhánh `hotfix/*` (hotfix), rồi đi vào `main` qua PR.
 - Phiên bản ghi trong `backend/pyproject.toml`, được `commitizen` cập nhật trong commit `chore(release): vX.Y.Z`. `commitizen` cấu hình đọc version từ `[project].version` và dùng tag dạng `v$version`.
 - Không chạy `cz bump` ở chế độ mặc định (tự commit và tự gắn tag), vì tag sẽ nằm trên `dev` chứ không phải `main`.

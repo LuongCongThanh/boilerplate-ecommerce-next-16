@@ -20,13 +20,13 @@ git push -u origin feat/<mo-ta-ngan>
 
 | Quy tắc | Chi tiết |
 |---|---|
-| Nhánh chính | `main` (production) ← `dev` (staging) ← nhánh tính năng |
+| Nhánh chính | `main` (production) ← `uat` (nghiệm thu, triển khai lên staging) ← `dev` (tích hợp) ← nhánh tính năng |
 | Commit, tên nhánh, tiêu đề PR | Tiếng Anh, theo Conventional Commits: `feat(ordering): add COD checkout` |
 | Merge vào `dev` | Squash merge |
-| Merge `dev` → `main` | Merge commit (không squash) |
+| Merge `dev` → `uat` và `uat` → `main` | Merge commit (không squash) |
 | Push thẳng vào `dev` | Chỉ khi thay đổi nhỏ, gấp và đã chạy `make lint`, `make test` |
-| Push thẳng vào `main` | Không được |
-| Force-push | Chỉ trên nhánh tính năng của mình, không bao giờ trên `dev` hoặc `main` |
+| Push thẳng vào `uat` hoặc `main` | Không được |
+| Force-push | Chỉ trên nhánh tính năng của mình, không bao giờ trên `dev`, `uat` hoặc `main` |
 
 ## Quy ước code
 
