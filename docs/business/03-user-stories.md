@@ -208,6 +208,12 @@
 ### US-608 · Xử lý tiền về cho đơn không còn chờ thanh toán · P1
 - AC1: Có danh sách các yêu cầu Hoàn tiền do hệ thống tự tạo (BR-PAY-05) để Staff xử lý, gồm cả đơn đã huỷ và đơn được trả tiền hai lần.
 
+### US-609 · Xử lý Vận đơn gặp sự cố · P1
+- AC1: Đơn Đang giao mà GHN báo mất hàng, hư hàng, sự cố, hoặc tự huỷ Vận đơn thì được gắn Cờ cần xử lý và hiện trong bộ lọc cờ (BR-SHP-08).
+- AC2: Staff huỷ được đơn đó (T14), bắt buộc nhập lý do; đơn đã thanh toán online được tạo Hoàn tiền toàn bộ (BR-REF-05).
+- AC3: Hàng chưa rời Kho thì Staff xác nhận nhập lại Tồn kho như đơn Hoàn hàng (US-607).
+- AC4: Đơn Đang giao không có cờ này thì Staff không huỷ được.
+
 ---
 
 ## E7. Tồn kho (Staff)

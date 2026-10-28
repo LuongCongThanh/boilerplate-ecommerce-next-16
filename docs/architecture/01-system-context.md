@@ -123,6 +123,7 @@ graph TB
     ordering --> payments
     ordering --> shipping
     inventory --> catalog
+    inventory --> identity
     promotions --> identity
     identity --> shared
     catalog --> shared

@@ -47,7 +47,7 @@ Refresh bằng R1 lần nữa (R1 đã dùng!)
                    → kẻ gian và người dùng thật đều phải đăng nhập lại
 ```
 
-Hai request refresh đồng thời hợp lệ từ cùng một client (ví dụ 2 tab) được chấp nhận trong cửa sổ **10 giây** để tránh đăng xuất nhầm **[Giả định]**.
+Hai request refresh đồng thời hợp lệ từ cùng một client (ví dụ 2 tab) được chấp nhận trong cửa sổ **10 giây** để tránh đăng xuất nhầm **[Giả định]**. Request thứ hai trong cửa sổ này nhận một cặp token mới (R2') cùng family; R1 vẫn là đã dùng, còn R2 và R2' đều hợp lệ. Hệ thống không trả lại R2 được vì DB chỉ lưu hash. Quá 10 giây mà dùng lại R1 thì thu hồi cả family như trên.
 
 ### 2.2. Thu hồi tức thì
 
