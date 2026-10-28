@@ -42,9 +42,11 @@
 ### US-103 · Tìm kiếm theo tên · P1
 **Là** Người mua, **tôi muốn** gõ tên Sản phẩm **để** tìm nhanh.
 
-- AC1: Gõ "ao thun" (không dấu) cho kết quả giống "áo thun".
+- AC1: Gõ "ao thun", "áo thun" hoặc "ÁO THUN" cho cùng kết quả; bỏ khoảng trắng đầu/cuối từ khoá (BR-CAT-13).
 - AC2: Gõ một phần tên, ví dụ "basic", vẫn ra Sản phẩm "Áo thun Basic cổ tròn".
 - AC3: Không có kết quả thì hiển thị thông báo và gợi ý danh mục.
+- AC4: Khớp chuỗi con liên tiếp: "ao thun" khớp "Áo thun Basic cổ tròn"; "ao thnu" hoặc "thun ao" không khớp tên này. MVP không tự sửa lỗi gõ hoặc tìm gần đúng (BR-CAT-13).
+- AC5: Từ khoá rỗng hoặc chỉ có khoảng trắng cho kết quả như không tìm kiếm. Kết quả vẫn áp dụng trạng thái hiển thị, các bộ lọc và cách sắp xếp của US-101, US-102.
 
 ### US-104 · Xem chi tiết Sản phẩm · P1
 **Là** Người mua, **tôi muốn** xem chi tiết và chọn size, màu **để** quyết định mua.
@@ -204,6 +206,7 @@
 
 ### US-607 · Xử lý đơn Hoàn hàng · P1
 - AC1: Đơn Hoàn hàng hiện trong danh sách chờ Staff xác nhận nhận hàng về Kho; xác nhận xong thì cộng lại Tồn kho.
+- AC2: Danh sách cũng gồm đơn huỷ T14 đã xác nhận hàng chưa rời Kho và còn cần nhập lại; không gồm hàng mất/hư hoặc đơn đã trả allocation khi huỷ trước Bàn giao. Hai thao tác xác nhận đồng thời hoặc gọi lại chỉ cộng tồn một lần.
 
 ### US-608 · Xử lý tiền về cho đơn không còn chờ thanh toán · P1
 - AC1: Có danh sách các yêu cầu Hoàn tiền do hệ thống tự tạo (BR-PAY-05) để Staff xử lý, gồm cả đơn đã huỷ và đơn được trả tiền hai lần.
@@ -211,7 +214,7 @@
 ### US-609 · Xử lý Vận đơn gặp sự cố · P1
 - AC1: Đơn Đang giao mà GHN báo mất hàng, hư hàng, sự cố, hoặc tự huỷ Vận đơn thì được gắn Cờ cần xử lý và hiện trong bộ lọc cờ (BR-SHP-08).
 - AC2: Staff huỷ được đơn đó (T14), bắt buộc nhập lý do; đơn đã thanh toán online được tạo Hoàn tiền toàn bộ (BR-REF-05).
-- AC3: Hàng chưa rời Kho thì Staff xác nhận nhập lại Tồn kho như đơn Hoàn hàng (US-607).
+- AC3: Khi huỷ T14, Staff phải xác nhận hàng chưa rời Kho hay mất/hư. Chỉ hàng chưa rời Kho được đánh dấu chờ nhập lại; huỷ chưa tự tăng tồn. Staff xác nhận nhập lại theo US-607; hàng mất/hư không được nhập lại.
 - AC4: Đơn Đang giao không có cờ này thì Staff không huỷ được.
 
 ---

@@ -1,10 +1,10 @@
 # 10. Yêu cầu phi chức năng
 
-> Trạng thái: **Bản nháp chờ review**. Các con số là mục tiêu cho MVP với tải khoảng 500–5.000 đơn/ngày; mục có nhãn **[Giả định]** cần xác nhận.
+> Trạng thái: **Đã duyệt cho MVP**. Các con số là mục tiêu cho MVP với tải khoảng 500–5.000 đơn/ngày; mục có nhãn **[Giả định · kiểm chứng: …]** được giữ cho tới khi có số liệu ở nơi ghi trong nhãn.
 
 ## 1. Hiệu năng
 
-| Chỉ số | Mục tiêu **[Giả định]** |
+| Chỉ số | Mục tiêu **[Giả định · kiểm chứng: test tải k6 trên staging trước đợt khuyến mãi lớn đầu tiên, [12](./12-testing-strategy.md) mục 9]** |
 |---|---|
 | p95 thời gian phản hồi API đọc (danh sách, chi tiết Sản phẩm, giỏ) | ≤ 300 ms |
 | p95 `POST /store/checkout` khi báo giá GHN đã có trong cache | ≤ 800 ms |
@@ -18,11 +18,11 @@ Cách đạt được:
 - Danh sách Sản phẩm dùng `catalog_variant.is_available` (bản sao) để lọc "còn hàng" mà không phải join sang `inventory`.
 - Cache trong Redis: cây danh mục (5 phút), báo giá GHN (10 phút), dữ liệu địa giới (1 ngày).
 - Checkout không gọi HTTP ra ngoài bên trong transaction. Phí ship lấy từ cache báo giá (thường đã có từ bước `checkout/quote`) trước khi mở transaction, nên khoá dòng chỉ được giữ trong lúc ghi DB.
-- Mọi transaction khoá dòng theo cùng một thứ tự: Đơn hàng → toàn bộ Tồn kho (theo `variant_id`) → toàn bộ Biến thể (checkout khoá để kiểm tra lại giá, [ADR 0012](../adr/0012-checkout-price-snapshot.md); luồng khác chỉ khoá Biến thể cần đổi trạng thái còn hàng) → Voucher ([02-backend-structure.md](./02-backend-structure.md) mục 9.1), để tránh deadlock khi nhiều người mua cùng lúc.
+- Checkout tạo đơn mới khoá Cart → toàn bộ Tồn kho theo variant_id → toàn bộ Biến thể theo id → Voucher; mọi cart mutation/merge khoá Cart theo id, không lấy Cart sau Tồn kho. Transition của đơn đã có khoá Order → Tồn kho → Biến thể cần cập nhật → Voucher, không quay lại Cart. Xem [02 mục 9.1](./02-backend-structure.md#91-quy-ước-chung) và [ADR 0012](../adr/0012-checkout-price-snapshot.md). Auth state back-office/private storefront đọc DB theo 05, không dùng cache để cấp quyền ghi; p95 phải đo với policy này.
 
 ## 2. Độ sẵn sàng và phục hồi
 
-| Chỉ số | Mục tiêu **[Giả định]** |
+| Chỉ số | Mục tiêu **[Giả định · kiểm chứng: diễn tập khôi phục RDS PITR trên staging trước go-live; độ sẵn sàng đo từ tháng đầu production]** |
 |---|---|
 | Độ sẵn sàng của API (production) | 99,5% / tháng |
 | RPO (dữ liệu tối đa có thể mất) | ≤ 5 phút (RDS PITR) |
@@ -48,7 +48,7 @@ Xem [05-auth-security.md](./05-auth-security.md). Thêm:
 | Log | `structlog` → stdout (JSON) → CloudWatch | Mỗi dòng có `request_id`, `user_id` (nếu có), `order_code` (nếu có); che PII |
 | Lỗi | Sentry | API, Celery task, relay |
 | Health | `/healthz` (tiến trình sống), `/readyz` (kết nối được PostgreSQL) | Dùng cho ALB và ECS health check |
-| Chỉ số nghiệp vụ cần cảnh báo | Sentry / CloudWatch | Outbox chưa lập delivery hoặc delivery pending tồn quá 1.000; `delivery_lag()` quá 60 giây (lúc này job T4 bắt đầu bỏ qua lượt chạy, [07](./07-async-events-jobs.md) mục 3.2); T4 bỏ lượt liên tục quá 15 phút (`cancel_skipped_too_long`); số Vận đơn quá 6 giờ chưa Đối soát tăng qua nhiều vòng liên tiếp (dấu hiệu webhook GHN đã chết); tuổi delivery pending cũ nhất; EmailLog queued/sending quá 5 phút hoặc failed; heartbeat relay/job khôi phục quá 3 phút; ErasureRequest processing có handler thiếu/failed/rejected; Payment creation_status prepared/unknown quá lease; Thanh toán pending quá 30 phút; tỉ lệ đơn dùng Phí ship dự phòng > 10%; có delivery failed chưa xử lý; Cờ cần xử lý mở quá 24 giờ **[Giả định]** |
+| Chỉ số nghiệp vụ cần cảnh báo | Sentry / CloudWatch | Outbox chưa lập delivery hoặc delivery pending tồn quá 1.000; `delivery_lag()` quá 60 giây (chỉ tính công việc đã tới hạn, [07](./07-async-events-jobs.md) mục 1.1.1; lúc này job T4 bắt đầu bỏ qua lượt chạy, mục 3.2); T4 bỏ lượt liên tục quá 15 phút (`cancel_skipped_too_long`); số Vận đơn quá 6 giờ chưa Đối soát tăng qua nhiều vòng liên tiếp (dấu hiệu webhook GHN đã chết); tuổi delivery pending cũ nhất; EmailLog queued/sending quá 5 phút hoặc failed; relay hoặc job theo lịch lỡ check-in quá 3 phút hoặc kết thúc lỗi (Sentry Cron Monitors, [07](./07-async-events-jobs.md) mục 3.4); ErasureRequest processing có handler thiếu/failed/rejected; Payment creation_status prepared/unknown quá lease; Thanh toán pending quá 30 phút; tỉ lệ đơn dùng Phí ship dự phòng > 10%; có delivery failed chưa xử lý; Cờ cần xử lý mở quá 24 giờ. Các ngưỡng là **[Giả định · kiểm chứng: chỉnh theo số liệu staging và tháng đầu production]** |
 
 `request_id` lấy từ header `X-Request-ID` nếu có, ngược lại tự sinh. `shared.events.publish` chép giá trị này vào `correlation_id` của sự kiện, và consumer gắn lại vào context log khi chạy handler, để lần theo một luồng từ API tới email.
 
@@ -57,23 +57,14 @@ Xem [05-auth-security.md](./05-auth-security.md). Thêm:
 | Khi | Làm gì |
 |---|---|
 | API chậm do CPU | Tăng số task ECS của API |
-| Queue Celery dài | Tăng worker; tách worker riêng cho queue `emails` / `integrations` |
+| Queue Celery dài | Tăng `worker`; tách worker riêng cho queue `emails`. Không tăng `worker-integrations`: queue này luôn đúng 1 instance để giữ rate limit nhà cung cấp ([07](./07-async-events-jobs.md) mục 3.1); queue này dài thì tăng `rate_limit` của task nếu nhà cung cấp cho phép |
 | Tìm kiếm chậm hoặc cần tìm sai chính tả | Thêm Meilisearch (giai đoạn 2) |
 | Cần phát lại sự kiện cho hệ thống mới, hoặc lưu lượng > 1.000 sự kiện/giây | Thêm adapter Kafka ([ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md)) |
 | Một module cần scale hoặc deploy độc lập | Tách module đó thành service. Ranh giới `contracts.py` và sự kiện đã có, nhưng trước đó phải bỏ các FK chéo module ([ADR 0006](../adr/0006-modular-monolith.md) cho phép) và tách bảng của module khỏi chuỗi migration chung |
 
 ## 6. Chất lượng code
 
-| Cổng chặn trong CI | Điều kiện để qua |
-|---|---|
-| `ruff check`, `ruff format --check` | Không lỗi |
-| `mypy` | Không lỗi (`--strict` cho `services`, `selectors`, `contracts`) |
-| `lint-imports` | Không vi phạm ranh giới module |
-| `pytest` | Toàn bộ test qua |
-| Độ phủ test | ≥ 80% branch coverage cho `services/` và `handlers.py`, tính riêng từng module, không đặt ngưỡng toàn repo ([12-testing-strategy.md](./12-testing-strategy.md) mục 8) |
-| OpenAPI | Schema sinh ra trùng với `backend/openapi.yaml` đã commit |
-| Migration | Không thiếu migration (`makemigrations --check`), không trùng số |
-| Lỗ hổng phụ thuộc | Không có lỗ hổng mức cao |
+Các cổng chặn trong CI (lint, type check, ranh giới module, test, coverage, OpenAPI, migration, lỗ hổng phụ thuộc) được định nghĩa một chỗ duy nhất ở [12-testing-strategy.md](./12-testing-strategy.md) mục 8.
 
 ## 7. Bản địa hoá
 

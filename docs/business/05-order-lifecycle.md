@@ -105,7 +105,7 @@ Yêu cầu Đổi trả **không** đổi trạng thái của Đơn hàng. Nó �
 
 - **Đã nhận hàng**: Staff xác nhận hàng gửi trả đã về Kho. Tồn kho **chưa** được cộng lại ở bước này.
 - **Chấp nhận / Từ chối**: Staff quyết định theo từng dòng, nhập số lượng được chấp nhận và chọn nhập lại Tồn kho hay không (BR-RET-08). Chỉ phần được chấp nhận và chọn nhập lại mới cộng lại Tồn kho (BR-INV-08). Không dòng nào được chấp nhận thì yêu cầu bị Từ chối; hàng không được chấp nhận được gửi lại cho Người mua (BR-RET-09).
-- **Đã hoàn tiền**: khi Chấp nhận, hệ thống tạo yêu cầu Hoàn tiền theo BR-RET-07 và gắn nó với yêu cầu Đổi trả. Yêu cầu chuyển sang Đã hoàn tiền khi Staff ghi nhận đúng Hoàn tiền đó.
+- **Đã hoàn tiền**: khi Chấp nhận, hệ thống tính số hoàn lũy kế theo BR-RET-07; nếu tổng > 0 thì tạo yêu cầu Hoàn tiền và gắn nó với yêu cầu Đổi trả. Yêu cầu chuyển sang Đã hoàn tiền khi Staff ghi nhận đúng Hoàn tiền đó. Nếu có hàng được chấp nhận nhưng tổng số hoàn bằng 0 do Voucher hoặc làm tròn, hệ thống xử lý nhập kho theo lựa chọn rồi chuyển thẳng sang Đã hoàn tiền, không tạo Hoàn tiền 0đ; không còn nghĩa vụ hoàn tiền cho yêu cầu này.
 
 Yêu cầu Đổi trả **đang mở** là yêu cầu chưa bị Từ chối và chưa Đã hoàn tiền. Khi còn yêu cầu đang mở, đơn chưa chuyển sang `COMPLETED` (T13), kể cả khi đã hết hạn Đổi trả.
 
@@ -131,7 +131,7 @@ GHN báo mất hàng, hư hàng, sự cố, hoặc tự huỷ một Vận đơn 
 1. Đơn **giữ nguyên** `SHIPPING` và được gắn Cờ cần xử lý `shipment_exception`.
 2. Staff liên hệ GHN và Người mua. Nếu GHN tiếp tục giao, đơn đi tiếp như bình thường và Staff gỡ cờ.
 3. Nếu không giao được nữa, Staff huỷ đơn (T14) và bắt buộc nhập lý do. Đơn đã thanh toán online được Hoàn tiền toàn bộ.
-4. Hàng chưa rời Kho (GHN huỷ trước khi lấy hàng) thì Staff xác nhận nhập lại Tồn kho như đơn Hoàn hàng. Hàng mất hoặc hư thì không nhập lại; việc đòi GHN bồi thường làm ngoài hệ thống.
+4. Khi huỷ T14, Staff xác nhận tường minh hàng chưa rời Kho (GHN huỷ trước khi lấy hàng) hay mất/hư. Trường hợp chưa rời Kho được đánh dấu cần nhập lại, nhưng chưa cộng tồn ở bước huỷ; Staff xác nhận nhập lại như đơn Hoàn hàng. Hàng mất hoặc hư không được đánh dấu hoặc nhập lại; việc đòi GHN bồi thường làm ngoài hệ thống. T12 luôn được đánh dấu cần nhận lại. Xác nhận nhập lại nhiều lần chỉ cộng tồn một lần và không đổi trạng thái cuối của đơn.
 
 ## 5. Thời gian và job tự động
 

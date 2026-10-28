@@ -1,6 +1,6 @@
 # 07. Sự kiện và job chạy nền
 
-> Trạng thái: **Bản nháp chờ review**. Quyết định nền tảng: [ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md), [ADR 0003](../adr/0003-postgres-redis-celery.md).
+> Trạng thái: **Đã duyệt cho MVP**. Mục có nhãn **[Giả định · kiểm chứng: …]** được giữ cho tới khi có số liệu ở nơi ghi trong nhãn. Quyết định nền tảng: [ADR 0007](../adr/0007-events-outbox-celery-no-kafka.md), [ADR 0003](../adr/0003-postgres-redis-celery.md).
 
 ## 1. Luồng sự kiện (Transactional Outbox)
 
@@ -25,7 +25,7 @@ sequenceDiagram
     RD->>W: dispatch_event
     W->>DB: BEGIN; khoá EventDelivery; bỏ qua nếu đã kết thúc hoặc chưa tới hạn retry
     W->>H: Gọi handler trong savepoint của cùng transaction
-    W->>DB: Ghi ProcessedEvent + delivery completed cùng tác động handler; COMMIT
+    W->>DB: Chuyển delivery completed cùng tác động handler; COMMIT
 ```
 
 ### 1.1. Bảo đảm
@@ -34,17 +34,18 @@ sequenceDiagram
 |---|---|
 | Sự kiện được lưu bền vững | Sự kiện ghi cùng transaction với dữ liệu nghiệp vụ trong PostgreSQL |
 | Tự giao lại khi mất task hoặc worker chết | `EventDelivery` lưu từng cặp sự kiện–handler; relay quét lại các delivery chưa kết thúc tới hạn |
-| Không lặp tác động DB của cùng cặp sự kiện–handler | Khoá delivery và ghi `shared_processed_event` cùng transaction với tác động của handler |
+| Không lặp tác động DB của cùng cặp sự kiện–handler | Khoá dòng delivery; chuyển `completed`/`rejected` cùng transaction với tác động của handler. Delivery không còn `pending` thì consumer bỏ qua |
 | Một handler lỗi không ảnh hưởng handler khác | Mỗi cặp (sự kiện, handler) là một Celery task riêng |
-| Có thể phát lại | Bảng outbox giữ sự kiện **90 ngày** **[Giả định]**; lệnh `manage.py replay_events --type … --since …` |
+| Có thể phát lại | Bảng outbox giữ sự kiện **90 ngày** **[Giả định · kiểm chứng: dung lượng bảng outbox trên staging trước go-live]**; lệnh `manage.py replay_events --type … --since …` |
 
 ### 1.1.1. PostgreSQL quyết định công việc còn chờ
 
 - `publish()` chỉ ghi `OutboxEvent`. Relay lập danh sách handler theo `event_type` và `schema_version`, tạo `EventDelivery` với `UNIQUE(event_id, handler)` rồi ghi `deliveries_created_at` trong cùng transaction. Marker này chỉ có nghĩa đã lập danh sách, không có nghĩa handler đã chạy. Không có handler thì ghi marker và log để tránh quét mãi.
-- Relay chạy độc lập với Celery Beat, quét mỗi giây. Với delivery `pending` có cả `next_attempt_at` và `next_dispatch_at` tới hạn, relay khoá dòng bằng `select_for_update(skip_locked=True)`, đặt `next_dispatch_at = now + 3 phút` **[Giả định]**, commit rồi mới enqueue. Không giữ transaction DB khi gọi broker. Chết trước enqueue, Redis mất task hay worker chết trước commit đều khiến delivery được giao lại sau hạn này.
+- Relay chạy độc lập với Celery Beat, quét mỗi giây. Với delivery `pending` có cả `next_attempt_at` và `next_dispatch_at` tới hạn, relay khoá dòng bằng `select_for_update(skip_locked=True)`, đặt `next_dispatch_at = now + 3 phút` **[Giả định · kiểm chứng: thời gian xử lý handler p99 trên staging]**, commit rồi mới enqueue. Không giữ transaction DB khi gọi broker. Chết trước enqueue, Redis mất task hay worker chết trước commit đều khiến delivery được giao lại sau hạn này.
 - Consumer khoá dòng delivery trong toàn transaction xử lý; kiểm tra trạng thái và `next_attempt_at` trước khi gọi handler. Task trùng chờ khoá rồi thấy kết quả đã commit thì kết thúc. Hạn giao lại dài hơn `task_time_limit` 120 giây; timeout không cho phép bỏ qua khoá DB. Task tới muộn vẫn phải kiểm tra trạng thái hiện tại.
-- `ProcessedEvent` và trạng thái delivery `completed`/`rejected` được ghi cùng transaction với kết quả xử lý. Retry dùng `attempts`, `next_attempt_at` trong PostgreSQL; không dùng bộ đếm Celery làm nguồn quyết định. `last_dispatched_at` chỉ phục vụ quan sát. Broker không hoạt động thì relay giữ công việc trong DB và thử tiếp, không tính là handler thất bại.
-- Chỉ purge sự kiện quá 90 ngày đã có `deliveries_created_at` và mọi delivery đã `completed` hoặc `rejected`, cùng delivery, ProcessedEvent và FailedEvent liên quan; giữ cả sự kiện và delivery `pending`/`failed` cho tới khi được xử lý. Cảnh báo công việc tồn đọng; không âm thầm xoá khi hết thời gian lưu thông thường.
+- Trạng thái delivery `completed`/`rejected` được ghi cùng transaction với kết quả xử lý; đây cũng là dấu "đã xử lý", không có bảng riêng. Retry dùng `attempts`, `next_attempt_at` trong PostgreSQL; không dùng bộ đếm Celery làm nguồn quyết định. `last_dispatched_at` chỉ phục vụ quan sát. Broker không hoạt động thì relay giữ công việc trong DB và thử tiếp, không tính là handler thất bại.
+- Chỉ purge sự kiện quá 90 ngày đã có `deliveries_created_at` và mọi delivery đã `completed` hoặc `rejected`, cùng các delivery của sự kiện đó; giữ cả sự kiện và delivery `pending`/`failed` cho tới khi được xử lý. Cảnh báo công việc tồn đọng; không âm thầm xoá khi hết thời gian lưu thông thường.
+- API công khai `shared.events.delivery_lag()` trả tuổi của công việc giao sự kiện đáng lẽ hạ tầng đã phải xử lý, lấy lớn nhất giữa: `now − created_at` của sự kiện chưa có `deliveries_created_at`, và `now − next_attempt_at` của delivery `pending` có `next_attempt_at ≤ now`. Không tính delivery `failed`, `completed`, `rejected` hay `pending` đang chờ tới lượt retry. Lý do: hàm đo tồn đọng của relay, broker và worker cho job T4 (mục 3.2); một handler lỗi đã tự dời `next_attempt_at` về tương lai, nên không làm T4 ngừng huỷ đơn. Delivery `failed` có cảnh báo riêng ([10-nfr.md](./10-nfr.md) mục 4).
 - API công khai `shared.events.get_delivery_outcomes(event_id, handler_names)` trả trạng thái từng handler được yêu cầu: missing/pending/completed/rejected/failed. Không suy thành công từ danh sách rỗng. Ẩn danh dùng required_handlers đã chốt trên ErasureRequest; replay không tự mở rộng yêu cầu đã hoàn tất.
 - `replay_events` bảo đảm delivery tồn tại cho handler được chọn, có thể thêm handler mới vào sự kiện cũ; không xoá dấu đã xử lý hay chạy lại cặp đã hoàn tất. Cặp `failed` cần lệnh `retry_failed_events` để mở lại có chủ đích. Thêm handler mới cho một loại sự kiện đã có: sau deploy chạy `replay_events --type <sự kiện> --since <lúc bắt đầu deploy>`, vì trong lúc deploy relay bản cũ có thể đã lập danh sách delivery mà không biết handler mới.
 
@@ -60,13 +61,13 @@ Handler báo kết quả cho consumer bằng cách kết thúc bình thường h
 
 | Handler kết thúc bằng | Consumer làm gì |
 |---|---|
-| Chạy xong | Commit tác động handler, `ProcessedEvent` và delivery `completed` |
-| `RetryLater`, ví dụ `TransitionNotYetValid` | Rollback savepoint handler; không ghi `ProcessedEvent`; tăng bộ đếm và lưu lịch retry trên delivery trong transaction ngoài |
-| `DomainError` khác, ví dụ `InvalidTransition` | Rollback savepoint handler nhưng ghi `ProcessedEvent` và delivery `rejected`, không retry. Log `WARNING` `event_rejected` kèm `event_type`, `handler`, `code` |
+| Chạy xong | Commit tác động handler và delivery `completed` |
+| `RetryLater`, ví dụ `TransitionNotYetValid` | Rollback savepoint handler; delivery giữ `pending`; tăng bộ đếm, ghi `last_error` và lưu lịch retry trên delivery trong transaction ngoài |
+| `DomainError` khác, ví dụ `InvalidTransition` | Rollback savepoint handler nhưng chuyển delivery `rejected`, không retry. Log `WARNING` `event_rejected` kèm `event_type`, `handler`, `code` |
 | Exception khác | Rollback savepoint handler; lưu retry như `RetryLater`. Nếu kết nối DB hỏng, toàn transaction rollback; relay giao lại theo hạn đã lưu |
 
-- Lịch retry lưu trong DB: sau lần đầu, thử lại tối đa **5 lần**, chờ lần lượt 10 giây, 1 phút, 5 phút, 15 phút, 30 phút **[Giả định]**. `attempts` đếm lỗi handler đã lưu được; task bị mất không tiêu hao lượt retry. Mỗi lỗi đặt lại cả `next_attempt_at` và `next_dispatch_at` theo lịch này.
-- Hết số lần retry: chuyển delivery `failed`, ghi `FailedEvent` (`event_id`, `handler`, `error`, `failed_at`) cùng transaction, gửi cảnh báo Sentry. Áp dụng cả cho `RetryLater`. `manage.py retry_failed_events` khoá delivery `failed`, đặt lại `pending`, bộ đếm và lịch về hiện tại, ghi `retried_at`; relay giao lại. Không tự mở lại delivery `completed`/`rejected`.
+- Lịch retry lưu trong DB: sau lần đầu, thử lại tối đa **5 lần**, chờ lần lượt 10 giây, 1 phút, 5 phút, 15 phút, 30 phút **[Giả định · kiểm chứng: tỉ lệ delivery `failed` trên staging và tháng đầu production]**. `attempts` đếm lỗi handler đã lưu được; task bị mất không tiêu hao lượt retry. Mỗi lỗi đặt lại cả `next_attempt_at` và `next_dispatch_at` theo lịch này.
+- Hết số lần retry: chuyển delivery `failed`, ghi `failed_at` và `last_error` trên chính dòng delivery, gửi cảnh báo Sentry. Áp dụng cả cho `RetryLater`. `manage.py retry_failed_events` khoá delivery `failed`, đặt lại `pending`, bộ đếm và lịch về hiện tại, ghi `retried_at`; relay giao lại. Không tự mở lại delivery `completed`/`rejected`.
 - Relay lỗi kết nối Redis: sự kiện vẫn nằm trong outbox, relay tự thử lại.
 - `enqueue_on_commit` cho công việc có bản ghi DB bắt lỗi kết nối/enqueue broker, ghi log và cảnh báo mà không biến request đã commit thành lỗi API. Không xoá hay đánh dấu hoàn tất khi enqueue thất bại; relay/job quét sẽ khôi phục. Lỗi lập trình hoặc dữ liệu không được âm thầm bỏ qua.
 
@@ -111,7 +112,11 @@ Thanh toán COD (`start_cod_payment`, `record_cod_collected`, `cancel_cod_paymen
 | `default` | Job theo lịch | Chung |
 | `events` | `dispatch_event` | Chung |
 | `emails` | Gửi email | Chung; tách riêng khi tải lớn |
-| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo và huỷ Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Chung; giới hạn tần suất bằng `rate_limit` của từng task để không vượt rate limit của nhà cung cấp (một worker nghe cả 4 queue nên không giới hạn được theo queue) |
+| `integrations` | Gọi API VNPay, MoMo, GHN: Đối soát, tạo và huỷ Vận đơn (tạo và huỷ Vận đơn luôn chạy nền, xem [06-integrations.md](./06-integrations.md) mục 4) | Riêng, **đúng 1 instance** (`worker-integrations`, [09](./09-deployment-aws-target.md) mục 2). Celery tính `rate_limit` theo từng worker instance, nên chỉ khi có đúng 1 instance thì `rate_limit` của từng task mới là giới hạn chung, không vượt rate limit của nhà cung cấp. Không scale queue này bằng cách thêm instance |
+
+Ở local, một worker nghe cả 4 queue ([08](./08-local-development.md) mục 7); vẫn chỉ có 1 instance nên quy tắc trên giữ nguyên.
+
+Lần gọi nhà cung cấp ngay trong request API (tạo link thanh toán, báo giá GHN) không đi qua queue `integrations`, nên `rate_limit` không áp cho chúng. Tần suất của các lần gọi này được giới hạn gián tiếp bằng throttle theo Người mua ([05-auth-security.md](./05-auth-security.md) mục 5).
 
 Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không gọi `.delay()` trực tiếp ([02-backend-structure.md](./02-backend-structure.md) mục 9.1).
 
@@ -125,15 +130,20 @@ Code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit`, không g
 | `ordering.complete_delivered_orders` | Mỗi giờ | ordering | T13 |
 | `ordering.compute_best_sellers` | Mỗi ngày 02:00 | ordering | BR-CAT-12; ghi kết quả vào `catalog` qua `catalog.contracts.set_best_seller_counts` |
 | `ordering.purge_expired_guest_carts` | Mỗi ngày 03:00 | ordering | BR-CRT-02 |
-| `notifications.recover_pending_emails` | Mỗi phút **[Giả định]** | notifications | Đẩy lại EmailLog `queued` tới hạn hoặc `sending` hết lease; xem mục 4 |
-| `shared.purge_old_outbox_events` | Mỗi ngày 03:30 | shared | Chỉ xoá sự kiện quá 90 ngày đã hoàn tất mọi delivery; xoá delivery và ProcessedEvent tương ứng |
+| `notifications.recover_pending_emails` | Mỗi phút | notifications | Đẩy lại EmailLog `queued` tới hạn hoặc `sending` hết lease; xem mục 4 |
+| `notifications.purge_old_emails` | Mỗi ngày 04:15 | notifications | EmailLog `sent`, `failed`, `cancelled` tạo quá 90 ngày: xoá `to_address` và `context`, giữ dòng để thống kê ([06-compliance.md](../business/06-compliance.md) mục 5) |
+| `shared.purge_old_outbox_events` | Mỗi ngày 03:30 | shared | Chỉ xoá sự kiện quá 90 ngày đã hoàn tất mọi delivery; xoá delivery tương ứng |
 | `shared.purge_idempotency_keys` | Mỗi ngày 03:45 | shared | Chỉ xoá key completed quá 24 giờ; giữ in_progress chưa rõ kết quả |
-| `identity.purge_refresh_replays` | Mỗi phút **[Giả định]** | identity | Xoá ciphertext replay hết hạn; endpoint vẫn kiểm tra hạn và thu hồi trước decrypt, không chờ job |
+| `identity.purge_refresh_replays` | Mỗi phút | identity | Xoá ciphertext replay hết hạn; endpoint vẫn kiểm tra hạn và thu hồi trước decrypt, không chờ job |
 | `identity.purge_expired_tokens` | Mỗi ngày 04:00 | identity | Refresh token, reset token hết hạn |
-| `identity.reconcile_erasure_requests` | Mỗi phút **[Giả định]** | identity | Chỉ hoàn tất processing khi mọi handler bắt buộc completed; thiếu/failed/rejected thì giữ trạng thái và cảnh báo |
-| `payments.recover_payment_initializations` | Mỗi phút **[Giả định]** | payments | Khôi phục prepared/unknown hết lease bằng cùng Payment và mã nhà cung cấp; không ghi đè IPN (06 mục 3.1) |
+| `identity.reconcile_erasure_requests` | Mỗi phút | identity | Chỉ hoàn tất processing khi mọi handler bắt buộc completed; thiếu/failed/rejected thì giữ trạng thái và cảnh báo |
+| `payments.recover_payment_initializations` | Mỗi phút | payments | Khôi phục prepared/unknown hết lease bằng cùng Payment và mã nhà cung cấp; không ghi đè IPN (06 mục 3.1) |
+
+Tần suất "mỗi phút" của các job khôi phục là **[Giả định · kiểm chứng: tải DB của các truy vấn quét trên staging]**.
 
 Mọi job đều **idempotent** và xử lý theo lô (ví dụ 200 đơn mỗi lần) để chạy lại an toàn.
+
+**Nguồn lịch job.** Lịch ở bảng trên được khai báo trong code (`config/celery.py`), là nguồn chuẩn. Lệnh `manage.py sync_beat_schedule` tạo hoặc cập nhật `PeriodicTask` của `django-celery-beat` theo code, **tắt** (không xoá) job có trong DB mà không còn trong code và ghi log từng thay đổi. Lệnh idempotent, chạy sau mỗi lần `migrate`: ở local qua `make migrate` ([08](./08-local-development.md) mục 2.4), trên AWS trong cùng task migration ([09](./09-deployment-aws-target.md) mục 4). Không sửa lịch bằng tay, vì Django Admin chỉ đọc.
 
 Job Đối soát (`reconcile_pending_payments`, `reconcile_shipments`) chỉ quét rồi đẩy mỗi Thanh toán hoặc Vận đơn một task con lên queue `integrations`, không tự gọi nhà cung cấp trong task của job. Một lô 200 lần gọi, mỗi lần tới 13 giây (06 mục 1), sẽ vượt `task_time_limit` 120 giây.
 
@@ -151,11 +161,47 @@ Job Đối soát (`reconcile_pending_payments`, `reconcile_shipments`) chỉ qu�
 
 Các cấu hình ack hỗ trợ giao lại task nhưng không thay thế trạng thái công việc trong PostgreSQL; tác vụ vẫn phải chạy lại an toàn. Tham khảo [tài liệu Celery về task và acks_late](https://docs.celeryq.dev/en/stable/userguide/tasks.html).
 
+### 3.4. Giám sát relay và job theo lịch
+
+Dùng **Sentry Cron Monitors**, chỉ bật ở staging và production:
+
+- Mỗi job ở mục 3.2 gửi check-in `in_progress` khi bắt đầu và `ok` hoặc `error` khi kết thúc, `monitor_slug` là tên job. Lịch của monitor lấy từ cùng khai báo trong code.
+- Relay gửi check-in mỗi phút từ vòng lặp chính.
+- Sentry cảnh báo khi check-in trễ quá **3 phút** hoặc job kết thúc lỗi. Lúc deploy beat ngừng vài chục giây ([09](./09-deployment-aws-target.md) mục 4), ngắn hơn ngưỡng này.
+
+Lý do không ghi heartbeat vào DB rồi để một job Beat kiểm tra: khi chính Beat chết thì không còn ai báo. Sentry nằm ngoài hệ thống cần giám sát.
+
 ## 4. Email: hàng đợi bền vững trong PostgreSQL
 
-- Handler gọi service tạo `EmailLog(status="queued")` cùng transaction với `ProcessedEvent`, `UNIQUE(event_id, template)`; lưu ID nguồn (`account_id`, `order_code` hoặc `refund_id`) để dựng lại nội dung. `context` chỉ cho phép snapshot `amount`, `currency` từ sự kiện nếu template cần số tiền của đúng lần phát sinh, không phụ thuộc outbox còn giữ hay không. Không lưu token, link bí mật, raw payload hay HTML chứa PII trong hàng đợi. Sau commit chỉ enqueue `send_email(email_log_id)` để giảm độ trễ; DB là nguồn công việc còn chờ.
-- Task mở transaction ngắn để khoá EmailLog, bỏ qua `sent`/`failed`/`cancelled`, `queued` chưa tới `next_attempt_at` hoặc `sending` có lease chưa hết; nhận lease bằng `lease_token` mới, `lease_expires_at = now + 3 phút` **[Giả định]**, đặt `sending` và tăng `attempts`. Sau commit mới lấy dữ liệu qua contracts, cấp token xác thực/reset nếu cần, render và gửi email ngoài transaction. Link bí mật chỉ tồn tại trong bộ nhớ lúc gửi.
+- Handler gọi service tạo `EmailLog(status="queued")` cùng transaction với việc chuyển delivery `completed`, `UNIQUE(event_id, template)`; lưu ID nguồn (`account_id`, `order_code` hoặc `refund_id`) để dựng lại nội dung. `context` chỉ cho phép snapshot `amount`, `currency` từ sự kiện nếu template cần số tiền của đúng lần phát sinh, không phụ thuộc outbox còn giữ hay không. Không lưu token, link bí mật, raw payload hay HTML chứa PII trong hàng đợi. Sau commit chỉ enqueue `send_email(email_log_id)` để giảm độ trễ; DB là nguồn công việc còn chờ.
+- Task mở transaction ngắn để khoá EmailLog, bỏ qua `sent`/`failed`/`cancelled`, `queued` chưa tới `next_attempt_at` hoặc `sending` có lease chưa hết; nhận lease bằng `lease_token` mới, `lease_expires_at = now + 3 phút` **[Giả định · kiểm chứng: thời gian gửi SES p99 trên staging]**, đặt `sending` và tăng `attempts`. Sau commit mới lấy dữ liệu qua contracts, cấp token xác thực/reset nếu cần, render và gửi email ngoài transaction. Link bí mật chỉ tồn tại trong bộ nhớ lúc gửi.
 - Ghi kết quả trong transaction ngắn, chỉ khi `lease_token` còn khớp. Thành công → `sent`; lỗi → `queued` với `next_attempt_at` theo lịch 10 giây, 1 phút, 5 phút, 15 phút, 30 phút; sau lần gửi thứ 6 thất bại → `failed` và cảnh báo Sentry. Claim sau lease hết hạn vẫn tính một lần gửi để giới hạn các lần worker chết; quá giới hạn chuyển `failed` để kiểm tra thủ công. Timeout gửi phải ngắn hơn lease và task time limit.
 - `recover_pending_emails` quét `queued` tới hạn và `sending` hết lease để đẩy lại task. Nếu task quét hoặc task gửi mất trong Redis, lần quét tiếp theo vẫn tìm thấy công việc. Không cần phát lại sự kiện đã xử lý. Lệnh `manage.py retry_failed_emails` mở lại các email `failed` được chọn, đặt lại bộ đếm, ghi log thao tác; không mở lại email `sent`/`cancelled`.
+- `purge_old_emails` (mục 3.2) đặt `to_address = ''` và `context = {}` cho EmailLog đã kết thúc quá 90 ngày; không đụng email `queued`/`sending`. Email `failed` đã purge không mở lại được bằng `retry_failed_emails` vì không còn địa chỉ nhận.
 - Nhà cung cấp đã nhận nhưng chưa lưu `sent` thì lần khôi phục có thể gửi trùng; `UNIQUE(event_id, template)` chỉ chống tạo hai EmailLog. Dùng Message-ID ổn định theo EmailLog để tra cứu, không coi đây là bảo đảm nhà cung cấp chống trùng.
 - Trước khi gửi, kiểm tra nguồn còn hợp lệ: chuyển `cancelled` (chỉ khi lease còn khớp) cho email xác thực khi tài khoản đã xác thực, reset khi tài khoản không còn hoạt động hoặc nguồn không còn hợp lệ, và trường hợp không còn địa chỉ nhận; `customer-erased` chuyển email chưa gửi của đối tượng sang `cancelled`, xoá `to_address` và vô hiệu lease. Task lấy lại dữ liệu mới ngay trước khi gửi; việc gửi đã bắt đầu ở nhà cung cấp không thể thu hồi bằng transaction DB.
+
+## 5. Kịch bản kiểm thử
+
+Test đặt ở `shared/events/tests/` và `test_handlers_<chủ đề>.py` của module; nguyên tắc chung ở [12-testing-strategy.md](./12-testing-strategy.md) mục 2.3.
+
+- Consumer (mục 1.3), test bằng handler giả: khoá delivery; thành công commit tác động và completed cùng nhau. RetryLater/exception rollback savepoint handler, delivery giữ pending, lưu bộ đếm, last_error và lịch DB; DomainError khác rollback savepoint nhưng chuyển rejected, không retry.
+- Relay: tạo từng cặp event–handler và marker deliveries_created_at nguyên tử, không tạo trùng khi hai relay cùng chạy. Relay không phụ thuộc Beat. Chết sau khi lưu hạn giao lại nhưng trước enqueue: sau hạn, delivery được giao tiếp.
+- Redis đã nhận rồi mất task hoặc worker chết trước commit: relay giao lại delivery pending tới hạn; tác động cuối cùng chỉ commit một lần. Test task giao trùng chạy đồng thời trên PostgreSQL thật; consumer phải kiểm tra trạng thái và next_attempt_at.
+- Handler hết retry: delivery chuyển failed, ghi failed_at và last_error; retry_failed_events mở lại đúng cặp, reset lịch/bộ đếm và ghi retried_at; không mở lại completed/rejected. Retry dùng lịch DB, mất task không làm reset số lỗi handler.
+- Purge không xoá sự kiện có delivery pending/failed dù quá 90 ngày; chỉ xoá sự kiện đủ tuổi đã kết thúc mọi delivery. Replay không xoá dấu đã xử lý; thêm handler mới thì tạo delivery mới được.
+- Email: handler commit EmailLog queued rồi process chết trước enqueue; job quét tìm lại và gửi được dù delivery đã completed. Mất task quét thì lần Beat tiếp theo vẫn phục hồi.
+- Hai task cùng gửi một EmailLog: chỉ một task nhận lease; kết quả lease cũ không ghi đè lease mới. Nhà cung cấp nhận rồi worker chết trước lưu sent: cho phép gửi lại, không khẳng định chỉ gửi một email.
+- Email queued lỗi theo backoff, sending hết lease được khôi phục; quá giới hạn chuyển failed và cảnh báo; retry_failed_emails chỉ mở lại failed được chọn. Email sent/cancelled không gửi lại. Email xác thực/reset không còn hợp lệ bị bỏ qua; không lưu token/link bí mật trong outbox hay EmailLog.
+- customer-erased huỷ email chưa gửi, xoá người nhận và vô hiệu lease; worker đang giữ lease cũ không ghi đè kết quả sau đó.
+- Job Celery Beat (mục 3.2): chạy 2 lần liên tiếp cho ra cùng kết quả.
+- `sync_beat_schedule`: DB rỗng thì tạo đủ job theo code; chạy lần hai không đổi gì; job có trong DB nhưng không còn trong code bị tắt, không bị xoá; tần suất trong DB khác code thì được sửa theo code.
+- `purge_old_emails`: chỉ xoá `to_address` và `context` của EmailLog `sent`/`failed`/`cancelled` quá 90 ngày, ở cả hai phía của mốc (time-machine); không đụng `queued`/`sending`; chạy lại không đổi gì.
+
+| Kịch bản | Kỳ vọng |
+|---|---|
+| `delivery_lag()` với delivery không do hạ tầng chậm | Delivery `failed`, `completed`, `rejected` và `pending` có `next_attempt_at` trong tương lai không được tính; một handler lỗi đang chờ retry 30 phút không làm T4 bỏ lượt. Delivery `pending` tới hạn và sự kiện chưa có `deliveries_created_at` thì được tính (mục 1.1.1) |
+| Xoá dữ liệu có một handler chưa xong, failed, rejected hoặc chưa có delivery | ErasureRequest giữ processing, completed_at null; không coi danh sách delivery rỗng là thành công |
+| Tất cả handler ẩn danh bắt buộc completed | Job hoàn tất một lần; gọi lại không phát thêm sự kiện; subject còn lấy được trong processing và được làm sạch sau hoàn tất |
+
+**Payload sự kiện không chứa secret hay PII** (mục 2): `backend/tests/test_event_payloads.py` duyệt mọi class `DomainEvent` đã đăng ký và fail nếu tên field **chứa** một từ trong danh sách cấm (`email`, `phone`, `address`, `name`, `token`, `password`) hoặc kết thúc bằng `_url`, nên `contact_name` hay `reset_token` cũng bị chặn. Test này chỉ bắt lỗi theo tên field; reviewer vẫn phải đọc payload của mọi sự kiện mới. Test đặt ở `backend/tests/` (không thuộc `root_packages`) vì cần nhìn thấy sự kiện của mọi module.
