@@ -35,6 +35,7 @@ Vì vậy Next.js là BFF cho **mọi** request tới Django, kể cả request 
 | Refresh token | Sống **30 ngày** (storefront) / **12 giờ** (back-office) **[Giả định]**. Là JWT có `jti` và `fam` (family_id); bảng RefreshToken chỉ lưu sha256; ngoại lệ có kiểm soát là response mã hoá trong RefreshReplay để trả lại cùng kết quả trong 10 giây (mục 2.1) |
 | Kiểm tra bắt buộc | Chữ ký, `exp`, `iat`, `iss`, `aud` đúng nhánh API, `tv` khớp `account.token_version`, Tài khoản `is_active` |
 | Lệch giờ cho phép | 30 giây |
+| `lookup_token` | JWT ký bằng cùng khoá Ed25519, `aud = order_lookup`, `sub` = Mã đơn, sống **30 phút**, không lưu DB và không thu hồi được (chỉ mở đúng một đơn và sống ngắn). Do `POST store/checkout` (Khách vãng lai) và `POST store/orders/lookup` cấp, gửi qua header `X-Lookup-Token`. `IsOrderOwner` kiểm tra chữ ký, `exp`, `aud` và `sub` khớp Mã đơn trên URL |
 
 ### 2.1. Xoay vòng refresh token và phát hiện dùng lại
 
@@ -66,7 +67,7 @@ Trong cửa sổ **10 giây** từ used_at **[Giả định]**, request lặp b�
 | Ẩn danh Tài khoản | Như vô hiệu hoá |
 | Đăng nhập Google vào Tài khoản chưa xác thực email | Như đổi mật khẩu (mục 3) |
 
-Kiểm tra `tv` cần đọc Tài khoản ở mỗi request; kết quả được cache trong Redis 60 giây và bị xoá khi `token_version` thay đổi. Khi Redis lỗi, đọc thẳng PostgreSQL.
+Kiểm tra `tv` cần đọc Tài khoản ở mỗi request; kết quả được cache trong Redis 60 giây và bị xoá khi `token_version` thay đổi. Khi Redis lỗi, đọc thẳng PostgreSQL. Nếu `token_version` đổi đúng lúc Redis lỗi thì lệnh xoá cache thất bại; khi Redis hồi lại, token cũ có thể còn được chấp nhận tối đa 60 giây (TTL của cache). Rủi ro này được chấp nhận.
 
 ### 2.3. Tách storefront và back-office
 
@@ -113,7 +114,7 @@ Dùng throttling của DRF, lưu đếm trong Redis. Khi Redis lỗi, throttle *
 | Đã đăng nhập, mặc định | 300 request / phút / Tài khoản |
 | `auth_login` | Như mục 3 |
 | `order_lookup` | 10 lần / 15 phút / IP |
-| `checkout` | 10 lần / phút / Tài khoản hoặc cart token |
+| `checkout` | 10 lần / phút / Tài khoản hoặc cart token, và 30 lần / phút / IP (Khách vãng lai đổi được cart token tuỳ ý) |
 | Webhook | Không throttle (đã xác thực bằng chữ ký) |
 
 ## 6. Webhook và tích hợp
@@ -134,7 +135,7 @@ Dùng throttling của DRF, lưu đếm trong Redis. Khi Redis lỗi, throttle *
 | Bề mặt public | Django chỉ mở `/api/v1/webhooks/*` ra internet; mọi API khác chỉ nhận request từ Next.js trong VPC (ADR 0009). Trình duyệt không gọi thẳng Django nên không cần CORS và không dùng `django-cors-headers` |
 | CSRF | API dùng Bearer token, không dùng cookie session của Django → không cần CSRF cho API; Django Admin (local) vẫn bật CSRF |
 | Header bảo mật | `SECURE_HSTS_SECONDS`, `SECURE_CONTENT_TYPE_NOSNIFF`, `X_FRAME_OPTIONS = "DENY"`, `SECURE_PROXY_SSL_HEADER` sau ALB |
-| Upload ảnh | Chỉ chấp nhận JPEG/PNG/WebP, kiểm tra bằng Pillow, giới hạn 5 MB, đổi tên file thành UUID |
+| Upload ảnh | Chỉ chấp nhận JPEG/PNG/WebP, kiểm tra bằng Pillow, giới hạn 5 MB, đặt `Image.MAX_IMAGE_PIXELS` để chặn decompression bomb, xoá EXIF (có thể chứa GPS), đổi tên file thành UUID |
 | Secrets | Không commit `.env`; trên AWS dùng Secrets Manager |
 | Phụ thuộc | `uv lock` + kiểm tra lỗ hổng (`pip-audit`) trong CI |
 
@@ -149,6 +150,7 @@ Dùng throttling của DRF, lưu đếm trong Redis. Khi Redis lỗi, throttle *
 ## 9. Kiểm chứng
 
 - Bộ test cho module JWT bám theo **OWASP JWT Cheat Sheet**: sai thuật toán, `alg: none`, sai `aud`, hết hạn, sai `kid`, dùng lại refresh token, đổi `token_version`.
+- Test `lookup_token`: token có `aud` khác (ví dụ access token `store`), token của đơn khác, token hết hạn đều bị từ chối.
 - Test liên kết Google: Tài khoản đăng ký bằng email + mật khẩu nhưng chưa xác thực, sau đó đăng nhập Google cùng email → mật khẩu cũ không còn dùng được, refresh token cũ bị thu hồi.
 - Test IP người dùng: `X-Client-IP` thiếu hoặc sai `X-BFF-Secret` thì bị bỏ qua, throttle tính theo IP nguồn.
 - Rà soát theo **OWASP ASVS** chương xác thực và quản lý phiên trước khi lên production.

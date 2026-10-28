@@ -1,15 +1,15 @@
 # 08. Môi trường phát triển local (macOS và Windows WSL2)
 
 > Trạng thái: **Bản nháp chờ review**.
-> **PostgreSQL cài trực tiếp trên máy** (trên Windows: cài trong WSL2). Mọi thứ còn lại chạy bằng **Docker Compose**.
+> Mọi dịch vụ, kể cả PostgreSQL, chạy bằng **Docker Compose**, nên mọi máy dùng đúng một phiên bản. Trên máy chỉ cần Docker, `uv`, `git`, `make`.
 
 ## 1. Tổng quan
 
 ```mermaid
 graph LR
-    subgraph mac [macOS]
-        pg[(PostgreSQL 18<br/>Homebrew · :5432)]
+    subgraph mac [macOS / WSL2]
         subgraph docker [Docker Compose]
+            pg[(postgres · :5432)]
             api[api · :8000<br/>runserver + debugpy :5678]
             worker[worker]
             beat[beat]
@@ -18,7 +18,7 @@ graph LR
             mailpit[mailpit · :1025 / :8025]
         end
     end
-    api -->|host.docker.internal:5432| pg
+    api --> pg
     worker --> pg
     beat --> pg
     relay --> pg
@@ -31,10 +31,10 @@ graph LR
 
 | Thành phần | Chạy ở đâu | Cổng |
 |---|---|---|
-| PostgreSQL 18 | Homebrew trên máy | 5432 |
+| PostgreSQL 18 | Docker, dữ liệu trong named volume `pgdata` | 5432 (mở ra máy để chạy test và dùng IDE) |
 | Django API | Docker, code được mount vào container nên sửa code tự reload | 8000 |
 | Celery worker, Celery Beat, Outbox relay | Docker, cùng image với API | — |
-| Redis 7.2 | Docker | 6379 |
+| Redis (Valkey, cùng major version với ElastiCache) | Docker | 6379 |
 | Mailpit | Docker | 1025 (SMTP), 8025 (giao diện xem mail) |
 | Ảnh Sản phẩm | Ổ đĩa, thư mục `backend/media/` | — |
 | VNPay, MoMo | Fake Gateway trong Django | — |
@@ -47,8 +47,7 @@ graph LR
 #### macOS
 
 ```bash
-brew install postgresql@18 uv
-brew services start postgresql@18
+brew install uv
 # Docker Desktop (hoặc OrbStack) cài riêng
 ```
 
@@ -73,48 +72,34 @@ Sau khi cài xong, mọi bước từ mục 2.2 trở đi **giống hệt macOS*
    - Bật **General → Use the WSL 2 based engine**.
    - Bật **Resources → WSL integration → Ubuntu-24.04**.
 
-3. **PostgreSQL 18 trong Ubuntu**, cài từ kho apt chính thức của PostgreSQL:
-   ```bash
-   sudo apt install -y postgresql-common
-   sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
-   sudo apt install -y postgresql-18
-   sudo service postgresql start
-   sudo -u postgres createuser --superuser "$USER"   # để dùng createdb/psql không cần sudo
-   ```
-
-4. **uv, git, make, openssl** trong Ubuntu:
+3. **uv, git, make, openssl** trong Ubuntu:
    ```bash
    sudo apt install -y git make openssl
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-5. **Clone repo vào trong WSL**, ví dụ `~/projects/`, **không** clone vào `/mnt/c/...`:
+4. **Clone repo vào trong WSL**, ví dụ `~/projects/`, **không** clone vào `/mnt/c/...`:
    ```bash
    mkdir -p ~/projects && cd ~/projects
    git clone <repo-url>
    git config --global core.autocrlf input
    ```
 
-6. **IDE**: xem mục 6.
+5. **IDE**: xem mục 6.
 
 | Lỗi hay gặp trên Windows | Cách xử lý |
 |---|---|
-| Container không kết nối được PostgreSQL | Trong `/etc/postgresql/18/main/postgresql.conf` đặt `listen_addresses = '*'`; trong `pg_hba.conf` thêm `host all all 172.16.0.0/12 scram-sha-256`; chạy `sudo service postgresql restart` |
-| PostgreSQL không tự chạy khi mở lại WSL | Thêm `sudo service postgresql start` vào `~/.bashrc`, hoặc bật `systemd=true` trong `/etc/wsl.conf` rồi `sudo systemctl enable postgresql` |
 | Sửa code nhưng server không reload, Docker chậm | Code đang nằm ở `/mnt/c/...`; chuyển repo vào `~/projects/` |
 | Lỗi `/bin/sh^M: bad interpreter` | File bị đổi sang CRLF; repo có `.gitattributes` ép LF, chạy `git add --renormalize .` |
 | WSL ăn nhiều RAM | Tạo `%UserProfile%\.wslconfig` với `[wsl2]` và `memory=6GB` |
 
 ### 2.2. Database
 
-```bash
-createuser --createdb --pwprompt fashion   # nhập mật khẩu, ví dụ: fashion; --createdb để pytest-django tự tạo DB test
-createdb --owner=fashion fashion
-```
+Không cần tạo tay. Service `postgres` trong Compose tạo user `fashion` (mật khẩu `fashion`) và database `fashion` ngay lần chạy đầu. User do image tạo có quyền `CREATEDB`, nên pytest-django tự tạo và xoá database test (`test_fashion`, và `test_fashion_gw0`, `test_fashion_gw1`… khi chạy song song).
 
-Extension `unaccent`, `pg_trgm`, `btree_gist` được tạo bằng migration. Cả ba là trusted extension (từ PostgreSQL 13), nên chủ database tự tạo được, không cần superuser. Database test (`test_fashion`, và `test_fashion_gw0`, `test_fashion_gw1`… khi chạy song song) do pytest-django tự tạo và xoá.
+Extension `unaccent`, `pg_trgm`, `btree_gist` được tạo bằng migration. Cả ba là trusted extension (từ PostgreSQL 13), nên chủ database tự tạo được, không cần superuser.
 
-> **Container kết nối tới PostgreSQL trên máy**: Docker Desktop chuyển `host.docker.internal` về máy thật. Nếu container báo không kết nối được, kiểm tra `listen_addresses` trong `postgresql.conf` và thêm dòng cho dải mạng của Docker vào `pg_hba.conf`, rồi `brew services restart postgresql@18`.
+Xoá sạch dữ liệu local: `make down` rồi `docker volume rm <project>_pgdata`.
 
 ### 2.3. Biến môi trường
 
@@ -127,7 +112,7 @@ Các biến chính trong `.env`:
 
 ```dotenv
 DJANGO_SETTINGS_MODULE=config.settings.local
-DATABASE_URL=postgres://fashion:fashion@host.docker.internal:5432/fashion
+DATABASE_URL=postgres://fashion:fashion@postgres:5432/fashion
 REDIS_URL=redis://redis:6379/0
 EMAIL_HOST=mailpit
 EMAIL_PORT=1025
@@ -201,9 +186,9 @@ make create-admin   # tạo tài khoản Admin
 
 ## 5. Chạy test
 
-- Test dùng database `test_fashion` do pytest-django tự tạo trên PostgreSQL của máy, mỗi worker `pytest-xdist` một database riêng (không dùng SQLite, để giống production: `select_for_update`, `EXCLUDE`, `unaccent`).
+- Test dùng database `test_fashion` do pytest-django tự tạo trên PostgreSQL của Compose, mỗi worker `pytest-xdist` một database riêng (không dùng SQLite, để giống production: `select_for_update`, `EXCLUDE`, `unaccent`).
 - Celery chạy đồng bộ; API bên ngoài dùng Fake hoặc `respx`; thời gian cố định bằng `time-machine`.
-- Có thể chạy test ngay trên máy (hoặc trong WSL), không qua Docker: `uv run pytest` với `DATABASE_URL` trỏ `localhost`.
+- Có thể chạy test ngay trên máy (hoặc trong WSL), không qua container `api`: `uv run pytest` với `DATABASE_URL` trỏ `localhost:5432` (PostgreSQL vẫn chạy trong Compose).
 
 ## 6. Cấu hình IDE dùng chung
 
@@ -236,8 +221,9 @@ x-app: &app
   build: .
   env_file: .env
   volumes: [".:/app"]
-  extra_hosts: ["host.docker.internal:host-gateway"]
-  depends_on: [redis]
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_started}
 
 services:
   api:
@@ -253,12 +239,26 @@ services:
   relay:
     <<: *app
     command: python manage.py run_outbox_relay
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: fashion        # user do image tạo là superuser trong container, đủ quyền CREATEDB
+      POSTGRES_PASSWORD: fashion
+      POSTGRES_DB: fashion
+    volumes: ["pgdata:/var/lib/postgresql"]
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fashion"]
+      interval: 2s
   redis:
-    image: redis:7.2-alpine
+    image: valkey/valkey:8-alpine   # cùng major version với ElastiCache [Cần xác minh]
     ports: ["6379:6379"]
   mailpit:
     image: axllent/mailpit
     ports: ["1025:1025", "8025:8025"]
+
+volumes:
+  pgdata:
 ```
 
-Phiên bản image (`mailpit`) sẽ được pin cụ thể khi khởi tạo dự án.
+Phiên bản image (`postgres`, `valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Từ image `postgres:18`, volume gắn vào `/var/lib/postgresql` thay cho `/var/lib/postgresql/data` như các bản trước.

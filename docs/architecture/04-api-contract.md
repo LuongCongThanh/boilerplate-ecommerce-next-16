@@ -19,7 +19,7 @@
 | Giỏ của Khách vãng lai | Header `X-Cart-Token` (Frontend lưu trong cookie `cart_token`) |
 | Đơn của Khách vãng lai | Header `X-Lookup-Token`: token 30 phút gắn với đúng một đơn, do `POST checkout` (với Khách vãng lai) hoặc `POST orders/lookup` cấp. Next.js cất token trong session |
 | IP người dùng | Django đọc `X-Client-IP` do BFF gửi kèm `X-BFF-Secret` ([05-auth-security.md](./05-auth-security.md) mục 5) |
-| Chống tạo trùng | Header Idempotency-Key (UUID) bắt buộc với checkout và bắt đầu Thanh toán. Key lưu PostgreSQL theo endpoint + Người mua, có in_progress/completed và resource_id. Cùng key khác body trả 409 IDEMPOTENCY_CONFLICT; còn xử lý trả 202 với Retry-After; hoàn tất trả kết quả đã lưu. Giữ completed 24 giờ; không purge in_progress chưa rõ kết quả. Xác nhận quote mới hoặc bắt đầu lần thử khác phải dùng key mới. Frontend sinh key mới mỗi khi body đổi, ví dụ sau `PRICE_CHANGED` |
+| Chống tạo trùng | Header Idempotency-Key (UUID) bắt buộc với checkout, bắt đầu Thanh toán và các lệnh ghi Tồn kho cộng dồn ở back-office (`stock/inbound`, `stock/adjust`, `stock/count`, scope là endpoint + `account_id` của Staff). Các endpoint chuyển trạng thái không cần, vì gọi lần hai đã bị máy trạng thái chặn bằng `409 INVALID_TRANSITION`. Key lưu PostgreSQL theo endpoint + Người mua, có in_progress/completed và resource_id. Cùng key khác body trả 409 IDEMPOTENCY_CONFLICT; còn xử lý trả 202 với Retry-After; hoàn tất trả kết quả đã lưu. Giữ completed 24 giờ; không purge in_progress chưa rõ kết quả. Xác nhận quote mới hoặc bắt đầu lần thử khác phải dùng key mới. Frontend sinh key mới mỗi khi body đổi, ví dụ sau `PRICE_CHANGED` |
 
 ## 2. Phân trang
 
@@ -78,7 +78,7 @@ Ba mã cần Frontend xử lý riêng:
 - `PRICE_CHANGED`: tổng tiền khác expected_total, hoặc phiên bản giá/dữ liệu snapshot/điều kiện bán thay đổi khi kiểm tra lại trong transaction, kể cả tổng tiền không đổi (BR-ORD-07). Rollback trước khi lấy lại quote ngoài transaction; đơn không được tạo. details.quote chứa bảng tính mới và chỉ rõ dòng không còn bán được; không bịa giá cho dòng đã bị ẩn. Client xác nhận bằng key mới.
 - `PAYMENT_INITIALIZING` (202): giao dịch đang tạo/chưa rõ kết quả. Response `{payment_id, code: "PAYMENT_INITIALIZING"}` kèm Retry-After; thử lại cùng endpoint/body/key. Nếu đã thanh toán/hết hạn mà không còn link, kết quả cuối trả payment_id/status để xem lại Đơn hàng; không tạo/gia hạn link mới.
 - `SHIPMENT_IN_PROGRESS`: Staff huỷ đơn khi Vận đơn đang được tạo ở GHN. Chờ kết quả tạo Vận đơn rồi xử lý tiếp.
-- `PAYMENT_WINDOW_CLOSED`: Người mua bắt đầu Thanh toán online sau phút thứ 10 kể từ khi đặt đơn (BR-INV-05). Đơn sẽ bị huỷ khi Giữ hàng hết hạn; Người mua phải đặt đơn mới.
+- `PAYMENT_WINDOW_CLOSED`: Người mua bắt đầu Thanh toán online từ phút thứ 8 kể từ khi đặt đơn, khi link mới còn quá ít thời gian để trả tiền (BR-INV-05). Đơn sẽ bị huỷ khi Giữ hàng hết hạn; Người mua phải đặt đơn mới.
 
 ## 4. Danh sách endpoint
 
@@ -98,7 +98,7 @@ Ba mã cần Frontend xử lý riêng:
 | POST | `cart/merge` | ordering | Customer, kèm `X-Cart-Token` | Gộp giỏ vãng lai vào giỏ của Tài khoản (BR-CRT-03). Next.js gọi ngay sau khi đăng nhập thành công | US-204 |
 | POST | `checkout/quote` | ordering | Guest / Customer | Tính thử: Tạm tính, Voucher, Phí ship, Tổng tiền đơn. `total` trả về được gửi lại làm `expected_total` | US-303, 304 |
 | POST | `checkout` | ordering | Guest / Customer | Đặt đơn (cần `Idempotency-Key`). Body có `payment_method` (`cod \| online`) và `expected_total`; lệch thì `409 PRICE_CHANGED`. Trả `201 {order_code, lookup_token}` (`lookup_token` chỉ có với Khách vãng lai) | US-301 → 307 |
-| POST | `orders/{code}/payments` | ordering | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Bắt đầu một lần Thanh toán online (cần `Idempotency-Key`), gọi `payments.contracts.start_payment`. Body `{gateway: "vnpay" \| "momo"}`; backend tự dựng URL quay về, gửi `return_url` bị từ chối `400 INVALID_RETURN_URL`. Sẵn sàng thì trả `redirect_url`, chưa xong thì `202 PAYMENT_INITIALIZING`. Mọi link của đơn hết hạn ở phút thứ 10 kể từ khi đặt đơn (BR-INV-05); sau mốc này trả `PAYMENT_WINDOW_CLOSED`. Gọi lại cùng key thì tiếp tục hoặc trả kết quả của Payment cũ ([06](./06-integrations.md) mục 3.1) | US-306 |
+| POST | `orders/{code}/payments` | ordering | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Bắt đầu một lần Thanh toán online (cần `Idempotency-Key`), gọi `payments.contracts.start_payment`. Body `{gateway: "vnpay" \| "momo"}`; backend tự dựng URL quay về, gửi `return_url` bị từ chối `400 INVALID_RETURN_URL`. Sẵn sàng thì trả `redirect_url`, chưa xong thì `202 PAYMENT_INITIALIZING`. Mọi link của đơn hết hạn ở phút thứ 10 kể từ khi đặt đơn (BR-INV-05); từ phút thứ 8 không tạo link mới mà trả `PAYMENT_WINDOW_CLOSED`. Gọi lại cùng key thì tiếp tục hoặc trả kết quả của Payment cũ ([06](./06-integrations.md) mục 3.1) | US-306 |
 | POST | `orders/lookup` | ordering | Công khai (throttle chặt) | Khách vãng lai tra cứu bằng `code` + `phone`, nhận `lookup_token` | US-401 |
 | GET | `orders` | ordering | Customer | Lịch sử đơn | US-402 |
 | GET | `orders/{code}` | ordering | Customer chủ đơn, hoặc Guest có `X-Lookup-Token` | Chi tiết đơn | US-402 |
@@ -151,9 +151,9 @@ Gộp giỏ là endpoint riêng của `ordering` thay vì nằm trong `auth/logi
 | GET | `refunds` | payments | Staff | Danh sách Hoàn tiền kèm `payment_id`, gateway và số tiền, lọc theo trạng thái |
 | POST | `refunds/{id}/complete` | payments | Staff | Ghi nhận đã hoàn: mã giao dịch hoàn, ngày hoàn (BR-REF-03). Gọi lại cùng dữ liệu trả kết quả cũ, không phát thêm sự kiện; khác dữ liệu đã ghi thì từ chối |
 | GET | `stock` | inventory | Staff | Tồn kho, Giữ hàng, Hàng chờ xuất và Số lượng bán được theo Biến thể; SKU và tên lấy qua `catalog.contracts`. Lọc tồn thấp bằng `available_lt=<n>` (mặc định 5, US-702) |
-| POST | `stock/inbound` | inventory | Staff | Nhập kho |
-| POST | `stock/adjust` | inventory | Staff | Điều chỉnh, bắt buộc lý do. Giảm quá Số lượng bán được thì `409 INSUFFICIENT_AVAILABLE` (BR-INV-11) |
-| POST | `stock/count` | inventory | Staff | Kiểm kê: gửi số đếm theo Biến thể, hệ thống điều chỉnh theo chênh lệch với Tồn kho + Hàng chờ xuất (US-703) |
+| POST | `stock/inbound` | inventory | Staff | Nhập kho (cần `Idempotency-Key`) |
+| POST | `stock/adjust` | inventory | Staff | Điều chỉnh, bắt buộc lý do, cần `Idempotency-Key`. Giảm quá Số lượng bán được thì `409 INSUFFICIENT_AVAILABLE` (BR-INV-11) |
+| POST | `stock/count` | inventory | Staff | Kiểm kê (cần `Idempotency-Key`): gửi số đếm theo Biến thể, hệ thống điều chỉnh theo chênh lệch với Tồn kho + Hàng chờ xuất (US-703) |
 | GET | `customers` | identity | Staff | Danh sách Khách hàng |
 | GET | `customers/{id}` | identity | Staff | Chi tiết Khách hàng (ghi log truy cập, CMP-07). Lịch sử đơn lấy bằng `GET orders?customer_id=` |
 | GET | `erasure-requests` | ordering | Staff | Danh sách Yêu cầu xoá dữ liệu (đọc qua `identity.contracts`) |

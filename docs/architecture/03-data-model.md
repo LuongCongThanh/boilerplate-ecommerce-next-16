@@ -309,12 +309,12 @@ erDiagram
 ```
 
 - `UNIQUE(warehouse_id, variant_id)`; `CHECK(on_hand >= 0)`, `CHECK(reserved >= 0)`, `CHECK(reserved <= on_hand)`, `CHECK(awaiting_dispatch >= 0)`. `UNIQUE(reference, stock_item_id)` trên `inventory_stock_reservation` và `inventory_stock_allocation`.
-- `on_hand` là Tồn kho; Số lượng bán được = `on_hand − reserved` (BR-INV-02). Cột `reserved` được cập nhật cùng transaction với `inventory_stock_reservation`, nên không phải cộng dồn khi đọc.
+- `on_hand` là Tồn kho; Số lượng bán được = `on_hand − reserved` (BR-INV-02). Cột `reserved` được cập nhật cùng transaction với `inventory_stock_reservation`, nên không phải cộng dồn khi đọc. Những lần đọc không khoá dòng (`get_available`, `catalog_variant.is_available`) có thể vẫn trừ Giữ hàng đã quá hạn cho tới khi T4 chạy hoặc có thao tác khoá dòng đó; lúc bán hàng thì luôn khoá dòng nên con số luôn đúng.
 - `awaiting_dispatch` là Hàng chờ xuất (BR-INV-10, [ADR 0010](../adr/0010-stock-decremented-at-order-awaiting-dispatch.md)), cập nhật cùng transaction với `inventory_stock_allocation`. Trừ Tồn kho khi bán (`decrement_stock` với COD, `commit_reservation` với online) tạo allocation `awaiting`; Vận đơn tạo xong (`dispatch_stock`) chuyển `dispatched`; huỷ đơn trước Bàn giao (`release_allocation`) chuyển `released` và trả số lượng về `on_hand`. Hàng trên kệ = `on_hand + awaiting_dispatch`.
 - Kiểm kê (`count_stock`, BR-INV-12) ghi một `inventory_stock_movement` loại `stock_count` với `delta` = số đếm − (`on_hand + awaiting_dispatch`). Điều chỉnh giảm làm `on_hand < reserved` thì bị từ chối (BR-INV-11).
 - `actor_id` FK tới `identity_account`: `inventory` ở lớp trên `identity` nên được khai báo FK.
 - `inventory_stock_reservation.expires_at` được truyền từ `ordering_order.expires_at` (nguồn duy nhất), không tự tính.
-- Giữ hàng đã quá `expires_at` bị coi là không hợp lệ ngay cả khi job chưa kịp giải phóng ([ADR 0003](../adr/0003-postgres-redis-celery.md)). Vì Số lượng bán được đọc từ cột `reserved`, `reserve_stock` và `decrement_stock` (sau khi khoá dòng `inventory_stock_item`) tự chuyển các Giữ hàng đã hết hạn của dòng đó sang `released` và giảm `reserved` trước khi kiểm tra. Job huỷ đơn (T4) vẫn gọi `release_reservation` sau đó; thao tác này idempotent.
+- Giữ hàng đã quá `expires_at` bị coi là không hợp lệ ngay cả khi job chưa kịp giải phóng ([ADR 0003](../adr/0003-postgres-redis-celery.md)). Vì Số lượng bán được đọc từ cột `reserved`, `reserve_stock` và `decrement_stock` (sau khi khoá dòng `inventory_stock_item`) tự chuyển các Giữ hàng đã hết hạn của dòng đó sang `released` và giảm `reserved` trước khi kiểm tra. Job huỷ đơn (T4) vẫn gọi `release_reservation` sau đó; thao tác này idempotent. Ngoại lệ là T3 tới muộn: `commit_reservation` gặp Giữ hàng đã quá hạn hoặc đã bị giải phóng thì kiểm tra lại Số lượng bán được trong cùng khoá dòng, đủ thì giữ lại hàng ([02](./02-backend-structure.md) mục 7.3).
 
 ## 5. `promotions`
 
@@ -405,6 +405,7 @@ erDiagram
 - Hoàn tiền của đơn online có `channel = gateway`; Hoàn tiền Đổi trả của đơn COD gắn vào Thanh toán COD, `channel = bank_transfer`. Hoàn tiền cho tiền về sai số tiền (BR-PAY-04) gắn vào Thanh toán `failed` đã nhận khoản tiền đó.
 - `request_refund(payment_id, amount, reason, channel, request_key)` bắt buộc chỉ đúng Thanh toán. `UNIQUE(payment_id, request_key)`; gọi lại cùng key và tham số trả cùng `refund_id`, khác tham số thì từ chối `REFUND_REQUEST_CONFLICT`. Key ổn định theo thao tác nguồn, ví dụ `unexpected-payment`, `amount-mismatch`, `cancel:<order_id>`, `returned-shipment:<order_id>`, `return:<return_request_id>`; không sinh key ngẫu nhiên mỗi lần retry.
 - Khoá dòng Payment trước khi tìm/tạo Refund và kiểm tra tổng `requested` + `completed` cộng yêu cầu mới không vượt `amount_received`; `CHECK(amount > 0)` cho Refund và `CHECK(amount_received >= 0)` cho Payment. Callback IPN/đối soát trùng không cộng tiền thực nhận lần nữa. Online lưu số thực nhận đã xác minh kể cả khi sai số tiền; COD ghi `amount_received = amount` khi xác nhận đã thu. Gateway lấy từ Payment, không nhận từ bên gọi yêu cầu hoàn.
+- Hoàn tiền `bank_transfer`: hệ thống **không** lưu số tài khoản ngân hàng của Người mua. Staff lấy thông tin qua hotline hoặc Zalo, chuyển khoản, rồi chỉ ghi mã giao dịch vào `provider_refund_ref`. `reason` là văn bản tự do và không được chứa PII.
 - `recorded_by` lưu id của Tài khoản Staff nhưng **không** khai báo FK: `payments` và `identity` cùng lớp nên không được phụ thuộc nhau ([ADR 0006](../adr/0006-modular-monolith.md)).
 
 ## 7. `shipping`
@@ -500,7 +501,10 @@ erDiagram
         bool invoice_requested
         jsonb invoice_info
         timestamptz expires_at "hạn Giữ hàng, nguồn duy nhất"
+        timestamptz placed_at "vào PLACED (T2, T3)"
+        timestamptz cancelled_at
         timestamptz delivered_at
+        timestamptz completed_at "ngày ghi Doanh thu (BR-REV-01)"
         timestamptz returned_to_warehouse_at "Hoàn hàng đã về Kho"
         string cancel_reason
     }
@@ -560,13 +564,14 @@ erDiagram
 - Mức giảm của Giá khuyến mãi trên một dòng tính từ `list_price` và `unit_price` khi cần (BR-PRC-04), không lưu thành cột số nguyên, để không làm tròn sai ở ngưỡng 50% của BR-RET-03.
 - `ordering_return_line`: `CHECK(0 <= accepted_quantity <= quantity)`. Yêu cầu chuyển `accepted` khi có ít nhất một dòng `accepted_quantity > 0`, ngược lại `rejected` (BR-RET-08). Chỉ phần `accepted_quantity` của dòng có `restock = true` được cộng lại Tồn kho.
 - `ordering_return_request.refund_id` FK tới `payments_refund` (`ordering` ở lớp trên `payments`). Handler `payments.refund-recorded` tìm Đổi trả theo `refund_id` để chuyển sang `refunded`; Hoàn tiền không gắn Đổi trả nào thì bỏ qua. Yêu cầu Đổi trả **đang mở** là yêu cầu có `status` khác `rejected` và `refunded`.
+- `placed_at`, `cancelled_at`, `completed_at` được ghi trong cùng transition với trạng thái tương ứng và null tới lúc đó. Báo cáo Doanh thu lọc theo `completed_at` (BR-REV-01); báo cáo đơn theo ngày dùng `placed_at`, không dùng `created_at`, vì `created_at` của đơn online là lúc vào `PENDING_PAYMENT`.
 - `returned_to_warehouse_at`: thời điểm Staff xác nhận hàng của đơn Hoàn hàng đã về Kho. Đơn `RETURNED_TO_SENDER` có cột này null là đơn chờ nhập kho (US-607).
 - `customer_id` cũng được gắn ngay lúc checkout của Khách vãng lai nếu `contact_email` trùng một Tài khoản đã xác thực (BR-ORD-08).
 - `ordering_order.payment_id` tham chiếu `payments_payment`: T2 lưu Thanh toán COD vừa tạo; T3 khoá Order rồi lưu đúng Thanh toán online đã đưa đơn vào `PLACED`. Huỷ, Hoàn hàng và Đổi trả dùng ID này; khoản tiền trả thêm dùng `payment_id` từ sự kiện. Sự kiện thành công lặp lại của chính Thanh toán đã gắn thì không tạo Hoàn tiền. Payment được gắn phải có `reference` khớp Mã đơn, kiểm tra ở service.
-- `ordering_order_flag` (Cờ cần xử lý): `kind` ∈ `payment_amount_mismatch | unexpected_payment | shipping_fee_fallback | ghn_ward_unmapped | shipment_failed | shipment_after_cancel | shipment_exception`. Partial `UNIQUE(order_id, kind) WHERE resolved_at IS NULL` để một vấn đề chỉ có một cờ đang mở. `resolved_by` FK tới `identity_account`.
+- `ordering_order_flag` (Cờ cần xử lý): `kind` ∈ `payment_amount_mismatch | unexpected_payment | shipping_fee_fallback | ghn_ward_unmapped | shipment_failed | shipment_after_cancel | shipment_exception`. Partial `UNIQUE(order_id, kind) WHERE resolved_at IS NULL` để một vấn đề chỉ có một cờ đang mở; `raise_flag` gặp cờ cùng `kind` đang mở thì nối thêm vào `note` chứ không báo lỗi (ví dụ tiền về lần hai cho đơn đã có cờ `unexpected_payment`). `resolved_by` FK tới `identity_account`.
 - `ordering_settings` là singleton (một dòng duy nhất), Admin sửa qua back-office.
 - `django-pghistory` chỉ ghi các field trong danh sách ở mục 10.1; không cấu hình theo dõi toàn bộ `payments_*`. Không tạo history cho `PaymentEvent.raw_payload` hay các cột liên hệ của Đơn hàng. Mỗi model sự kiện do `django-pghistory` sinh ra phải khai báo `Meta.db_table` có tiền tố module (ví dụ `ordering_order_event`), vì mặc định chúng mang tiền tố của app chung `modules_`.
-- Index: `(contact_phone, code)` cho tra cứu của Khách vãng lai; `(status, created_at)` cho back-office; partial index `expires_at WHERE status = 'PENDING_PAYMENT'` cho job huỷ đơn; partial index `(kind, raised_at) WHERE resolved_at IS NULL` trên `ordering_order_flag` cho bộ lọc theo cờ.
+- Index: `(contact_phone, code)` cho tra cứu của Khách vãng lai; `(status, created_at)` cho back-office; `completed_at` cho báo cáo Doanh thu; partial index `expires_at WHERE status = 'PENDING_PAYMENT'` cho job huỷ đơn; partial index `(kind, raised_at) WHERE resolved_at IS NULL` trên `ordering_order_flag` cho bộ lọc theo cờ.
 
 ## 9. `notifications`
 
@@ -610,6 +615,7 @@ erDiagram
 | `identity_address` | identity | Xoá |
 | `ordering_order` | ordering | `contact_name`, `contact_phone`, `contact_email`, `ship_street`, email nhận hoá đơn trong `invoice_info` → giá trị ẩn danh; giữ `ship_ward_code`, số tiền, Dòng đơn hàng, tên công ty, mã số thuế, địa chỉ công ty trong `invoice_info` |
 | `ordering_cart` | ordering | Xoá |
+| `ordering_return_request` | ordering | `note` → rỗng. `note` là văn bản tự do; quy định cho Staff là không ghi PII vào đây, việc xoá trắng chỉ là lưới an toàn |
 | `promotions_voucher_redemption` | promotions | `phone` → giá trị ẩn danh |
 | `notifications_email_log` | notifications | `to_address` → giá trị ẩn danh; email chưa gửi chuyển `cancelled`, vô hiệu lease |
 | `shipping_shipment`, `shipping_shipment_event` | shipping (do ordering gọi) | Xoá PII trong creation_input và raw_payload; không giữ các bản sao này trong audit |
@@ -617,7 +623,7 @@ erDiagram
 | Lịch sử pghistory của `ordering_order` | — | Không cần xử lý: chỉ theo dõi field không phải PII (mục 8) |
 | Lịch sử pghistory của Thanh toán và Hoàn tiền | payments | Chỉ chứa các field được liệt kê ở mục 10.1; không có raw payload hay thông tin liên hệ |
 | `shared_outbox_event` | — | Không cần xử lý: payload sự kiện không chứa PII |
-| `identity_consent`, `identity_erasure_request` | identity | **Giữ** làm bằng chứng tuân thủ |
+| `identity_consent`, `identity_erasure_request`, `identity_customer_data_access_log` | identity | **Giữ** làm bằng chứng tuân thủ: đã đồng ý gì, đã yêu cầu xoá khi nào, và Staff nào đã xem dữ liệu của ai (CMP-07) |
 
 ### 10.1. Các field được ghi lịch sử
 
@@ -625,7 +631,7 @@ Chỉ bật tracker `django-pghistory` với danh sách field tường minh, kè
 
 | Model | Field được ghi lịch sử |
 |---|---|
-| `Order` | `status`, `payment_method`, `payment_id`, `subtotal`, `discount`, `shipping_fee`, `total`, `delivered_at`; không ghi lý do huỷ tự do |
+| `Order` | `status`, `payment_method`, `payment_id`, `subtotal`, `discount`, `shipping_fee`, `total`, `placed_at`, `cancelled_at`, `delivered_at`, `completed_at`; không ghi lý do huỷ tự do |
 | `OrderFlag` | `order_id`, `kind`, `raised_at`, `resolved_at`, `resolved_by`; không ghi `note` tự do |
 | `OrderingSettings` | `free_shipping_threshold`, `cod_limit` |
 | `ShippingSettings` | `fallback_fee` |
