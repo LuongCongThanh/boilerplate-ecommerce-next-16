@@ -15,7 +15,7 @@ Repo dành riêng cho **Fashion Store**, với nghiệp vụ thời trang, thanh
 | Vận chuyển | GHN |
 | Backend | Python 3.13, Django 5.2 LTS, DRF, PostgreSQL 18, Redis, Celery |
 | Kiến trúc | Modular monolith: app `modules` với 8 module con, app `shared` hạ tầng |
-| Local | PostgreSQL cài trên máy; API, Celery, Redis, Mailpit chạy bằng Docker Compose |
+| Local | PostgreSQL cài trên máy bằng `scripts/setup/postgres.sh` (macOS: Homebrew; Windows: trong WSL2); API, Celery, Redis, Mailpit chạy bằng Docker Compose |
 | Production (mục tiêu) | AWS Singapore: ECS Fargate (Django và Next.js BFF, cùng VPC), RDS, ElastiCache, S3, SES |
 
 ## Tài liệu
@@ -64,6 +64,7 @@ Thuật ngữ chung: **[GLOSSARY.md](./GLOSSARY.md)** — đọc trước tiên.
 | [0012](./docs/adr/0012-checkout-price-snapshot.md) | Kiểm tra lại giá và điều kiện bán dưới khoá Biến thể khi checkout |
 | [0013](./docs/adr/0013-recoverable-payment-initiation.md) | Khởi tạo Thanh toán có thể phục hồi bằng cùng Payment và mã nhà cung cấp |
 | [0014](./docs/adr/0014-refresh-single-successor.md) | Refresh chỉ có một successor, trả lại response mã hoá trong cửa sổ 10 giây |
+| [0019](./docs/adr/0019-local-postgres-on-host.md) | PostgreSQL ở local cài trên máy, bản major mới nhất |
 
 ### Cấu hình cho agent (`docs/agents/`)
 

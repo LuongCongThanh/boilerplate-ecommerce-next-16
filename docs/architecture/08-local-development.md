@@ -1,15 +1,15 @@
 # 08. Môi trường phát triển local (macOS và Windows WSL2)
 
 > Trạng thái: **Đã duyệt cho MVP**.
-> Mọi dịch vụ, kể cả PostgreSQL, chạy bằng **Docker Compose**, nên mọi máy dùng đúng một phiên bản. Trên máy chỉ cần Docker, `uv`, `git`, `make`.
+> **PostgreSQL cài trên máy** (macOS: Homebrew; Windows: trong WSL2 Ubuntu), bằng bộ cài `scripts/setup/postgres.sh` ([ADR 0019](../adr/0019-local-postgres-on-host.md)). Các dịch vụ còn lại chạy bằng **Docker Compose**. Trên máy cần Docker, `uv`, `git`, `make`.
 
 ## 1. Tổng quan
 
 ```mermaid
 graph LR
     subgraph mac [macOS / WSL2]
+        pg[(PostgreSQL bản mới nhất · :5432<br/>cài trên máy)]
         subgraph docker [Docker Compose]
-            pg[(postgres · :5432)]
             api[api · :8000<br/>runserver + debugpy :5678]
             worker[worker]
             beat[beat]
@@ -18,7 +18,7 @@ graph LR
             mailpit[mailpit · :1025 / :8025]
         end
     end
-    api --> pg
+    api -- host.docker.internal --> pg
     worker --> pg
     beat --> pg
     relay --> pg
@@ -31,7 +31,7 @@ graph LR
 
 | Thành phần | Chạy ở đâu | Cổng |
 |---|---|---|
-| PostgreSQL 18 | Docker, dữ liệu trong named volume `pgdata` | 5432 (mở ra máy để chạy test và dùng IDE) |
+| PostgreSQL (bản major mới nhất) | Cài trên máy: Homebrew (macOS), apt PGDG trong WSL2 Ubuntu (Windows). Container gọi qua `host.docker.internal` | 5432, hoặc cổng trống kế tiếp nếu 5432 đang bận (`PG_PORT`) |
 | Django API | Docker, code được mount vào container nên sửa code tự reload | 8000 |
 | Celery worker, Celery Beat, Outbox relay | Docker, cùng image với API | — |
 | Redis (Valkey 8, cùng bản với ElastiCache) | Docker | 6379 |
@@ -51,6 +51,8 @@ brew install uv
 # Docker Desktop (hoặc OrbStack) cài riêng
 ```
 
+PostgreSQL: xem mục 2.2.
+
 #### Windows (qua WSL2)
 
 Trên Windows, **mọi thao tác đều làm bên trong WSL2 (Ubuntu)**, không làm trực tiếp trên Windows. Lý do:
@@ -67,6 +69,13 @@ Sau khi cài xong, mọi bước từ mục 2.2 trở đi **giống hệt macOS*
    wsl --install -d Ubuntu-24.04
    ```
    Khởi động lại máy, mở "Ubuntu" và tạo user Linux.
+
+   Bật networking mirrored để container Docker và Windows gọi được PostgreSQL chạy trong WSL. Tạo hoặc sửa `%UserProfile%\.wslconfig`:
+   ```ini
+   [wsl2]
+   networkingMode=mirrored
+   ```
+   Rồi chạy `wsl --shutdown` trong PowerShell để áp dụng. Cần Windows 11 22H2 trở lên.
 
 2. **Docker Desktop** cài trên Windows. Trong Settings:
    - Bật **General → Use the WSL 2 based engine**.
@@ -95,11 +104,29 @@ Sau khi cài xong, mọi bước từ mục 2.2 trở đi **giống hệt macOS*
 
 ### 2.2. Database
 
-Không cần tạo tay. Service `postgres` trong Compose tạo user `fashion` (mật khẩu `fashion`) và database `fashion` ngay lần chạy đầu. User do image tạo có quyền `CREATEDB`, nên pytest-django tự tạo và xoá database test (`test_fashion`, và `test_fashion_gw0`, `test_fashion_gw1`… khi chạy song song).
+PostgreSQL cài trên máy, không chạy trong Docker ([ADR 0019](../adr/0019-local-postgres-on-host.md)). Từ gốc repo, chạy (trên Windows thì chạy trong Ubuntu của WSL):
 
-Extension `unaccent`, `pg_trgm`, `btree_gist` được tạo bằng migration. Cả ba là trusted extension (từ PostgreSQL 13), nên chủ database tự tạo được, không cần superuser.
+```bash
+bash scripts/setup/postgres.sh
+```
 
-Xoá sạch dữ liệu local: `make down` rồi `docker volume rm <project>_pgdata`.
+Script làm các việc sau, chạy lại nhiều lần vẫn an toàn:
+
+1. Kiểm tra `git`, `make`, `docker`, `uv` (chỉ báo thiếu, không tự cài).
+2. Tìm bản major mới nhất: macOS lấy `postgresql@<major>` trên Homebrew, Ubuntu/WSL thêm repo PGDG rồi lấy `postgresql-<major>`. Máy đã có bản đó thì dùng luôn, chưa có thì cài.
+3. Không đụng tới cluster PostgreSQL khác đang có. Nếu cổng 5432 đã bị cluster khác giữ, cluster mới chạy ở cổng trống kế tiếp (5433…).
+4. Tạo role `fashion` (mật khẩu `fashion`, quyền `CREATEDB`) và database `fashion`. Nhờ `CREATEDB`, pytest-django tự tạo và xoá database test (`test_fashion`, và `test_fashion_gw0`, `test_fashion_gw1`… khi chạy song song).
+5. Kiểm tra extension `unaccent`, `pg_trgm`, `btree_gist` có sẵn để cài. Extension do **migration** tạo, giống CI và RDS. Cả ba là trusted extension (từ PostgreSQL 13), nên chủ database tự tạo được, không cần superuser.
+6. Thử đăng nhập bằng `fashion` qua `localhost`, rồi in `DATABASE_URL` và `PG_PORT` để chép vào `backend/.env` (mục 2.3). Trên WSL, script nhắc nếu chưa bật networking mirrored.
+
+Production (RDS) và CI (`postgres:18`) có thể chạy bản major cũ hơn local: không dùng tính năng chỉ có ở bản mới; CI sẽ bắt lỗi này.
+
+Kết nối:
+
+- IDE, `psql`, pytest chạy trên máy hoặc trong WSL: `localhost:<PG_PORT>`.
+- Container trong Compose: `host.docker.internal:<PG_PORT>` (mục 7). Trên Windows cần `networkingMode=mirrored` (mục 2.1) **[Cần xác minh]**; trên macOS **[Cần xác minh]**. Nếu container không kết nối được thì cách sửa sẽ được ghi ở đây (ticket `.scratch/backend-bootstrap/issues/08-local-postgres-installer.md`).
+
+Dữ liệu nằm trên máy (hoặc trong WSL), nên `make down` không làm mất dữ liệu. Thường không cần xoá; chỉ xoá khi migration bị rối (đổi qua lại giữa các nhánh có migration xung đột) hoặc muốn seed lại từ đầu: `make db-reset` (drop và tạo lại database `fashion`, giữ role, rồi migrate). `wsl --unregister` sẽ xoá luôn dữ liệu; khi đó chạy lại script và seed lại (mục 2.4).
 
 ### 2.3. Biến môi trường
 
@@ -112,7 +139,8 @@ Các biến chính trong `.env`:
 
 ```dotenv
 DJANGO_SETTINGS_MODULE=config.settings.local
-DATABASE_URL=postgres://fashion:fashion@postgres:5432/fashion
+DATABASE_URL=postgres://fashion:fashion@localhost:5432/fashion   # theo output của scripts/setup/postgres.sh
+PG_PORT=5432                                                      # Compose dùng để trỏ host.docker.internal
 REDIS_URL=redis://redis:6379/0
 EMAIL_HOST=mailpit
 EMAIL_PORT=1025
@@ -170,6 +198,7 @@ make create-admin   # tạo tài khoản Admin
 | `make logs s=worker` | Xem log của một service |
 | `make shell` | `manage.py shell` trong container api |
 | `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) |
+| `make db-reset` | Xoá và tạo lại database `fashion` rồi migrate (mục 2.2) |
 | `make load-geo` | Nạp 34 tỉnh/thành và phường/xã |
 | `make seed` | Tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu |
 | `make create-admin` | Tạo Tài khoản Admin (`manage.py create_staff --admin`) |
@@ -186,13 +215,13 @@ make create-admin   # tạo tài khoản Admin
 
 ## 5. Chạy test
 
-- Test dùng database `test_fashion` do pytest-django tự tạo trên PostgreSQL của Compose, mỗi worker `pytest-xdist` một database riêng (không dùng SQLite, để giống production: `select_for_update`, `EXCLUDE`, `unaccent`).
+- Test dùng database `test_fashion` do pytest-django tự tạo trên PostgreSQL cài trên máy, mỗi worker `pytest-xdist` một database riêng (không dùng SQLite, để giống production: `select_for_update`, `EXCLUDE`, `unaccent`).
 - Celery chạy đồng bộ; API bên ngoài dùng Fake hoặc `respx`; thời gian cố định bằng `time-machine`.
-- Có thể chạy test ngay trên máy (hoặc trong WSL), không qua container `api` (PostgreSQL vẫn chạy trong Compose). `.env` trỏ host `postgres` và `redis` (tên service trong Compose), nên phải ghi đè khi chạy từ máy:
+- Có thể chạy test ngay trên máy (hoặc trong WSL), không qua container `api`. `DATABASE_URL` trong `.env` đã trỏ `localhost:<PG_PORT>`, nhưng `REDIS_URL` trỏ host `redis` (tên service trong Compose), nên phải ghi đè khi chạy từ máy:
   ```bash
-  DATABASE_URL=postgres://fashion:fashion@localhost:5432/fashion REDIS_URL=redis://localhost:6379/0 uv run pytest
+  REDIS_URL=redis://localhost:6379/0 uv run pytest
   ```
-  Biến môi trường của shell được ưu tiên hơn giá trị trong `.env`. Run configuration "Pytest (local)" của VS Code và "Pytest" của PyCharm (mục 6) cũng phải đặt hai biến này (thêm khi khởi tạo backend).
+  Biến môi trường của shell được ưu tiên hơn giá trị trong `.env`. Run configuration "Pytest (local)" của VS Code và "Pytest" của PyCharm (mục 6) cũng phải đặt biến này (thêm khi khởi tạo backend).
 
 ## 6. Cấu hình IDE dùng chung
 
@@ -224,9 +253,12 @@ Team dùng cả **VS Code** và **PyCharm**. Repo commit sẵn cấu hình chung
 x-app: &app
   build: .
   env_file: .env
+  environment:
+    # PostgreSQL cài trên máy (mục 2.2); trong container, localhost là chính container
+    DATABASE_URL: postgres://fashion:fashion@host.docker.internal:${PG_PORT:-5432}/fashion
+  extra_hosts: ["host.docker.internal:host-gateway"]   # Docker Desktop đã có sẵn; Docker Engine trên Linux không được hỗ trợ (PostgreSQL chỉ nghe localhost)
   volumes: [".:/app"]
   depends_on:
-    postgres: {condition: service_healthy}
     redis: {condition: service_started}
 
 services:
@@ -243,26 +275,12 @@ services:
   relay:
     <<: *app
     command: python manage.py run_outbox_relay
-  postgres:
-    image: postgres:18
-    environment:
-      POSTGRES_USER: fashion        # user do image tạo là superuser trong container, đủ quyền CREATEDB
-      POSTGRES_PASSWORD: fashion
-      POSTGRES_DB: fashion
-    volumes: ["pgdata:/var/lib/postgresql"]
-    ports: ["5432:5432"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fashion"]
-      interval: 2s
   redis:
     image: valkey/valkey:8-alpine   # ghim Valkey 8, cùng bản với ElastiCache
     ports: ["6379:6379"]
   mailpit:
     image: axllent/mailpit
     ports: ["1025:1025", "8025:8025"]
-
-volumes:
-  pgdata:
 ```
 
-Phiên bản image (`postgres`, `valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Từ image `postgres:18`, volume gắn vào `/var/lib/postgresql` thay cho `/var/lib/postgresql/data` như các bản trước.
+Phiên bản image (`valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Compose không có service `postgres` ([ADR 0019](../adr/0019-local-postgres-on-host.md)); `PG_PORT` đọc từ `.env` để Compose thay vào `DATABASE_URL`.

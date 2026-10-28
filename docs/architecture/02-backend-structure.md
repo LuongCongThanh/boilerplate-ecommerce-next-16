@@ -21,7 +21,7 @@ File này là chuẩn tổ chức code và ranh giới module cho thiết kế m
 | Ngôn ngữ | Python | 3.13 |
 | Framework | Django | 5.2 LTS (hỗ trợ tới 04/2028; nâng lên 6.2 LTS khoảng Q3/2027) |
 | API | Django REST Framework | 3.18 |
-| Database | PostgreSQL (extension `unaccent`, `pg_trgm`, `btree_gist`) | 18 |
+| Database | PostgreSQL (extension `unaccent`, `pg_trgm`, `btree_gist`) | 18 (RDS và CI); local dùng bản major mới nhất ([ADR 0019](../adr/0019-local-postgres-on-host.md)) |
 | Cache, broker | Redis (chạy bằng **Valkey**) | Ghim **Valkey 8** cho cả local và ElastiCache for Valkey trên AWS (xem [09](./09-deployment-aws-target.md)). Tài liệu gọi chung là "Redis" vì đó là tên giao thức và thư viện (`redis-py`, broker `redis://`); Valkey tương thích giao thức nên không phải sửa code |
 | Background jobs | Celery + Celery Beat | 5.6 |
 | Quản lý package | uv | 0.13 |
@@ -150,7 +150,7 @@ backend/
 ├── .env.example                    # mẫu biến môi trường (file .env thật không commit)
 ├── .python-version                 # 3.13
 ├── Dockerfile                      # 1 image dùng chung cho api, worker, beat, relay
-├── docker-compose.yml              # api, worker, beat, relay, PostgreSQL, redis, mailpit (mọi dịch vụ chạy Compose, xem 08)
+├── docker-compose.yml              # api, worker, beat, relay, redis, mailpit (PostgreSQL cài trên máy, xem 08 mục 2.2)
 ├── Makefile                        # lệnh tắt: make up, make test, make lint, make migrate…
 ├── openapi.yaml                    # schema OpenAPI đã commit; CI so với bản sinh lại ([12](./12-testing-strategy.md) mục 5)
 ├── CHANGELOG.md                    # sinh bằng commitizen ([11](./11-git-workflow.md) mục 7)
@@ -160,7 +160,7 @@ backend/
 │
 ├── config/                         # cấu hình project, KHÔNG chứa nghiệp vụ
 │   ├── __init__.py                 # nạp Celery app khi Django khởi động
-│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production)
+│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) và PG_PORT (chỉ Compose dùng, khai báo để pydantic-settings không báo biến thừa khi đọc .env)
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường
