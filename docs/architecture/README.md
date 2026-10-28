@@ -86,7 +86,7 @@ Liên quan: [ADR 0003](../adr/0003-postgres-redis-celery.md), [ADR 0007](../adr/
 
 ### [08. Môi trường phát triển local](./08-local-development.md)
 
-Cách dựng môi trường trên macOS và trên Windows qua WSL2. PostgreSQL cài trực tiếp trên máy, các thành phần còn lại chạy bằng Docker Compose. File hướng dẫn cài đặt lần đầu, đặt biến môi trường, các lệnh `Makefile` hằng ngày, debug, chạy test và cấu hình VS Code hoặc PyCharm.
+Cách dựng môi trường trên macOS và trên Windows qua WSL2. Mọi dịch vụ, kể cả PostgreSQL và Redis (Valkey), chạy bằng Docker Compose. File hướng dẫn cài đặt lần đầu, đặt biến môi trường, các lệnh `Makefile` hằng ngày, debug, chạy test và cấu hình VS Code hoặc PyCharm.
 
 ### [09. Triển khai trên AWS (mục tiêu)](./09-deployment-aws-target.md)
 

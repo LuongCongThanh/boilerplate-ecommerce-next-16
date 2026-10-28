@@ -6,7 +6,7 @@ Quy ước viết code test (factory, mock, thời gian) nằm ở [02-backend-s
 
 ## 1. Nguyên tắc
 
-- Test chạy trên **PostgreSQL thật** (`fashion_test`), không dùng SQLite và không mock ORM. Lý do: nghiệp vụ dựa vào `select_for_update`, `EXCLUDE`, `unaccent`.
+- Test chạy trên **PostgreSQL thật** (`test_fashion`, do `pytest-django` tự tạo), không dùng SQLite và không mock ORM. Lý do: nghiệp vụ dựa vào `select_for_update`, `EXCLUDE`, `unaccent`.
 - Chỉ giả lập **hệ thống bên ngoài**: Fake Gateway cho thanh toán và vận chuyển ([ADR 0005](../adr/0005-provider-adapters-fake-gateways.md)), `respx` cho `httpx`. Fake Gateway và `FakeShippingProvider` được bật bằng `FAKE_PROVIDERS_ENABLED=true` trong `settings/test.py` (cùng cờ với local), nên flow test gọi được trang và endpoint IPN của Fake Gateway. CI không gọi sandbox thật của VNPay, MoMo, GHN (mục 7).
 - Celery chạy đồng bộ (`CELERY_TASK_ALWAYS_EAGER=True` trong `settings/test.py`); thời gian cố định bằng `time-machine`.
 - Test chạy trong transaction không bao giờ commit, nên task đẩy bằng `shared.tasks.enqueue_on_commit` không tự chạy, và relay (một tiến trình riêng) không tự gửi sự kiện. Test service cần task chạy thì dùng `django_capture_on_commit_callbacks(execute=True)`; flow test dùng `drain_events()` (mục 2.7).

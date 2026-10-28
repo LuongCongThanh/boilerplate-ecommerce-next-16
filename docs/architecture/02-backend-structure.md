@@ -19,7 +19,7 @@
 | Framework | Django | 5.2 LTS (hỗ trợ tới 04/2028; nâng lên 6.2 LTS khoảng Q3/2027) |
 | API | Django REST Framework | 3.18 |
 | Database | PostgreSQL (extension `unaccent`, `pg_trgm`, `btree_gist`) | 18 |
-| Cache, broker | Redis | 7.2 ở local, để khớp với ElastiCache trên AWS (xem [09](./09-deployment-aws-target.md)) |
+| Cache, broker | Redis (chạy bằng **Valkey**) | Cùng major version với ElastiCache for Valkey trên AWS **[Cần xác minh phiên bản ElastiCache hiện có]** (xem [09](./09-deployment-aws-target.md)). Tài liệu gọi chung là "Redis" vì đó là tên giao thức và thư viện (`redis-py`, broker `redis://`); Valkey tương thích giao thức nên không phải sửa code |
 | Background jobs | Celery + Celery Beat | 5.6 |
 | Quản lý package | uv | 0.13 |
 
