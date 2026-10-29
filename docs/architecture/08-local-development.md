@@ -135,9 +135,10 @@ cd backend
 cp .env.example .env
 ```
 
-Các biến chính trong `.env`:
+Các biến chính trong `.env`. Mỗi biến được khai báo trong `config/env.py` ở mốc đầu tiên dùng tới nó ([roadmap](../../.scratch/mvp-roadmap/map.md)); `.env.example` chỉ chứa biến đã khai báo. Thiếu biến bắt buộc thì Django dừng ngay khi khởi động và báo tên biến.
 
 ```dotenv
+# Từ M0
 DJANGO_SETTINGS_MODULE=config.settings.local
 DJANGO_SECRET_KEY=local-only-change-me
 DATABASE_URL=postgres://fashion:fashion@localhost:5432/fashion   # theo output của scripts/setup/postgres.sh
@@ -145,24 +146,32 @@ PG_PORT=5432                                                      # Compose dùn
 REDIS_URL=redis://redis:6379/0
 EMAIL_HOST=mailpit
 EMAIL_PORT=1025
+PII_HMAC_KEYS=local-pii-1:local-pii-secret                # kid:secret, khoá đầu dùng cho giá trị mới, không xoá khoá cũ (ADR 0016)
+STOREFRONT_ORIGIN=http://localhost:3000
+BFF_SHARED_SECRET=local-bff-secret
+
+# Từ M1 (đăng nhập, JWT, refresh)
 JWT_PRIVATE_KEY_PATH=.secrets/jwt_ed25519.pem
 JWT_KEY_ID=local-1
 REFRESH_REPLAY_KEY_ID=local-replay-1
 REFRESH_REPLAY_KEY_PATH=.secrets/refresh_replay.key
+
+# Từ M2 (checkout COD, Fake GHN)
 QUOTE_SIGNING_KEYS=local-quote-1:local-quote-secret       # kid:secret, nhiều khoá cách nhau bằng dấu phẩy, khoá đầu dùng để ký (04 mục 5.3)
-PII_HMAC_KEYS=local-pii-1:local-pii-secret                # kid:secret, khoá đầu dùng cho giá trị mới, không xoá khoá cũ (ADR 0016)
-STOREFRONT_ORIGIN=http://localhost:3000
-PAYMENT_PROVIDER_VNPAY=fake
-PAYMENT_PROVIDER_MOMO=fake
 SHIPPING_PROVIDER=fake
 FAKE_PROVIDERS_ENABLED=true
+
+# Từ M3 (thanh toán online)
+PAYMENT_PROVIDER_VNPAY=fake
+PAYMENT_PROVIDER_MOMO=fake
+
+# Từ M6 (đăng nhập Google)
 GOOGLE_OAUTH_CLIENT_ID=
-BFF_SHARED_SECRET=local-bff-secret
 ```
 
 `BFF_SHARED_SECRET` phải trùng với giá trị cấu hình ở Next.js local. Next.js gửi secret này trong header `X-BFF-Secret` kèm `X-Client-IP`, và Django chỉ tin `X-Client-IP` khi secret đúng ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Gọi thẳng `localhost:8000` từ Swagger UI hay `curl` vẫn chạy được, chỉ là throttle tính theo IP của máy gọi.
 
-Sinh khoá JWT cho local:
+Từ M1, sinh khoá JWT cho local:
 
 ```bash
 mkdir -p .secrets && openssl genpkey -algorithm ed25519 -out .secrets/jwt_ed25519.pem
@@ -171,7 +180,7 @@ mkdir -p .secrets && openssl genpkey -algorithm ed25519 -out .secrets/jwt_ed2551
 Khoá RefreshReplay độc lập JWT, tạo một lần cho local và không commit. Chạy từ backend/ sau khi có .secrets/:
 
 ```bash
-python -c "from pathlib import Path; import secrets; Path('.secrets/refresh_replay.key').open('xb').write(secrets.token_bytes(32))"
+uv run python -c "from pathlib import Path; import secrets; Path('.secrets/refresh_replay.key').open('xb').write(secrets.token_bytes(32))"
 ```
 
 Lệnh từ chối ghi đè key đã có; không tạo lại mỗi lần khởi động. Key có ID để xoay và các API replica phải cùng đọc được key còn hiệu lực trong cửa sổ replay. STOREFRONT_ORIGIN chỉ là origin tin cậy, không kèm path/query/userinfo; payment return path do backend cố định.
@@ -179,36 +188,40 @@ Lệnh từ chối ghi đè key đã có; không tạo lại mỗi lần khởi 
 ### 2.4. Chạy
 
 ```bash
-make up             # docker compose up -d --build
-make migrate        # chạy migration rồi sync_beat_schedule (lịch job Celery Beat)
+make up             # docker compose up -d --build; service migrate chạy migration và sync_beat_schedule trước khi api, worker, beat, relay khởi động (mục 7)
 make load-geo       # nạp 34 tỉnh/thành và phường/xã
-make seed           # tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu
 make create-admin   # tạo tài khoản Admin
+make seed           # (từ M1) tạo Kho, danh mục, Sản phẩm mẫu; Voucher mẫu từ M2
 ```
+
+`make migrate` chỉ cần khi đã có migration mới mà không muốn khởi động lại container.
 
 | Địa chỉ | Dùng để |
 |---|---|
 | http://localhost:8000/api/docs/ | Swagger UI, gọi thử API |
-| http://localhost:8000/admin/ | Django Admin read-only, xem dữ liệu |
 | http://localhost:8025 | Mailpit, xem email đã gửi |
-| http://localhost:8000/dev/fake-gateway/ | Fake Gateway |
+| http://localhost:8000/dev/fake-gateway/ | Fake Gateway (từ M3) |
+
+Không có Django Admin ([ADR 0004](../adr/0004-custom-nextjs-admin.md)). Xem dữ liệu bằng `psql`, công cụ database của IDE hoặc `make shell`.
 
 ## 3. Lệnh hằng ngày (`Makefile`)
 
-| Lệnh | Làm gì |
-|---|---|
-| `make up` / `make down` | Bật / tắt các container |
-| `make logs s=worker` | Xem log của một service |
-| `make shell` | `manage.py shell` trong container api |
-| `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) |
-| `make db-reset` | Xoá và tạo lại database `fashion` rồi migrate (mục 2.2) |
-| `make load-geo` | Nạp 34 tỉnh/thành và phường/xã |
-| `make seed` | Tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu |
-| `make create-admin` | Tạo Tài khoản Admin (`manage.py create_staff --admin`) |
-| `make test` | `pytest -n auto` |
-| `make lint` | `ruff check`, `ruff format --check`, `mypy`, `lint-imports` |
-| `make fmt` | `ruff format` + `ruff check --fix` |
-| `make tunnel` | Mở Cloudflare Tunnel để nghiệm thu với sandbox ([06](./06-integrations.md) mục 8) |
+Mỗi lệnh được thêm vào `Makefile` cùng ticket tạo ra lệnh mà nó gọi, nên cột "Có từ" cho biết lệnh nào đã dùng được.
+
+| Lệnh | Làm gì | Có từ |
+|---|---|---|
+| `make up` / `make down` | Bật / tắt các container; `make up` chạy service `migrate` trước (mục 7) | M0 (ticket 07) |
+| `make logs s=worker` | Xem log của một service | M0 (ticket 07) |
+| `make shell` | `manage.py shell` trong container api | M0 (ticket 07) |
+| `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) | M0 (ticket 07) |
+| `make db-reset` | Xoá và tạo lại database `fashion` rồi migrate (mục 2.2) | M0 (ticket 07) |
+| `make test` | `pytest -n auto` | M0 (ticket 07) |
+| `make lint` | `ruff check`, `ruff format --check`, `mypy`, `lint-imports`, `scripts/gen_importlinter.py --check` | M0 (ticket 07) |
+| `make fmt` | `ruff format` + `ruff check --fix` | M0 (ticket 07) |
+| `make load-geo` | Nạp 34 tỉnh/thành và phường/xã | M0 (ticket 09) |
+| `make create-admin` | Tạo Tài khoản Admin (`manage.py create_staff --admin`) | M0 (ticket 12) |
+| `make seed` | Tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu | M1 (Voucher mẫu từ M2) |
+| `make tunnel` | Mở Cloudflare Tunnel để nghiệm thu với sandbox ([06](./06-integrations.md) mục 8) | M7 |
 
 ## 4. Debug
 
@@ -263,8 +276,18 @@ x-app: &app
   volumes: [".:/app"]
   depends_on:
     redis: {condition: service_started}
+    migrate: {condition: service_completed_successfully}  # beat cần bảng django_celery_beat, relay cần bảng outbox
 
 services:
+  migrate:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://fashion:fashion@host.docker.internal:${PG_PORT:-5432}/fashion
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes: [".:/app"]
+    command: sh -c "python manage.py migrate && python manage.py sync_beat_schedule"
+    restart: "no"
   api:
     <<: *app
     command: python -m debugpy --listen 0.0.0.0:5678 manage.py runserver 0.0.0.0:8000
@@ -286,4 +309,4 @@ services:
     ports: ["1025:1025", "8025:8025"]
 ```
 
-Phiên bản image (`valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Compose không có service `postgres` ([ADR 0015](../adr/0015-local-postgres-on-host.md)); `PG_PORT` đọc từ `.env` để Compose thay vào `DATABASE_URL`.
+Phiên bản image (`valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Compose không có service `postgres` ([ADR 0015](../adr/0015-local-postgres-on-host.md)); `PG_PORT` đọc từ `.env` để Compose thay vào `DATABASE_URL`. Service `migrate` chạy một lần rồi thoát; `api`, `worker`, `beat`, `relay` chỉ khởi động khi nó thoát thành công, nên DB trống không làm `beat` hay `relay` lỗi liên tục. Migration lỗi thì `make up` dừng ở bước này, xem bằng `make logs s=migrate`.

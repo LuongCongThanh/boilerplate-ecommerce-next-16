@@ -15,7 +15,7 @@ Spec: [spec.md](../spec.md)
 - `shared/exceptions.py`: `DomainError(code, message, details)`, `RetryLater`.
 - `shared/api/`: `exception_handler` trả `ErrorDTO` ([04 mục 3](../../../docs/architecture/04-api-contract.md#3-định-dạng-lỗi)), pagination (`page_size` mặc định 24, tối đa 100), `permissions` theo `kind`/`aud`, middleware `client_ip` (ADR 0009, so `X-BFF-Secret` bằng `hmac.compare_digest`, nhận tối đa hai secret), throttling cơ sở fail-open khi Redis lỗi, `i18n` theo `Accept-Language`.
 - `shared/logging.py`: cấu hình structlog JSON, processor `redact_pii` ([02 mục 9.6](../../../docs/architecture/02-backend-structure.md#96-logging)).
-- `shared/geo/`: model `Province`, `Ward` (mã chính thức làm PK), lệnh `load_geo` từ `vietnam-provinces` chạy lại an toàn, endpoint `GET store/geo/provinces` và `geo/provinces/{code}/wards`.
+- `shared/geo/`: model `Province`, `Ward` (mã chính thức làm PK), lệnh `load_geo` từ `vietnam-provinces` chạy lại an toàn (thêm target `make load-geo` vào `Makefile`), endpoint `GET store/geo/provinces` và `geo/provinces/{code}/wards`.
 - Migration `shared` bật `unaccent`, `pg_trgm`, `btree_gist` và tạo hàm `immutable_unaccent` ([03 mục 0.7](../../../docs/architecture/03-data-model.md#07-khởi-tạo-và-seed)).
 
 ## Acceptance criteria

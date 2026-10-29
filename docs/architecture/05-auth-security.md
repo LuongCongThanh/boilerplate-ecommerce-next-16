@@ -169,7 +169,7 @@ Failure ledger dùng timestamp của cửa sổ trượt 15 phút, request ID đ
 | Injection | Chỉ dùng ORM / query có tham số; cấm `raw()` với chuỗi ghép |
 | Gán field ngoài ý muốn | Serializer liệt kê field tường minh, không dùng `fields = "__all__"` |
 | Bề mặt public | Django chỉ mở `/api/v1/webhooks/*` ra internet; mọi API khác chỉ nhận request từ Next.js trong VPC (ADR 0009). Trình duyệt không gọi thẳng Django nên không cần CORS và không dùng `django-cors-headers` |
-| CSRF | Đoạn BFF → Django chỉ dùng Bearer/lookup token, không dùng cookie session Django nên không yêu cầu Django CSRF cho API đó. Browser → BFF dùng cookie phải kiểm CSRF/Origin theo mục 1.1; Django Admin (local) vẫn bật CSRF |
+| CSRF | Đoạn BFF → Django chỉ dùng Bearer/lookup token, không dùng cookie session Django nên không yêu cầu Django CSRF cho API đó. Browser → BFF dùng cookie phải kiểm CSRF/Origin theo mục 1.1. Không dùng Django Admin ở mọi môi trường (ADR 0004), nên không có trang nào của Django dùng cookie session |
 | Header bảo mật | `SECURE_HSTS_SECONDS`, `SECURE_CONTENT_TYPE_NOSNIFF`, `X_FRAME_OPTIONS = "DENY"`, `SECURE_PROXY_SSL_HEADER` sau ALB |
 | Upload ảnh | Chỉ chấp nhận JPEG/PNG/WebP, kiểm tra bằng Pillow, giới hạn 5 MB, đặt `Image.MAX_IMAGE_PIXELS` để chặn decompression bomb, xoá EXIF (có thể chứa GPS), đổi tên file thành UUID |
 | Secrets | Không commit `.env`; trên AWS dùng Secrets Manager |
