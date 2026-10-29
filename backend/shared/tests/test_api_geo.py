@@ -1,15 +1,15 @@
 import pytest
 from django.test import Client
 
-from shared.models import Province, Ward
+from shared.testing.factories import ProvinceFactory, WardFactory
 from shared.tests._helpers import error_of
 
 pytestmark = pytest.mark.django_db
 
 
 def test_provinces_returns_unpaginated_array_ordered_by_code(client: Client) -> None:
-    Province.objects.create(code="79", name="Thành phố Hồ Chí Minh")
-    Province.objects.create(code="01", name="Thành phố Hà Nội")
+    ProvinceFactory(code="79", name="Thành phố Hồ Chí Minh")
+    ProvinceFactory(code="01", name="Thành phố Hà Nội")
 
     response = client.get("/api/v1/store/geo/provinces")
 
@@ -21,12 +21,11 @@ def test_provinces_returns_unpaginated_array_ordered_by_code(client: Client) -> 
 
 
 def test_wards_of_province_returns_unpaginated_array(client: Client) -> None:
-    ha_noi = Province.objects.create(code="01", name="Thành phố Hà Nội")
-    hcm = Province.objects.create(code="79", name="Thành phố Hồ Chí Minh")
-    Ward.objects.create(code="00008", province=ha_noi, name="Phường Ngọc Hà")
-    Ward.objects.create(code="00004", province=ha_noi, name="Phường Ba Đình")
-    Ward.objects.create(code="26734", province=hcm, name="Phường Sài Gòn")
-    Province.objects.create(code="02", name="Tỉnh chưa có phường/xã")
+    ha_noi = ProvinceFactory(code="01")
+    WardFactory(code="00008", province=ha_noi, name="Phường Ngọc Hà")
+    WardFactory(code="00004", province=ha_noi, name="Phường Ba Đình")
+    WardFactory(code="26734", province=ProvinceFactory(code="79"))
+    ProvinceFactory(code="02")
 
     response = client.get("/api/v1/store/geo/provinces/01/wards")
     empty = client.get("/api/v1/store/geo/provinces/02/wards")
@@ -41,7 +40,7 @@ def test_wards_of_province_returns_unpaginated_array(client: Client) -> None:
 
 def test_geo_endpoints_are_public(client: Client) -> None:
     # Mặc định view cần đăng nhập (05 mục 4); 04 mục 4.1 ghi địa giới là Công khai
-    Province.objects.create(code="01", name="Thành phố Hà Nội")
+    ProvinceFactory(code="01")
 
     provinces = client.get("/api/v1/store/geo/provinces")
     wards = client.get("/api/v1/store/geo/provinces/01/wards")

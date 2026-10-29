@@ -7,22 +7,25 @@ from vietnam_provinces import Province as SourceProvince
 from vietnam_provinces import Ward as SourceWard
 
 from shared.models import Province, Ward
+from shared.testing.factories import ProvinceFactory, WardFactory
 
 pytestmark = pytest.mark.django_db
 
 
 def test_load_geo_twice_creates_no_duplicates() -> None:
+    province_total = len(list(SourceProvince.iter_all()))
+    ward_total = len(list(SourceWard.iter_all()))
     call_command("load_geo")
 
     with capture_logs() as logs:
         call_command("load_geo")
 
-    assert Province.objects.count() == 34
-    assert Ward.objects.count() == 3321
+    assert Province.objects.count() == province_total
+    assert Ward.objects.count() == ward_total
     loaded = [log for log in logs if log["event"] == "geo_loaded"]
     assert len(loaded) == 1
-    assert loaded[0]["provinces"] == {"created": 0, "updated": 0, "unchanged": 34}
-    assert loaded[0]["wards"] == {"created": 0, "updated": 0, "unchanged": 3321}
+    assert loaded[0]["provinces"] == {"created": 0, "updated": 0, "unchanged": province_total}
+    assert loaded[0]["wards"] == {"created": 0, "updated": 0, "unchanged": ward_total}
 
 
 def test_codes_are_zero_padded() -> None:
@@ -48,10 +51,13 @@ def test_rerun_updates_renamed_and_keeps_missing_codes(monkeypatch: pytest.Monke
     ]
     monkeypatch.setattr(SourceProvince, "iter_all", lambda: iter(source_provinces))
     monkeypatch.setattr(SourceWard, "iter_all", lambda: iter(source_wards))
-    Province.objects.create(code="01", name="Tỉnh Giả Tên Cũ")
-    Province.objects.create(code="99", name="Tỉnh Giả Đã Bỏ")
-    Ward.objects.create(code="00004", province_id="01", name="Xã Giả Giữ Nguyên")
-    Ward.objects.create(code="99999", province_id="99", name="Xã Giả Đã Bỏ")
+    renamed = ProvinceFactory(code="01", name="Tỉnh Giả Tên Cũ")
+    WardFactory(code="00004", province=renamed, name="Xã Giả Giữ Nguyên")
+    WardFactory(
+        code="99999",
+        province=ProvinceFactory(code="99", name="Tỉnh Giả Đã Bỏ"),
+        name="Xã Giả Đã Bỏ",
+    )
 
     with capture_logs() as logs:
         call_command("load_geo")
@@ -74,3 +80,28 @@ def test_rerun_updates_renamed_and_keeps_missing_codes(monkeypatch: pytest.Monke
     assert len(loaded) == 1
     assert loaded[0]["provinces"] == {"created": 1, "updated": 1, "unchanged": 0}
     assert loaded[0]["wards"] == {"created": 1, "updated": 0, "unchanged": 1}
+
+
+def test_rerun_moves_ward_to_new_province(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Nguồn giả: phường/xã 00004 chuyển từ tỉnh 01 sang tỉnh 02, tên giữ nguyên
+    source_provinces = [
+        SimpleNamespace(code=1, name="Tỉnh Giả Cũ"),
+        SimpleNamespace(code=2, name="Tỉnh Giả Nhận"),
+    ]
+    source_wards = [SimpleNamespace(code=4, province_code=2, name="Xã Giả Chuyển Tỉnh")]
+    monkeypatch.setattr(SourceProvince, "iter_all", lambda: iter(source_provinces))
+    monkeypatch.setattr(SourceWard, "iter_all", lambda: iter(source_wards))
+    ProvinceFactory(code="02", name="Tỉnh Giả Nhận")
+    WardFactory(
+        code="00004",
+        province=ProvinceFactory(code="01", name="Tỉnh Giả Cũ"),
+        name="Xã Giả Chuyển Tỉnh",
+    )
+
+    with capture_logs() as logs:
+        call_command("load_geo")
+
+    assert Ward.objects.get(code="00004").province_id == "02"
+    loaded = [log for log in logs if log["event"] == "geo_loaded"]
+    assert len(loaded) == 1
+    assert loaded[0]["wards"] == {"created": 0, "updated": 1, "unchanged": 0}
