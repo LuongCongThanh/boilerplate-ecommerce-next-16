@@ -24,17 +24,17 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args: object, **options: object) -> None:
-        code_schedule: dict[str, dict[str, Any]] = app.conf.beat_schedule
-        for name, entry in code_schedule.items():
+        beat_schedule: dict[str, dict[str, Any]] = app.conf.beat_schedule
+        for name, entry in beat_schedule.items():
             _sync_job(name, entry)
-        for task in PeriodicTask.objects.filter(enabled=True).exclude(name__in=list(code_schedule)):
+        for task in PeriodicTask.objects.filter(enabled=True).exclude(name__in=list(beat_schedule)):
             task.enabled = False
             task.save()
             logger.info("beat_job_disabled", name=task.name)
 
 
 def _sync_job(name: str, entry: dict[str, Any]) -> None:
-    interval, cron = _schedule_rows(name, entry["schedule"])
+    interval, cron = _resolve_schedule_row(name, entry["schedule"])
     wanted = {
         "task": entry["task"],
         "interval": interval,
@@ -58,22 +58,22 @@ def _sync_job(name: str, entry: dict[str, Any]) -> None:
         logger.info("beat_job_updated", name=name, fields=changed)
 
 
-def _schedule_rows(
-    name: str, code_schedule: object
+def _resolve_schedule_row(
+    name: str, job_schedule: object
 ) -> tuple[IntervalSchedule | None, CrontabSchedule | None]:
     """Dòng lịch khớp với lịch trong code, tạo mới khi chưa có."""
-    if isinstance(code_schedule, crontab):
-        cron = CrontabSchedule.from_schedule(code_schedule)
+    if isinstance(job_schedule, crontab):
+        cron = CrontabSchedule.from_schedule(job_schedule)
         if cron.pk is None:
             cron.save()
         return None, cron
-    if isinstance(code_schedule, int | float | timedelta):
-        code_schedule = schedule(code_schedule)
-    if isinstance(code_schedule, schedule):
+    if isinstance(job_schedule, int | float | timedelta):
+        job_schedule = schedule(job_schedule)
+    if isinstance(job_schedule, schedule):
         spec = {
-            "every": int(code_schedule.run_every.total_seconds()),
+            "every": int(job_schedule.run_every.total_seconds()),
             "period": IntervalSchedule.SECONDS,
         }
         interval = IntervalSchedule.objects.filter(**spec).order_by("pk").first()
         return interval or IntervalSchedule.objects.create(**spec), None
-    raise CommandError(f"{name}: chỉ hỗ trợ lịch crontab và interval, nhận {code_schedule!r}")
+    raise CommandError(f"{name}: chỉ hỗ trợ lịch crontab và interval, nhận {job_schedule!r}")
