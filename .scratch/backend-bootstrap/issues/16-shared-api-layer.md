@@ -39,3 +39,48 @@ Chốt khi grilling ngày 29/10/2026.
 - [ ] Thiếu hoặc sai `X-BFF-Secret` thì throttle dùng IP kết nối; đúng secret thì dùng `X-Client-IP`.
 - [ ] Redis tắt thì request vẫn qua throttle (fail-open) và có log cảnh báo không chứa IP thô.
 - [ ] `page_size` lớn hơn 100 bị giới hạn ở 100.
+
+## Comments
+
+### Báo cáo 29/10/2026
+
+**Nhánh:** `feat/shared-api-layer` · **PR:** chưa mở · **Mode:** full
+
+#### Đã làm
+
+| AC | Bằng chứng |
+| --- | --- |
+| 1. Mọi lỗi không bắt trả `ErrorDTO` có `request_id` | `shared/tests/test_api_errors.py::test_unknown_route_returns_error_dto`, `::test_method_not_allowed_returns_error_dto`, `::test_validation_error_returns_fields`, `::test_domain_error_uses_class_status`, `::test_unhandled_exception_returns_internal_error` |
+| 2. Thiếu/sai `X-BFF-Secret` → IP kết nối; đúng → `X-Client-IP` | `shared/tests/test_api_client_ip.py::test_missing_secret_uses_remote_addr`, `::test_wrong_secret_uses_remote_addr`, `::test_valid_secret_uses_x_client_ip`, `::test_second_secret_accepted` |
+| 3. Redis tắt → fail-open, log không chứa IP thô | `shared/tests/test_api_throttling.py::test_cache_down_allows_request_and_logs_without_ip`, `::test_cache_down_allows_authenticated_request` |
+| 4. `page_size` > 100 giới hạn ở 100 | `shared/tests/test_api_pagination.py::test_page_size_capped_at_100` |
+
+Test thêm ngoài AC: quyền `IsCustomer`/`IsStaff`/`IsAdmin` (`test_api_permissions.py`), quyền mặc định chặn người chưa xác thực, schema vẫn công khai, 429 giữ `Retry-After`, IP sai định dạng, quota tách theo IP, `BFF_SHARED_SECRET` 1–2 giá trị (`tests/test_env.py`).
+
+Lint xanh (ruff, format, mypy, import-linter) · test: 125 passed trong 6.68s. Chạy từng lệnh trong `Makefile` vì máy chưa có `make`.
+
+#### Chưa làm
+
+- Metric khi throttle fail-open (05 mục 5, 10-nfr): hiện chỉ có log `throttle_backend_unavailable`. Metric thêm khi dựng observability.
+- Scope throttle riêng (`checkout`, `order_lookup`, `auth_google`, …): thêm ở mốc dùng tới, theo quyết định.
+- Bản dịch tiếng Anh cho message lỗi: chỉ bật `LocaleMiddleware`, theo quyết định.
+
+#### Gap
+
+- Chưa có authenticator, nên tới M1 request chưa xác thực nhận `403 PERMISSION_DENIED` thay vì `401 NOT_AUTHENTICATED`. M1 thêm JWT authentication sẽ sửa.
+- View mới phải khai báo quyền; mặc định là `IsAuthenticated`. View công khai phải ghi `AllowAny`.
+- Throttle scope mới nên kế thừa `ClientIpRateThrottle` hoặc `FailOpenRateThrottle` để có fail-open và khoá `pii_hmac`.
+- Tin `X-Request-ID` từ BFF: ticket [19](./19-trust-upstream-request-id.md) (`needs-triage`).
+
+#### Thay đổi theo yêu cầu
+
+- Không
+
+#### Review
+
+Chưa review.
+
+#### Tài liệu đã cập nhật
+
+- `docs/architecture/04-api-contract.md`: `page_size` > 100 giới hạn ở 100; thêm mã `METHOD_NOT_ALLOWED` cho 405.
+- `docs/architecture/08-local-development.md` và `.env.example`: `BFF_SHARED_SECRET` nhận 1–2 secret cách nhau bằng dấu phẩy.
