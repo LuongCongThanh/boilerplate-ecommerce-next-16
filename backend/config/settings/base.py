@@ -98,6 +98,9 @@ SPECTACULAR_SETTINGS = {
 
 # Log JSON ra stdout, đã che PII; local ghi đè bằng log dễ đọc (02 mục 9.6)
 LOGGING = configure_logging(json=True)
+# django-structlog mặc định gắn `ip` thô (đọc cả X-Client-IP chưa xác minh) vào contextvars,
+# nên mọi dòng log của request mang IP; IP chỉ được log dạng pii_hmac (05 mục 5, ADR 0016)
+DJANGO_STRUCTLOG_IP_LOGGING_ENABLED = False
 
 CELERY_BROKER_URL = env.REDIS_URL
 CELERY_TASK_DEFAULT_QUEUE = "default"

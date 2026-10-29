@@ -1,3 +1,5 @@
+import json
+import logging.config
 from types import SimpleNamespace
 from typing import Any
 
@@ -12,6 +14,7 @@ from structlog.testing import capture_logs
 
 from shared.api.throttling import AccountThrottle, AnonThrottle
 from shared.privacy import pii_hmac
+from shared.tests._helpers import BFF_IP, BFF_SECRET, CLIENT_IP
 
 
 def drf_request(user: Any = None) -> Request:
@@ -83,3 +86,28 @@ def test_cache_down_allows_authenticated_request() -> None:
         {"event": "throttle_backend_unavailable", "scope": "account", "log_level": "warning"}
     ]
     assert "throttle_account_42" not in repr(logs)
+
+
+@pytest.mark.urls("shared.tests.api_urls")
+@pytest.mark.usefixtures("cache_down")
+def test_cache_down_json_log_has_no_raw_ip(
+    json_logging: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Chạy qua chuỗi processor thật (có merge_contextvars), không thay bằng capture_logs:
+    # middleware của django-structlog gắn contextvars mà dòng log nào cũng mang theo
+    logging.config.dictConfig(json_logging)
+
+    with override_settings(BFF_SHARED_SECRETS=(BFF_SECRET,)):
+        response = APIClient().get(
+            "/items", REMOTE_ADDR=BFF_IP, HTTP_X_BFF_SECRET=BFF_SECRET, HTTP_X_CLIENT_IP=CLIENT_IP
+        )
+
+    assert response.status_code == 200
+    output = capsys.readouterr().err
+    lines = [json.loads(line) for line in output.splitlines()]
+    warnings = [line for line in lines if line["event"] == "throttle_backend_unavailable"]
+    assert len(warnings) == 1
+    assert warnings[0]["scope"] == "anon"
+    # Cả dòng cảnh báo lẫn log request_started/finished của request đều không có IP thô
+    for raw in (CLIENT_IP, BFF_IP):
+        assert raw not in output
