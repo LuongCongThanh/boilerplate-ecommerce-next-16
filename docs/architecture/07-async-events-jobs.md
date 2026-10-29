@@ -145,7 +145,7 @@ Tần suất "mỗi phút" của các job khôi phục là **[Giả định · k
 
 Mọi job đều **idempotent** và xử lý theo lô (ví dụ 200 đơn mỗi lần) để chạy lại an toàn.
 
-**Nguồn lịch job.** Lịch ở bảng trên được khai báo trong code (`config/celery.py`), là nguồn chuẩn. Lệnh `manage.py sync_beat_schedule` tạo hoặc cập nhật `PeriodicTask` của `django-celery-beat` theo code, **tắt** (không xoá) job có trong DB mà không còn trong code và ghi log từng thay đổi. Lệnh idempotent, chạy sau mỗi lần `migrate`: ở local qua `make migrate` ([08](./08-local-development.md) mục 2.4), trên AWS trong cùng task migration ([09](./09-deployment-aws-target.md) mục 4). Không sửa lịch bằng tay trong DB, vì lần `sync_beat_schedule` sau sẽ ghi đè theo code.
+**Nguồn lịch job.** Lịch ở bảng trên được khai báo trong code (`config/celery.py`), là nguồn chuẩn. Lệnh `manage.py sync_beat_schedule` tạo hoặc cập nhật `PeriodicTask` của `django-celery-beat` theo code, **tắt** (không xoá) job có trong DB mà không còn trong code và ghi log từng thay đổi. Lệnh idempotent, chạy sau mỗi lần `migrate`: ở local qua service `migrate` của `make up`, `make migrate` và `make db-reset` ([08](./08-local-development.md) mục 3), trên AWS trong cùng task migration ([09](./09-deployment-aws-target.md) mục 4). Không sửa lịch bằng tay trong DB, vì lần `sync_beat_schedule` sau sẽ ghi đè theo code.
 
 Job Đối soát (`reconcile_pending_payments`, `reconcile_shipments`) chỉ quét rồi đẩy mỗi Thanh toán hoặc Vận đơn một task con lên queue `integrations`, không tự gọi nhà cung cấp trong task của job. Một lô 200 lần gọi, mỗi lần tới 13 giây (06 mục 1), sẽ vượt `task_time_limit` 120 giây.
 

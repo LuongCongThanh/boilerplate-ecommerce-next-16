@@ -16,7 +16,6 @@ updates:
       actions-minor-patch:
         update-types: [minor, patch]
 
-  # Thư mục backend/ chưa có: hai mục dưới sẽ báo lỗi trong tab Dependabot cho tới khi có code
   - package-ecosystem: uv
     directory: /backend
     schedule:

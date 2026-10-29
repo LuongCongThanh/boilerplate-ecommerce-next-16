@@ -31,10 +31,10 @@ Chốt khi grilling ngày 29/10/2026.
 | Image | `python:3.14.<vá>-slim`, `uv` chép từ image `ghcr.io/astral-sh/uv:<bản>`, cài bằng `uv sync --locked --no-build --no-dev`. Venv ở `/opt/venv` (ngoài `/app`) để bind mount `backend/` không đè `.venv` của máy lên venv của container. Chạy bằng user không phải root |
 | Phiên bản image | Valkey `8.1.11`, trùng service của CI; Mailpit ghim bản vá. 08 mục 7 sửa theo |
 | `REDIS_PORT` | Khai báo `REDIS_PORT: int = 6380` trong `config/env.py` như `PG_PORT` (chỉ Compose dùng), vì `Env` có `extra="forbid"` |
-| `make db-reset` | Lệnh `shared` `manage.py reset_db`: nối database `postgres`, `DROP DATABASE … WITH (FORCE)`, `CREATE DATABASE … OWNER <user>`; từ chối khi `DEBUG` tắt hoặc host không phải `localhost`/`127.0.0.1`. Recipe: `reset_db` → `migrate` → `sync_beat_schedule`. Khác *Việc cần làm*: thêm lệnh này vì recipe chỉ được gọi `uv run`/`docker compose` (ADR 0017), không gọi `psql` |
+| `make db-reset` | Lệnh `shared` `manage.py reset_db`: nối database `postgres`, `DROP DATABASE … WITH (FORCE)`, `CREATE DATABASE … OWNER <user>`; từ chối khi `DEBUG` tắt hoặc host không phải `localhost`/`127.0.0.1`. Recipe: `reset_db` → `$(MAKE) migrate` (`migrate` → `sync_beat_schedule`). Khác *Việc cần làm*: thêm lệnh này vì recipe chỉ được gọi `uv run`/`docker compose` (ADR 0017), không gọi `psql` |
 | `make migrate` | Chạy trên máy: `migrate` rồi `sync_beat_schedule` |
 | `make restart-worker` | Khởi động lại `worker`, `beat`; ticket 10 thêm `relay` |
-| `sync_beat_schedule` | Tên `PeriodicTask` là key của `beat_schedule`. Hỗ trợ lịch crontab và interval. Đồng bộ `task`, lịch, `queue`, `enabled`; job trong DB không còn trong code thì `enabled=False`. Mỗi thay đổi ghi một dòng log |
+| `sync_beat_schedule` | Tên `PeriodicTask` là key của `beat_schedule`. Hỗ trợ lịch crontab và interval; job trong DB đang dùng `solar`/`clocked` được chuyển về lịch của code. Đồng bộ `task`, lịch, `queue`, `enabled`; job trong DB không còn trong code thì `enabled=False`. Mỗi thay đổi ghi một dòng log |
 | `celery.backend_cleanup` | Đặt `result_expires = None` trong `config/celery.py` để Beat không tự thêm job này (không có result backend, 07 mục 3.3). Khác *Việc cần làm*: thêm một dòng cấu hình Celery |
 | `debugpy` | Bỏ package khỏi nhóm dev và bảng ở 02. Giữ extension VS Code `ms-python.debugpy` và `"type": "debugpy"` trong `launch.json` (debugger của IDE, không phải package) |
 | Thêm sau review (29/10) | Giữ `.dockerignore` (không đưa `.env`, `.venv` vào image), `COPY . .` trong Dockerfile (image chạy được khi không bind mount, ticket 14 quét image này), `name: fashion` trong Compose (tên container không trùng project khác ở thư mục `backend`); 08 mục 7 sửa theo |
@@ -63,13 +63,12 @@ Chốt khi grilling ngày 29/10/2026.
 | 2. Lệnh chạy được trên Windows (PowerShell 7, GNU make) và macOS | Kiểm tay một phần: từng lệnh trong recipe (`docker compose …`, `uv run …`) chạy được trên Windows. Chưa chạy qua GNU make vì máy chưa cài; macOS không có máy để kiểm (không test tự động: phụ thuộc hệ điều hành và shell) |
 | 3. `sync_beat_schedule` tạo đủ job, chạy lần hai không đổi gì, tắt job thừa (không xoá), sửa tần suất lệch | `shared/tests/test_sync_beat_schedule.py::test_empty_db_creates_every_job_from_code`, `::test_second_run_changes_nothing`, `::test_job_missing_from_code_is_disabled_not_deleted`, `::test_db_frequency_differing_from_code_is_corrected`, `::test_db_job_on_other_schedule_type_is_switched_to_code_schedule` |
 | 4. `make db-reset` xoá, tạo lại database `fashion` rồi migrate | `shared/tests/test_reset_db.py::test_refuses_when_debug_is_off`, `::test_refuses_non_local_database_host` (3 host: tên miền, RDS, rỗng) cho phần chặn an toàn. Kiểm tay phần xoá/tạo thật trên database nháp `fashion_reset_check`: tạo được khi chưa có, owner `fashion`, `DROP … WITH (FORCE)` chạy được khi còn session mở. Chưa chạy `make db-reset` trên `fashion` |
-| 5. Tài liệu lệch được sửa trong cùng PR | Làm ở phase sync, sau review |
+| 5. Tài liệu lệch được sửa trong cùng PR | Rà tay theo danh sách thay đổi; xem *Tài liệu đã cập nhật* |
 
 Lint (`ruff check`, `ruff format --check`, `mypy`, `lint-imports`) xanh · test: 148 passed trong 6.11s (sau vòng sửa review). Hai lệnh chạy thẳng recipe của `make lint` / `make test` vì máy chưa có GNU make.
 
 #### Chưa làm
 
-- Tài liệu lệch (AC5): 08 mục 6 và 7, 02 (dòng `debugpy`, mô tả Dockerfile, cây thư mục), comment trong `dependabot.yml` và `.env.example`. Sửa ở phase sync.
 - Kiểm tay còn thiếu: chạy các lệnh qua GNU make, macOS, `make db-reset` trên database `fashion` khi worker/beat đang chạy, mở thử run config của VS Code và PyCharm.
 
 #### Gap
@@ -106,4 +105,10 @@ Một vòng sửa, xanh.
 
 #### Tài liệu đã cập nhật
 
-- Không (phase sync)
+- `docs/architecture/02-backend-structure.md`: bỏ `debugpy` khỏi bảng dev; cây thư mục: Dockerfile cho worker/beat/relay/migrate, thêm `.dockerignore`, `reset_db.py`, Compose không còn api; §9.1 cho phép transaction trong management command hạ tầng của `shared`.
+- `docs/architecture/08-local-development.md`: mục 7 khớp `docker-compose.yml` (`name: fashion`, khối `x-base`, image ghim `valkey/valkey:8.1.11`, `axllent/mailpit:v1.31.6`, mô tả Dockerfile); mục 3 `restart-worker`, `db-reset`; mục 6 thêm extension Python Debugger.
+- `docs/architecture/06-integrations.md`: Mailpit local, worker dùng `mailpit:1025`, API trên máy dùng `localhost:1025`.
+- `docs/architecture/07-async-events-jobs.md`: nơi chạy `sync_beat_schedule` ở local.
+- `docs/architecture/09-deployment-aws-target.md`: image Valkey local và CI là `8.1.11`.
+- `.github/dependabot.yml`: bỏ comment "backend/ chưa có".
+- `backend/.env.example`: comment nêu cả `postgres.ps1`.
