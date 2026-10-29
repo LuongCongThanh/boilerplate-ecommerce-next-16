@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Django (local)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": ["runserver"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}/backend/.venv/Scripts/python.exe" },
+      "justMyCode": true,
+      "django": true
+    },
+    {
+      "name": "Pytest (local)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-x", "-q"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}/backend/.venv/Scripts/python.exe" },
+      "justMyCode": false,
+      "django": true
+    }
+  ]
+}

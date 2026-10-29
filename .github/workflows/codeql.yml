@@ -1,0 +1,49 @@
+# Phân tích tĩnh bảo mật bằng CodeQL (miễn phí cho repo public).
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 2 * * 1" # 9h sáng thứ Hai, giờ Việt Nam
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: codeql (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # đẩy kết quả lên tab Security
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, python]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Kiểm tra có code để quét không
+        id: detect
+        env:
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          if [ "$LANGUAGE" = "python" ] && [ -z "$(git ls-files '*.py')" ]; then
+            echo "::notice::Chưa có file Python, bỏ qua CodeQL cho python"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        if: steps.detect.outputs.present == 'true'
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        if: steps.detect.outputs.present == 'true'
+        with:
+          category: /language:${{ matrix.language }}
