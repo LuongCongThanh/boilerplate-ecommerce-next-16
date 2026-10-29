@@ -1,0 +1,53 @@
+# Worker, beat, Redis, Mailpit cho local (08 mục 7). Không có service postgres (ADR 0015)
+# và không có service api: API chạy trên máy bằng `make run` (ADR 0017).
+# Service relay thêm ở ticket 10, cùng lúc với lệnh run_outbox_relay.
+
+# Tên project cố định: mặc định là tên thư mục (backend), dễ trùng container của project khác
+name: fashion
+
+x-container-env: &container-env
+  # .env viết cho máy (08 mục 2.3); trong container, localhost là chính container
+  DATABASE_URL: postgres://fashion:fashion@host.docker.internal:${PG_PORT:-5432}/fashion
+  REDIS_URL: redis://redis:6379/0
+  EMAIL_HOST: mailpit
+
+x-base: &base
+  build: .
+  env_file: .env
+  environment: *container-env
+  # Docker Desktop đã có sẵn; Docker Engine trên Linux không được hỗ trợ (PostgreSQL chỉ nghe localhost)
+  extra_hosts: ["host.docker.internal:host-gateway"]
+  # Celery không tự reload: sửa code xong chạy make restart-worker
+  volumes: [".:/app"]
+
+x-app: &app
+  <<: *base
+  depends_on:
+    redis: {condition: service_started}
+    # beat cần bảng django_celery_beat; relay (ticket 10) cần bảng outbox
+    migrate: {condition: service_completed_successfully}
+
+services:
+  migrate:
+    <<: *base
+    command: sh -c "python manage.py migrate && python manage.py sync_beat_schedule"
+    restart: "no"
+
+  worker:
+    <<: *app
+    # Local: 1 worker cho cả 4 queue (07 mục 3.1)
+    command: celery -A config worker -Q default,events,emails,integrations -l info
+
+  beat:
+    <<: *app
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+  redis:
+    # Cùng bản với service của CI
+    image: valkey/valkey:8.1.11
+    # Không tranh 6379 với Redis/Memurai của project khác trên máy
+    ports: ["${REDIS_PORT:-6380}:6379"]
+
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports: ["1025:1025", "8025:8025"]
