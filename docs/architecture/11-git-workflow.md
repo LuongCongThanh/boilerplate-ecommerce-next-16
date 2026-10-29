@@ -222,7 +222,7 @@ Commit `chore(release): vX.Y.Z` ở mục 5.3 cũng được push thẳng vào `
 # 1. Trên dev: cập nhật version và CHANGELOG, KHÔNG tạo tag
 git switch dev && git pull
 cd backend
-cz bump --files-only     # tính version mới từ commit kể từ tag trước, ghi vào pyproject.toml
+cz bump --version-files-only     # tính version mới từ commit kể từ tag trước, ghi vào pyproject.toml
 cz changelog --incremental --unreleased-version "v$(cz version --project)"
 git add pyproject.toml CHANGELOG.md
 git commit -m "chore(release): v0.2.0"
@@ -236,7 +236,7 @@ git tag -a v0.2.0 -m "v0.2.0"
 git push origin v0.2.0
 ```
 
-Cờ của `cz` ở trên cần kiểm tra lại theo phiên bản `commitizen` được pin khi khởi tạo dự án **[Cần xác minh]**.
+Cờ của `cz` ở trên đã kiểm tra với `commitizen` 4.19.3, bản pin trong `backend/pyproject.toml` và `.pre-commit-config.yaml`. Cờ `--files-only` cũ đã bị deprecate, thay bằng `--version-files-only`.
 
 ### 5.4. Hotfix
 
@@ -246,7 +246,7 @@ git switch -c hotfix/vnpay-signature
 # … sửa, commit …
 # cập nhật version và CHANGELOG ngay trong nhánh hotfix, như bước 1 của mục 5.3
 cd backend
-cz bump --files-only
+cz bump --version-files-only
 cz changelog --incremental --unreleased-version "v$(cz version --project)"
 git add pyproject.toml CHANGELOG.md
 git commit -m "chore(release): v0.2.1"

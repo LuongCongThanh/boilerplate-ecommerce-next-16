@@ -38,7 +38,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `djangorestframework` | 3.18.3 | REST API | Phổ biến nhất, team đã quen |
 | `drf-spectacular` | 0.30.0 | Sinh OpenAPI 3 và Swagger UI | Chuẩn de facto cho DRF; OpenAPI dùng để sinh TS client cho Frontend |
 | `django-filter` | 26.2 | Lọc danh sách (size, màu, giá, trạng thái) | Tích hợp sẵn với DRF |
-| `psycopg[binary,pool]` | — | Driver PostgreSQL | psycopg 3, wheel binary và connection pool; khớp `uv sync --locked --no-build` (không build C extension lúc cài). Dùng connection pool có sẵn của Django 5.2 (`OPTIONS["pool"]`, `CONN_MAX_AGE = 0`) |
+| `psycopg[binary,pool]` | 3.3.6 | Driver PostgreSQL | psycopg 3, wheel binary và connection pool; khớp `uv sync --locked --no-build` (không build C extension lúc cài). Dùng connection pool có sẵn của Django 5.2 (`OPTIONS["pool"]`, `CONN_MAX_AGE = 0`) |
 | `redis` | 8.1.0 | Client Redis | Dùng cho cache, throttling, Celery |
 | `celery` | 5.6.3 | Worker chạy job | Có retry, định tuyến queue, hệ sinh thái lớn |
 | `django-celery-beat` | 2.9.0 | Lịch job lưu trong DB (`DatabaseScheduler`) | Beat trên ECS không cần ổ đĩa để ghi file lịch. Lịch vẫn khai báo trong code (`beat_schedule`) và được đồng bộ vào DB khi beat khởi động, nên muốn đổi lịch thì sửa code |
@@ -57,28 +57,28 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `vietnam-provinces` | 2026.9.0 | Dữ liệu 34 tỉnh/thành và phường/xã (sau 07/2025) | Đã cập nhật theo cấu trúc 2 cấp |
 | `structlog` + `django-structlog` | 26.1.0 / 11.0.0 | Log JSON có `request_id` | Dễ tìm kiếm log trên CloudWatch |
 | `sentry-sdk[django,celery]` | 2.73.0 | Theo dõi lỗi và hiệu năng | Chuẩn |
-| `gunicorn` | — | Server chạy production (WSGI, worker `gthread`) | Code toàn đồng bộ (DRF, ORM), chạy ASGI chỉ thêm chi phí `sync_to_async`. Chỉ chuyển sang ASGI khi thực sự cần async (ví dụ SSE) |
+| `gunicorn` | 26.2.0 | Server chạy production (WSGI, worker `gthread`) | Code toàn đồng bộ (DRF, ORM), chạy ASGI chỉ thêm chi phí `sync_to_async`. Chỉ chuyển sang ASGI khi thực sự cần async (ví dụ SSE) |
 
 ### 3.2. Dev và test
 
 | Package | Phiên bản | Dùng để |
 |---|---|---|
 | `ruff` | 0.17.2 | Lint và format (thay cho flake8, isort, black) |
-| `mypy` + `django-stubs` + `djangorestframework-stubs` | 2.4.0 / bản tương thích Django 5.2 / — | Kiểm tra kiểu, có plugin hiểu Django ORM |
+| `mypy` + `django-stubs` + `djangorestframework-stubs` | 2.4.1 / 5.2.9 / 3.16.9 | Kiểm tra kiểu, có plugin hiểu Django ORM. Không dùng extra `compatible-mypy`: extra này của `djangorestframework-stubs` giới hạn `mypy<2.4` |
 | `import-linter` | 2.15 | Kiểm tra ranh giới giữa các module (bắt buộc trong CI) |
-| `pytest` + `pytest-django` | — / 4.14.0 | Chạy test |
+| `pytest` + `pytest-django` | 9.2.0 / 4.14.0 | Chạy test |
 | `pytest-xdist` | 3.8.0 | Chạy test song song |
 | `factory-boy` | 3.3.3 | Tạo dữ liệu test |
 | `coverage` | 7.17.0 | Đo độ phủ test |
-| `pytest-cov` | — | Đo coverage khi chạy song song bằng `pytest-xdist` |
-| `respx` | — | Giả lập API bên ngoài khi test `httpx` |
-| `time-machine` | — | Cố định thời gian khi test (Giữ hàng 15 phút, Hoàn tất sau 7 ngày) |
+| `pytest-cov` | 7.1.0 | Đo coverage khi chạy song song bằng `pytest-xdist` |
+| `respx` | 0.23.1 | Giả lập API bên ngoài khi test `httpx` |
+| `time-machine` | 3.6.0 | Cố định thời gian khi test (Giữ hàng 15 phút, Hoàn tất sau 7 ngày) |
 | `django-zeal` | 2.3.0 | Phát hiện lỗi N+1 query khi chạy test |
-| `django-test-migrations` | — | Test data migration có `RunPython` ([12-testing-strategy.md](./12-testing-strategy.md) mục 6) |
-| `debugpy` | — | Debug từ IDE vào container |
+| `django-test-migrations` | 1.7.0 | Test data migration có `RunPython` ([12-testing-strategy.md](./12-testing-strategy.md) mục 6) |
+| `debugpy` | 1.8.22 | Debug từ IDE vào container |
 | `pip-audit` | 2.10.1 | Kiểm tra lỗ hổng đã công bố trong dependency (chạy trong CI) |
 | `pre-commit` | 4.7.0 | Chạy ruff, mypy, import-linter và các hook `pre-commit-hooks` (`check-yaml`, `check-toml`, `end-of-file-fixer`, `trailing-whitespace`) trước khi commit |
-| `commitizen` | — | Kiểm tra commit message theo Conventional Commits, gắn tag phiên bản, sinh CHANGELOG ([11](./11-git-workflow.md)) |
+| `commitizen` | 4.19.3 | Kiểm tra commit message theo Conventional Commits, gắn tag phiên bản, sinh CHANGELOG ([11](./11-git-workflow.md)) |
 
 ### 3.3. Không dùng (và lý do)
 
