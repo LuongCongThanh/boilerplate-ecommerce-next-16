@@ -1,8 +1,13 @@
 """Đồng bộ lịch job từ `config/celery.py` vào `django-celery-beat` (07 mục 3.2).
 
-Code là nguồn chuẩn: tên `PeriodicTask` là key của `beat_schedule`; `task`, lịch, `queue`,
-`enabled` được ghi theo code. Job có trong DB mà không còn trong code bị tắt, không bị xoá.
-Chỉ hỗ trợ lịch crontab và interval. Mỗi thay đổi ghi một dòng log; chạy lại không đổi gì.
+Code là nguồn chuẩn: tên `PeriodicTask` là key của `beat_schedule`; `task`, lịch, `args`,
+`kwargs`, `options`, `enabled` được ghi theo code. Job có trong DB mà không còn trong code bị
+tắt, không bị xoá. Chỉ hỗ trợ lịch crontab và interval. Mỗi thay đổi ghi một dòng log; chạy lại
+không đổi gì.
+
+Không gọi `ModelEntry.from_entry` như Beat lúc khởi động: hàm đó lưu lại `PeriodicTask` và dòng
+lịch mỗi lần chạy, làm Beat nạp lại toàn bộ lịch dù không có gì đổi. Lệnh chỉ dùng chung cách
+Beat đổi `args`, `kwargs`, `options` thành cột, để hai bên ghi ra cùng giá trị.
 """
 
 from datetime import timedelta
@@ -13,6 +18,8 @@ from celery.schedules import crontab, schedule
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django_celery_beat.models import CrontabSchedule, IntervalSchedule, PeriodicTask
+from django_celery_beat.schedulers import ModelEntry
+from kombu.utils.json import dumps
 
 from config.celery import app
 
@@ -42,7 +49,10 @@ def _sync_job(name: str, entry: dict[str, Any]) -> None:
         # PeriodicTask chỉ nhận một loại lịch: bỏ solar, clocked nếu job trong DB đang dùng
         "solar": None,
         "clocked": None,
-        "queue": entry.get("options", {}).get("queue"),
+        "args": dumps(entry.get("args") or []),
+        "kwargs": dumps(entry.get("kwargs") or {}),
+        # queue, exchange, routing_key, priority, headers, expire_seconds
+        **ModelEntry._unpack_options(**entry.get("options", {})),
         "enabled": True,
     }
     task = PeriodicTask.objects.filter(name=name).first()
