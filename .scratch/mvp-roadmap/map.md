@@ -47,6 +47,7 @@ Ký hiệu: ✅ `resolved` · 🟡 đang dở · ⬜ chưa làm · ⏸ để sau
 - 29/10/2026: Làm ticket 07 song song với 08; phần cần container gọi PostgreSQL trên máy tách sang ticket 15.
 - 29/10/2026: Tách ticket lớn của M0: 07 → 07 + 15 (Compose), `gen_importlinter.py` gộp vào 04; 09 → 09 + 16 (lớp API) + 17 (địa giới); 10 → 10 + 18 (lệnh vận hành).
 - 29/10/2026: `sync_beat_schedule` làm ở ticket 15 vì service `migrate` gọi nó; service `relay` thêm vào Compose ở ticket 10 cùng `run_outbox_relay`.
+- 29/10/2026: Ticket 09 chốt API của `shared` (keyring nhiều khoá, `Money`, `DomainError.http_status`, `redact_pii`, manager giữ `updated_at`); chi tiết ở [09](../backend-bootstrap/issues/09-shared-core.md#quyết-định).
 
 ## Fog
 

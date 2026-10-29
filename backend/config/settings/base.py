@@ -1,10 +1,13 @@
 """Cấu hình chung mọi môi trường."""
 
-from config.env import BASE_DIR, database_config, get_env
+from config.env import BASE_DIR, database_config, get_env, parse_keyring
+from shared.logging import configure_logging
 
 env = get_env()
 
 SECRET_KEY = env.DJANGO_SECRET_KEY.get_secret_value()
+# Keyring cho shared.privacy.pii_hmac; khoá đầu dùng cho giá trị mới (ADR 0016)
+PII_HMAC_KEYS = parse_keyring(env.PII_HMAC_KEYS.get_secret_value())
 DEBUG = False
 ALLOWED_HOSTS: list[str] = []
 
@@ -77,6 +80,9 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
 }
+
+# Log JSON ra stdout, đã che PII; local ghi đè bằng log dễ đọc (02 mục 9.6)
+LOGGING = configure_logging(json=True)
 
 CELERY_BROKER_URL = env.REDIS_URL
 CELERY_TASK_DEFAULT_QUEUE = "default"

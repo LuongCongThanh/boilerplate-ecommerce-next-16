@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
-from pydantic import SecretStr, ValidationError
+from pydantic import SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,6 +34,29 @@ class Env(BaseSettings):
     PII_HMAC_KEYS: SecretStr
     STOREFRONT_ORIGIN: str
     BFF_SHARED_SECRET: SecretStr
+
+    @field_validator("PII_HMAC_KEYS")
+    @classmethod
+    def _check_keyring(cls, value: SecretStr) -> SecretStr:
+        parse_keyring(value.get_secret_value())
+        return value
+
+
+def parse_keyring(raw: str) -> tuple[tuple[str, str], ...]:
+    """Đọc keyring dạng `kid2:secret2,kid1:secret1` thành các cặp `(kid, secret)`.
+
+    Khoá đầu dùng cho giá trị mới; khoá sau giữ để kiểm tra giá trị cũ (ADR 0016).
+    Thông báo lỗi không chứa secret.
+    """
+    keys: list[tuple[str, str]] = []
+    for entry in raw.split(","):
+        kid, sep, secret = entry.strip().partition(":")
+        if not sep or not kid or not secret:
+            raise ValueError("mỗi khoá phải có dạng kid:secret, kid và secret không rỗng")
+        if any(kid == seen for seen, _ in keys):
+            raise ValueError(f"kid {kid!r} bị trùng")
+        keys.append((kid, secret))
+    return tuple(keys)
 
 
 def load_env(env_file: Path | None = BASE_DIR / ".env") -> Env:
