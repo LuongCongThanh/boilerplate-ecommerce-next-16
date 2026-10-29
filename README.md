@@ -15,7 +15,7 @@ Repo dành riêng cho **Fashion Store**, với nghiệp vụ thời trang, thanh
 | Vận chuyển | GHN |
 | Backend | Python 3.14, Django 5.2 LTS, DRF, PostgreSQL 18, Redis, Celery |
 | Kiến trúc | Modular monolith: app `modules` với 8 module con, app `shared` hạ tầng |
-| Local | PostgreSQL cài trên máy bằng `scripts/setup/postgres.sh` (macOS: Homebrew; Windows: trong WSL2); API, Celery, Redis, Mailpit chạy bằng Docker Compose |
+| Local | PostgreSQL cài trên máy (macOS: Homebrew qua `scripts/setup/postgres.sh`; Windows: bộ cài EDB rồi `scripts/setup/postgres.ps1`, không dùng WSL2); API chạy trên máy bằng `uv run`; Celery, Redis, Mailpit chạy bằng Docker Compose |
 | Production (mục tiêu) | AWS Singapore: ECS Fargate (Django và Next.js BFF, cùng VPC), RDS, ElastiCache, S3, SES |
 
 ## Tài liệu

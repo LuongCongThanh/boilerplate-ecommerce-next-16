@@ -3,7 +3,7 @@
 Đọc theo thứ tự:
 
 1. [GLOSSARY.md](./GLOSSARY.md): thuật ngữ dùng chung trong code và tài liệu.
-2. [Môi trường phát triển local](./docs/architecture/08-local-development.md): cài đặt trên macOS hoặc Windows (WSL2).
+2. [Môi trường phát triển local](./docs/architecture/08-local-development.md): cài đặt trên macOS hoặc Windows.
 3. [Cấu trúc Backend](./docs/architecture/02-backend-structure.md): module, quy tắc từng file, ranh giới giữa các module.
 4. [Quy ước Git](./docs/architecture/11-git-workflow.md): nhánh, commit, PR, release.
 

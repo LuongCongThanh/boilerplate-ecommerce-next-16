@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Cài PostgreSQL bản major mới nhất cho môi trường local và tạo role/database `fashion`.
 #   macOS        : Homebrew (postgresql@<major>)
-#   Windows      : chạy bên trong WSL2 Ubuntu, cài bằng apt từ repo PGDG
-#   Ubuntu/Debian: như WSL2 (ngoài phạm vi hỗ trợ chính thức)
+#   Ubuntu/Debian: apt từ repo PGDG (ngoài phạm vi hỗ trợ chính thức)
+#   Windows      : dùng scripts/setup/postgres.ps1 (ADR 0017)
 # Chạy lại nhiều lần vẫn an toàn. Xem docs/architecture/08-local-development.md mục 2.2.
 set -euo pipefail
 
@@ -35,23 +35,18 @@ esac
 # ---------------------------------------------------------------- Hệ điều hành
 
 OS=""
-IS_WSL=false
 case "$(uname -s)" in
   Darwin) OS=macos ;;
   Linux)
-    grep -qi microsoft /proc/version 2>/dev/null && IS_WSL=true
     if [ -r /etc/os-release ] && grep -qiE '^(ID|ID_LIKE)=.*(ubuntu|debian)' /etc/os-release; then
       OS=debian
     else
-      die "Chỉ hỗ trợ Ubuntu/Debian (kể cả trong WSL2) và macOS."
+      die "Chỉ hỗ trợ Ubuntu/Debian và macOS."
     fi
     ;;
-  *) die "Hệ điều hành không được hỗ trợ: $(uname -s). Trên Windows hãy chạy script trong WSL2 Ubuntu." ;;
+  MINGW* | MSYS* | CYGWIN*) die "Trên Windows hãy chạy: pwsh scripts/setup/postgres.ps1 (xem 08 mục 2.2)." ;;
+  *) die "Hệ điều hành không được hỗ trợ: $(uname -s)." ;;
 esac
-
-if $IS_WSL && [[ "$PWD" == /mnt/* ]]; then
-  warn "Repo đang nằm ở $PWD. Nên clone vào ~/projects trong WSL (xem 08 mục 2.1)."
-fi
 
 # ---------------------------------------------------------------- Công cụ khác (chỉ kiểm tra)
 
@@ -87,7 +82,7 @@ free_port_from() {
   echo "$port"
 }
 
-# ---------------------------------------------------------------- Ubuntu / WSL2 (apt + PGDG)
+# ---------------------------------------------------------------- Ubuntu/Debian (apt + PGDG)
 
 PG_MAJOR=""
 PG_PORT=""
@@ -233,17 +228,6 @@ check_login() {
     || die "Không đăng nhập được bằng '$DB_USER' tại localhost:$PG_PORT; kiểm tra pg_hba.conf."
 }
 
-wsl_networking_hint() {
-  $IS_WSL || return 0
-  local mode=""
-  command -v wslinfo >/dev/null 2>&1 && mode="$(wslinfo --networking-mode 2>/dev/null || true)"
-  if [ "$mode" != mirrored ]; then
-    warn "WSL chưa bật networking mirrored (hiện tại: ${mode:-không rõ}). Container Docker cần chế độ này để gọi PostgreSQL."
-    warn "Thêm vào %UserProfile%\\.wslconfig trên Windows rồi chạy 'wsl --shutdown' (xem 08 mục 2.1):"
-    printf '      [wsl2]\n      networkingMode=mirrored\n' >&2
-  fi
-}
-
 main() {
   check_tools
   if [ "$OS" = macos ]; then macos_install; else debian_install; fi
@@ -251,7 +235,6 @@ main() {
   create_role_and_db
   check_extensions
   check_login
-  wsl_networking_hint
 
   cat <<EOF
 

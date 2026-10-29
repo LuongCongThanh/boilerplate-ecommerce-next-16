@@ -30,7 +30,7 @@ Tài liệu `docs/` đã chốt cho MVP nhưng repo chưa có `backend/`. M0 d�
 Thứ tự làm theo số; `Blocked by` ghi ở đầu từng ticket.
 
 1. [`07-project-skeleton.md`](./issues/07-project-skeleton.md): pyproject, settings, health check, `make lint`/`test`/`fmt`, job CI `backend`.
-2. [`08-local-postgres-installer.md`](./issues/08-local-postgres-installer.md): chạy thử bộ cài PostgreSQL trên Windows (WSL2) (người làm); chặn 15.
+2. [`08-local-postgres-installer.md`](./issues/08-local-postgres-installer.md): bộ cài PostgreSQL trên Windows (`postgres.ps1`, không dùng WSL2); chặn 15.
 3. [`15-docker-compose-local.md`](./issues/15-docker-compose-local.md): Dockerfile, Compose, lệnh Makefile dùng container, `sync_beat_schedule`.
 4. [`09-shared-core.md`](./issues/09-shared-core.md): BaseModel, Money, phones, privacy, lỗi, logging, extension PostgreSQL.
 5. [`16-shared-api-layer.md`](./issues/16-shared-api-layer.md): `ErrorDTO`, pagination, permissions, `client_ip`, throttling, i18n.
