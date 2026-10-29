@@ -15,6 +15,7 @@ from check_ac_trace import test_exists, trace
 from check_ship import check_subjects, diff_size
 from close_ticket import close
 from progress import Feature, frontier, parse_blocked, parse_ticket
+from run_logged import make_recipe
 from state import apply, check_transition, pick_active, validate
 
 TICKET = """# Lớp API
@@ -208,6 +209,23 @@ class Checks(unittest.TestCase):
             "5\t5\tuv.lock\n"
         )
         self.assertEqual(diff_size(numstat), 12)
+
+    def test_make_recipe_reads_only_its_target(self):
+        makefile = (
+            ".PHONY: test lint\n\ntest:\n\tuv run pytest -n auto\n\n"
+            "lint:\n\tuv run ruff check .\n\tuv run mypy .\n\nfmt:\n\tuv run ruff format .\n"
+        )
+        self.assertEqual(
+            make_recipe(makefile, "lint"),
+            [["uv", "run", "ruff", "check", "."], ["uv", "run", "mypy", "."]],
+        )
+        self.assertEqual(make_recipe(makefile, "test"), [["uv", "run", "pytest", "-n", "auto"]])
+
+    def test_make_recipe_rejects_unknown_target_and_make_variables(self):
+        with self.assertRaises(ValueError):
+            make_recipe("test:\n\tuv run pytest\n", "up")
+        with self.assertRaises(ValueError):
+            make_recipe("up:\n\tdocker compose -f $(FILE) up\n", "up")
 
 
 if __name__ == "__main__":
