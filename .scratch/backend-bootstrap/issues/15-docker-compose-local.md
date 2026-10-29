@@ -37,6 +37,9 @@ Chốt khi grilling ngày 29/10/2026.
 | `sync_beat_schedule` | Tên `PeriodicTask` là key của `beat_schedule`. Hỗ trợ lịch crontab và interval. Đồng bộ `task`, lịch, `queue`, `enabled`; job trong DB không còn trong code thì `enabled=False`. Mỗi thay đổi ghi một dòng log |
 | `celery.backend_cleanup` | Đặt `result_expires = None` trong `config/celery.py` để Beat không tự thêm job này (không có result backend, 07 mục 3.3). Khác *Việc cần làm*: thêm một dòng cấu hình Celery |
 | `debugpy` | Bỏ package khỏi nhóm dev và bảng ở 02. Giữ extension VS Code `ms-python.debugpy` và `"type": "debugpy"` trong `launch.json` (debugger của IDE, không phải package) |
+| Thêm sau review (29/10) | Giữ `.dockerignore` (không đưa `.env`, `.venv` vào image), `COPY . .` trong Dockerfile (image chạy được khi không bind mount, ticket 14 quét image này), `name: fashion` trong Compose (tên container không trùng project khác ở thư mục `backend`); 08 mục 7 sửa theo |
+| Transaction trong command | `sync_beat_schedule` giữ `@transaction.atomic` (đồng bộ lịch phải trọn vẹn); 02 §9.1 thêm ngoại lệ cho management command hạ tầng của `shared` |
+| Commit `8687733` | Sửa tài liệu ngoài *Việc cần làm* (lệnh JWT, 08 §2.4, §3.1, comment pre-commit, README) giữ trong PR, ghi ngoài phạm vi ở Notes |
 
 ## Acceptance criteria
 
@@ -58,11 +61,11 @@ Chốt khi grilling ngày 29/10/2026.
 | --- | --- |
 | 1. `make up` trên DB trống: `migrate` chạy trước, worker/beat không restart liên tục; `make run`, `/healthz`, `/readyz` trả 200 | `tests/test_env.py::test_redis_port_is_accepted_and_defaults_to_6380` (phần `REDIS_PORT`). Kiểm tay trên Docker Desktop 29.7.2 bằng `docker compose up -d --build` trên database `fashion` trống: `migrate` Exited(0) sau khi áp mọi migration và chạy `sync_beat_schedule`, worker/beat Up và không restart, container chạy user `app` (uid 999); `runserver` trên máy trả `/healthz` 200, `/readyz` 200 (không test tự động: cần Docker và PostgreSQL thật) |
 | 2. Lệnh chạy được trên Windows (PowerShell 7, GNU make) và macOS | Kiểm tay một phần: từng lệnh trong recipe (`docker compose …`, `uv run …`) chạy được trên Windows. Chưa chạy qua GNU make vì máy chưa cài; macOS không có máy để kiểm (không test tự động: phụ thuộc hệ điều hành và shell) |
-| 3. `sync_beat_schedule` tạo đủ job, chạy lần hai không đổi gì, tắt job thừa (không xoá), sửa tần suất lệch | `shared/tests/test_sync_beat_schedule.py::test_empty_db_creates_every_job_from_code`, `::test_second_run_changes_nothing`, `::test_job_missing_from_code_is_disabled_not_deleted`, `::test_db_frequency_differing_from_code_is_corrected` |
+| 3. `sync_beat_schedule` tạo đủ job, chạy lần hai không đổi gì, tắt job thừa (không xoá), sửa tần suất lệch | `shared/tests/test_sync_beat_schedule.py::test_empty_db_creates_every_job_from_code`, `::test_second_run_changes_nothing`, `::test_job_missing_from_code_is_disabled_not_deleted`, `::test_db_frequency_differing_from_code_is_corrected`, `::test_db_job_on_other_schedule_type_is_switched_to_code_schedule` |
 | 4. `make db-reset` xoá, tạo lại database `fashion` rồi migrate | `shared/tests/test_reset_db.py::test_refuses_when_debug_is_off`, `::test_refuses_non_local_database_host` (3 host: tên miền, RDS, rỗng) cho phần chặn an toàn. Kiểm tay phần xoá/tạo thật trên database nháp `fashion_reset_check`: tạo được khi chưa có, owner `fashion`, `DROP … WITH (FORCE)` chạy được khi còn session mở. Chưa chạy `make db-reset` trên `fashion` |
 | 5. Tài liệu lệch được sửa trong cùng PR | Làm ở phase sync, sau review |
 
-Lint (`ruff check`, `ruff format --check`, `mypy`, `lint-imports`) xanh · test: 147 passed trong 5.92s. Hai lệnh chạy thẳng recipe của `make lint` / `make test` vì máy chưa có GNU make.
+Lint (`ruff check`, `ruff format --check`, `mypy`, `lint-imports`) xanh · test: 148 passed trong 6.11s (sau vòng sửa review). Hai lệnh chạy thẳng recipe của `make lint` / `make test` vì máy chưa có GNU make.
 
 #### Chưa làm
 
@@ -81,9 +84,25 @@ Lint (`ruff check`, `ruff format --check`, `mypy`, `lint-imports`) xanh · test:
 
 - Không
 
+- Sửa tài liệu ngoài *Việc cần làm* ở commit `8687733` (lệnh JWT, 08 §2.4, §3.1, comment pre-commit, README): giữ trong PR theo quyết định sau review.
+
 #### Review
 
-Chưa review.
+Một vòng sửa, xanh.
+
+| Mã | Chỗ | Kết luận | Lý do |
+| --- | --- | --- | --- |
+| Sp6 | `shared/management/commands/sync_beat_schedule.py:38` | đã sửa | job đang dùng lịch `solar`/`clocked` không sửa được; `wanted` đặt `solar`, `clocked` về `None`, test red trước (2bd6aa4) |
+| Sp7 | `.run/Django server.run.xml:3` | đã sửa | bỏ `<module>` ghim tên thư mục clone (27dd344) |
+| St4 | `shared/management/commands/sync_beat_schedule.py:27` | đã sửa | `code_schedule` hai nghĩa → `beat_schedule`, `job_schedule`, `_resolve_schedule_row` (051698f) |
+| St5 | `backend/Makefile:51` | đã sửa | `db-reset` gọi `$(MAKE) migrate` thay vì lặp lệnh (e046cc3) |
+| Sp4, Sp5 | `backend/docker-compose.yml:6`, `backend/Dockerfile:26`, `backend/.dockerignore` | chỉ báo | ngoài *Việc cần làm*, người dùng giữ, ghi vào `## Quyết định` |
+| St1 | `shared/management/commands/sync_beat_schedule.py:25` | chỉ báo | transaction trong command; giữ, 02 §9.1 thêm ngoại lệ ở phase sync |
+| Sp3 | commit `8687733` | chỉ báo | sửa tài liệu ngoài phạm vi, giữ trong PR |
+| Sp1, Sp2 | AC2, AC4 | chỉ báo | chưa chạy qua GNU make, chưa `make db-reset` trên `fashion`; kiểm tay trước G2 |
+| St3 | `shared/tests/test_reset_db.py` | chỉ báo | nhánh DROP/CREATE không test tự động (phá huỷ), kiểm tay |
+| St2, St6, St7 | test, `.env.example`, `config/env.py` | chỉ báo | smell: chưa có factory cho model `django-celery-beat`; `6380` lặp ở `REDIS_PORT`/`REDIS_URL` như mẫu `PG_PORT`; assert lặp trong test |
+| St8 | `backend/Makefile:36` | bác | `s=worker` đúng 08 §3 |
 
 #### Tài liệu đã cập nhật
 
