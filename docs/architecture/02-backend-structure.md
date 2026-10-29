@@ -153,7 +153,7 @@ backend/
 ├── Makefile                        # lệnh tắt: make up, make test, make lint, make migrate…
 ├── openapi.yaml                    # schema OpenAPI đã commit; CI so với bản sinh lại ([12](./12-testing-strategy.md) mục 5)
 ├── CHANGELOG.md                    # sinh bằng commitizen ([11](./11-git-workflow.md) mục 7)
-├── conftest.py                     # fixture cần Tài khoản: customer_client, staff_client, admin_client (dùng factory của identity)
+├── conftest.py                     # pytest_plugins = ["shared.testing.fixtures"]; fixture cần Tài khoản (customer_client, staff_client, admin_client, dùng factory của identity) thêm ở đây
 ├── scripts/
 │   └── gen_importlinter.py         # sinh các contract "forbidden" của import-linter cho từng module (mục 8)
 │
@@ -199,7 +199,7 @@ backend/
 │   │   ├── client_ip.py            # middleware: lấy IP người dùng từ X-Client-IP khi X-BFF-Secret đúng (ADR 0009)
 │   │   ├── throttling.py           # các mức throttle dùng chung, theo IP từ client_ip; fail-open khi Redis lỗi
 │   │   ├── idempotency.py          # xử lý header Idempotency-Key cho các POST quan trọng, lưu trong IdempotencyKey (PostgreSQL)
-│   │   └── i18n.py                 # chọn ngôn ngữ theo Accept-Language (vi mặc định)
+│   │   └── views.py                # handler400/403/404/500 của Django trả ErrorDTO cho lỗi ngoài DRF; chọn ngôn ngữ theo Accept-Language không cần file riêng: LocaleMiddleware bật trong settings (vi mặc định)
 │   ├── health/
 │   │   └── views.py                # /healthz (sống), /readyz (kết nối được PostgreSQL)
 │   ├── logging.py                  # configure_logging(json=...) cấu hình structlog, processor redact_pii che PII
@@ -213,7 +213,7 @@ backend/
 │   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension)
 │   └── testing/
 │       ├── factories.py            # factory gốc
-│       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (api_client…); fixture cần Tài khoản nằm ở backend/conftest.py
+│       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (xoá cache trước/sau mỗi test, json_logging, api_client…), nạp qua pytest_plugins của backend/conftest.py; fixture cần Tài khoản nằm ở backend/conftest.py
 │       └── events.py               # drain_events(): chạy callback on_commit, relay và handler tới khi không còn delivery tới hạn; không chờ retry tương lai
 │
 ├── modules/                        # Django app "modules": toàn bộ nghiệp vụ
@@ -682,7 +682,7 @@ Các loại test, marker, coverage và cổng chặn trong CI: xem [12-testing-s
 | Logger | `logger = structlog.get_logger(__name__)` ở đầu file. Không dùng `print` hay `logging.getLogger` |
 | Định dạng | `shared.logging.configure_logging(json=...)` trả setting `LOGGING`: JSON ở test, staging, production; `config.settings.local` in dạng dễ đọc trên terminal |
 | Message | Tên sự kiện tiếng Anh dạng `snake_case`, dữ liệu truyền bằng keyword: `logger.info("order_placed", order_code=code)`. Không dùng f-string hay `%` trong message, để lọc được theo field trên CloudWatch |
-| Context | `request_id`, `user_id`, `order_code` do `django-structlog` và middleware gắn sẵn ([10-nfr.md](./10-nfr.md)); không truyền lại thủ công |
+| Context | `request_id`, `user_id`, `order_code` do `django-structlog` và middleware gắn sẵn ([10-nfr.md](./10-nfr.md)); không truyền lại thủ công. Không gắn IP: `DJANGO_STRUCTLOG_IP_LOGGING_ENABLED = False`, vì log không được chứa IP thô ([05 mục 5](./05-auth-security.md)) |
 | PII | Không log email, SĐT, địa chỉ, token, mật khẩu, payload thanh toán thô. Processor `shared.logging.redact_pii` làm lưới an toàn, không thay cho việc tự kiểm tra: che giá trị của key có chứa `email`, `phone`, `address`, `token`, `password`, `card`, `secret` (khớp chuỗi con, không phân biệt hoa thường, kể cả `contact_phone`, `access_token`, và trong dict/list lồng nhau, kể cả `extra` của log stdlib). Key kết thúc bằng `_hmac` không bị che vì đã là HMAC ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)) |
 | Mức log | Lỗi nghiệp vụ (`DomainError`) log `INFO`. `WARNING` cho tình huống bất thường nhưng đã xử lý (ví dụ dùng phí ship dự phòng). `ERROR` chỉ cho lỗi ngoài dự kiến; Sentry tự bắt exception chưa xử lý |
 

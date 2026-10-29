@@ -8,6 +8,8 @@ env = get_env()
 SECRET_KEY = env.DJANGO_SECRET_KEY.get_secret_value()
 # Keyring cho shared.privacy.pii_hmac; khoá đầu dùng cho giá trị mới (ADR 0016)
 PII_HMAC_KEYS = tuple((kid, secret.get_secret_value()) for kid, secret in env.PII_HMAC_KEYS)
+# Secret Next.js gửi trong X-BFF-Secret; 2 giá trị khi đang xoay (05 mục 5)
+BFF_SHARED_SECRETS = tuple(secret.get_secret_value() for secret in env.BFF_SHARED_SECRET)
 DEBUG = False
 ALLOWED_HOSTS: list[str] = []
 
@@ -25,7 +27,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Chọn ngôn ngữ theo Accept-Language, mặc định LANGUAGE_CODE; phải đứng trước Common
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # Gán request.client_ip cho throttle; đứng trước RequestMiddleware để log dùng được
+    "shared.api.client_ip.ClientIpMiddleware",
     "django_structlog.middlewares.RequestMiddleware",
 ]
 
@@ -70,9 +76,18 @@ EMAIL_PORT = env.EMAIL_PORT
 REST_FRAMEWORK: dict[str, object] = {
     # Chưa có xác thực ở M0; JWT thêm ở M1
     "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "DEFAULT_PERMISSION_CLASSES": [],
+    # Mặc định từ chối; view công khai tự khai báo AllowAny (05 mục 4)
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_PAGINATION_CLASS": "shared.api.pagination.StandardPagination",
+    "EXCEPTION_HANDLER": "shared.api.exception_handler.exception_handler",
+    # Khoá theo pii_hmac(request.client_ip) hoặc Tài khoản (05 mục 5)
+    "DEFAULT_THROTTLE_CLASSES": [
+        "shared.api.throttling.AnonThrottle",
+        "shared.api.throttling.AccountThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {"anon": "120/min", "account": "300/min"},
 }
 
 SPECTACULAR_SETTINGS = {
@@ -83,6 +98,9 @@ SPECTACULAR_SETTINGS = {
 
 # Log JSON ra stdout, đã che PII; local ghi đè bằng log dễ đọc (02 mục 9.6)
 LOGGING = configure_logging(json=True)
+# django-structlog mặc định gắn `ip` thô (đọc cả X-Client-IP chưa xác minh) vào contextvars,
+# nên mọi dòng log của request mang IP; IP chỉ được log dạng pii_hmac (05 mục 5, ADR 0016)
+DJANGO_STRUCTLOG_IP_LOGGING_ENABLED = False
 
 CELERY_BROKER_URL = env.REDIS_URL
 CELERY_TASK_DEFAULT_QUEUE = "default"

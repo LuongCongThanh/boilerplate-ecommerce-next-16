@@ -178,7 +178,7 @@ GOOGLE_OAUTH_CLIENT_ID=
 
 `DJANGO_SETTINGS_MODULE` trong `.env` chỉ có tác dụng trong Compose, vì Compose nạp `.env` vào biến môi trường của container; khi `.env` được đọc thì settings đã được chọn rồi. Chạy trên máy thì `export` biến này, hoặc dùng mặc định `config.settings.local` của `manage.py`. `wsgi.py` và Celery không có giá trị mặc định: process deploy thiếu biến này thì dừng ngay.
 
-`BFF_SHARED_SECRET` phải trùng với giá trị cấu hình ở Next.js local. Next.js gửi secret này trong header `X-BFF-Secret` kèm `X-Client-IP`, và Django chỉ tin `X-Client-IP` khi secret đúng ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Gọi thẳng `localhost:8000` từ Swagger UI hay `curl` vẫn chạy được, chỉ là throttle tính theo IP của máy gọi.
+`BFF_SHARED_SECRET` phải trùng với giá trị cấu hình ở Next.js local. Next.js gửi secret này trong header `X-BFF-Secret` kèm `X-Client-IP`, và Django chỉ tin `X-Client-IP` khi secret đúng và IP là IPv4/IPv6 hợp lệ ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Biến nhận 1 hoặc 2 secret cách nhau bằng dấu phẩy (2 khi đang xoay, [05 mục 5](./05-auth-security.md)); rỗng hoặc hơn 2 thì Django dừng lúc khởi động. Gọi thẳng `localhost:8000` từ Swagger UI hay `curl` vẫn chạy được, chỉ là throttle tính theo IP của máy gọi.
 
 Từ M1, sinh khoá JWT cho local:
 

@@ -1,13 +1,12 @@
 import json
 import logging
 import logging.config
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
 import structlog
 
-from shared.logging import REDACTED, configure_logging, redact_pii
+from shared.logging import REDACTED, redact_pii
 
 
 def test_redacts_sensitive_keys_including_substrings() -> None:
@@ -44,16 +43,6 @@ def test_keeps_hmac_values() -> None:
     event = redact_pii(None, "info", {"event": "x", "subject_phone_hmac": "k1:ab"})
 
     assert event["subject_phone_hmac"] == "k1:ab"
-
-
-@pytest.fixture
-def json_logging() -> Iterator[dict[str, Any]]:
-    root = logging.getLogger()
-    handlers, level = root.handlers[:], root.level
-    yield configure_logging(json=True)
-    root.handlers[:] = handlers
-    root.setLevel(level)
-    structlog.reset_defaults()
 
 
 def test_json_output_is_redacted_for_structlog_and_stdlib_loggers(
