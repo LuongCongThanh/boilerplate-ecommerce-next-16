@@ -1,6 +1,8 @@
 import pytest
 from django.test import Client
 
+from shared.tests._helpers import error_of
+
 pytestmark = pytest.mark.urls("shared.tests.api_urls")
 
 
@@ -25,13 +27,23 @@ def test_invalid_page_size_returns_400(client: Client, page_size: str) -> None:
     response = client.get("/items", {"page_size": page_size})
 
     assert response.status_code == 400
-    error = response.json()["error"]
+    error = error_of(response)
     assert error["code"] == "VALIDATION_ERROR"
     assert set(error["details"]["fields"]) == {"page_size"}
+
+
+@pytest.mark.parametrize("page", ["0", "-1", "abc", "1.5"])
+def test_invalid_page_returns_400(client: Client, page: str) -> None:
+    response = client.get("/items", {"page": page})
+
+    assert response.status_code == 400
+    error = error_of(response)
+    assert error["code"] == "VALIDATION_ERROR"
+    assert set(error["details"]["fields"]) == {"page"}
 
 
 def test_page_past_end_returns_404(client: Client) -> None:
     response = client.get("/items", {"page": 99})
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "NOT_FOUND"
+    assert error_of(response)["code"] == "NOT_FOUND"
