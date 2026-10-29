@@ -1,13 +1,13 @@
 """Cấu hình chung mọi môi trường."""
 
-from config.env import BASE_DIR, database_config, get_env, parse_keyring
+from config.env import BASE_DIR, database_config, get_env
 from shared.logging import configure_logging
 
 env = get_env()
 
 SECRET_KEY = env.DJANGO_SECRET_KEY.get_secret_value()
 # Keyring cho shared.privacy.pii_hmac; khoá đầu dùng cho giá trị mới (ADR 0016)
-PII_HMAC_KEYS = parse_keyring(env.PII_HMAC_KEYS.get_secret_value())
+PII_HMAC_KEYS = tuple((kid, secret.get_secret_value()) for kid, secret in env.PII_HMAC_KEYS)
 DEBUG = False
 ALLOWED_HOSTS: list[str] = []
 

@@ -1,8 +1,7 @@
 import pytest
 from django.test import override_settings
 
-from config.env import parse_keyring
-from shared.privacy import pii_hmac, pii_hmac_candidates
+from shared.privacy import parse_keyring, pii_hmac, pii_hmac_candidates
 
 KEYRING = (("k1", "secret-1"),)
 ROTATED = (("k2", "secret-2"), ("k1", "secret-1"))

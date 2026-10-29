@@ -159,7 +159,7 @@ backend/
 │
 ├── config/                         # cấu hình project, KHÔNG chứa nghiệp vụ
 │   ├── __init__.py                 # nạp Celery app khi Django khởi động
-│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) và PG_PORT (chỉ Compose dùng, khai báo để pydantic-settings không báo biến thừa khi đọc .env); parse_keyring đọc PII_HMAC_KEYS thành các cặp (kid, secret)
+│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) và PG_PORT (chỉ Compose dùng, khai báo để pydantic-settings không báo biến thừa khi đọc .env); PII_HMAC_KEYS được parse một lần thành keyring (secret bọc SecretStr)
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường
@@ -176,7 +176,7 @@ backend/
 │   ├── models.py                   # uuid7(), BaseModel: id UUID v7, created_at, updated_at; IdempotencyKey; import model của events/ và geo/ để Django nhận ra
 │   ├── money.py                    # value object Money(amount: int, currency="VND")
 │   ├── phones.py                   # normalize_vn_phone: chuẩn hoá số điện thoại dùng chung, không import modules (03 mục 0.6)
-│   ├── privacy.py                  # pii_hmac(value) -> "<kid>:<hex>" bằng khoá đầu của keyring PII_HMAC_KEYS; pii_hmac_candidates(value) -> giá trị theo mọi khoá để tra cứu dữ liệu cũ khi xoay khoá (ADR 0016); dùng cho bằng chứng sau ẩn danh, IP trong log, key failure ledger
+│   ├── privacy.py                  # pii_hmac(value) -> "<kid>:<hex>" bằng khoá đầu của keyring PII_HMAC_KEYS; pii_hmac_candidates(value) -> giá trị theo mọi khoá để tra cứu dữ liệu cũ khi xoay khoá; parse_keyring đọc chuỗi `kid2:s2,kid1:s1` (ADR 0016); dùng cho bằng chứng sau ẩn danh, IP trong log, key failure ledger
 │   ├── exceptions.py               # DomainError (thuộc tính lớp code, http_status mặc định 422; khởi tạo nhận message, details tuỳ chọn), RetryLater (handler báo consumer thử lại sau, không kế thừa DomainError) và các lỗi chung
 │   ├── tasks.py                    # enqueue_on_commit(task_name, **kwargs): đẩy Celery task theo tên sau khi transaction commit (on_commit robust=True: broker lỗi thì chỉ log); purge_old_outbox_events (chỉ xoá sự kiện đã kết thúc mọi delivery, cùng các delivery đó), purge_idempotency_keys
 │   ├── events/
@@ -210,7 +210,7 @@ backend/
 │   │   ├── replay_events.py        # phát lại sự kiện trong outbox theo loại và mốc thời gian (07 mục 1.1)
 │   │   ├── sync_beat_schedule.py   # ghi lịch job từ config/celery.py vào django-celery-beat, tắt job thừa; chạy sau migrate (07 mục 3.2)
 │   │   └── load_geo.py             # nạp dữ liệu tỉnh/thành, phường/xã
-│   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent
+│   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension)
 │   └── testing/
 │       ├── factories.py            # factory gốc
 │       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (api_client…); fixture cần Tài khoản nằm ở backend/conftest.py
