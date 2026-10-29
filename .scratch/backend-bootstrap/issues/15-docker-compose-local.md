@@ -22,6 +22,22 @@ Tách từ ticket [07](./07-project-skeleton.md) để phần cần container g�
 - IDE: `.vscode/launch.json` thay "Attach Django (Docker)" bằng "Django (local)"; thêm `.run/Django server.run.xml` cho PyCharm; bỏ extension WSL khỏi `.vscode/extensions.json`.
 - Bỏ `debugpy` khỏi dependency dev và khỏi bảng ở [02](../../../docs/architecture/02-backend-structure.md), vì không còn container api để attach.
 
+## Quyết định
+
+Chốt khi grilling ngày 29/10/2026.
+
+| Chủ đề | Quyết định |
+|---|---|
+| Image | `python:3.14.<vá>-slim`, `uv` chép từ image `ghcr.io/astral-sh/uv:<bản>`, cài bằng `uv sync --locked --no-build --no-dev`. Venv ở `/opt/venv` (ngoài `/app`) để bind mount `backend/` không đè `.venv` của máy lên venv của container. Chạy bằng user không phải root |
+| Phiên bản image | Valkey `8.1.11`, trùng service của CI; Mailpit ghim bản vá. 08 mục 7 sửa theo |
+| `REDIS_PORT` | Khai báo `REDIS_PORT: int = 6380` trong `config/env.py` như `PG_PORT` (chỉ Compose dùng), vì `Env` có `extra="forbid"` |
+| `make db-reset` | Lệnh `shared` `manage.py reset_db`: nối database `postgres`, `DROP DATABASE … WITH (FORCE)`, `CREATE DATABASE … OWNER <user>`; từ chối khi `DEBUG` tắt hoặc host không phải `localhost`/`127.0.0.1`. Recipe: `reset_db` → `migrate` → `sync_beat_schedule`. Khác *Việc cần làm*: thêm lệnh này vì recipe chỉ được gọi `uv run`/`docker compose` (ADR 0017), không gọi `psql` |
+| `make migrate` | Chạy trên máy: `migrate` rồi `sync_beat_schedule` |
+| `make restart-worker` | Khởi động lại `worker`, `beat`; ticket 10 thêm `relay` |
+| `sync_beat_schedule` | Tên `PeriodicTask` là key của `beat_schedule`. Hỗ trợ lịch crontab và interval. Đồng bộ `task`, lịch, `queue`, `enabled`; job trong DB không còn trong code thì `enabled=False`. Mỗi thay đổi ghi một dòng log |
+| `celery.backend_cleanup` | Đặt `result_expires = None` trong `config/celery.py` để Beat không tự thêm job này (không có result backend, 07 mục 3.3). Khác *Việc cần làm*: thêm một dòng cấu hình Celery |
+| `debugpy` | Bỏ package khỏi nhóm dev và bảng ở 02. Giữ extension VS Code `ms-python.debugpy` và `"type": "debugpy"` trong `launch.json` (debugger của IDE, không phải package) |
+
 ## Acceptance criteria
 
 - [ ] Trên DB trống, `make up` chạy `migrate` trước rồi mới bật worker, beat; không service nào khởi động lại liên tục. Sau đó `make run`, `curl localhost:8000/healthz` và `/readyz` trả 200.
