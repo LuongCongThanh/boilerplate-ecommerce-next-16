@@ -37,7 +37,6 @@ dev = [
     "time-machine>=2.19",
     "django-zeal>=2.3.0",
     "django-test-migrations>=1.5",
-    "debugpy>=1.8",
     "pip-audit>=2.10.1",
     "pre-commit>=4.7.0",
     # Cùng bản với hook commitizen trong .pre-commit-config.yaml
