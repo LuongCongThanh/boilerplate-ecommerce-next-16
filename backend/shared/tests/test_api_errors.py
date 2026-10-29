@@ -19,7 +19,7 @@ def test_unknown_route_returns_error_dto(client: Client) -> None:
 
 @API_URLS
 def test_method_not_allowed_returns_error_dto(client: Client) -> None:
-    response = client.post("/items")
+    response = client.post("/paged")
 
     assert response.status_code == 405
     error = error_of(response)
@@ -49,7 +49,7 @@ def test_domain_error_uses_class_status(client: Client) -> None:
     assert response.status_code == 409
     error = error_of(response)
     assert error["code"] == "OUT_OF_STOCK"
-    assert error["message"] == "Một số sản phẩm không đủ hàng."
+    assert error["message"] == "Một số Biến thể không đủ hàng."
     assert error["details"] == {"items": [{"sku": "A", "requested": 3, "available": 1}]}
 
 

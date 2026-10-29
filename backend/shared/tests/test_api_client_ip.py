@@ -8,24 +8,26 @@ from structlog.testing import capture_logs
 
 from shared.api.throttling import AnonThrottle
 from shared.privacy import pii_hmac
+from shared.tests._helpers import BFF_IP, BFF_SECRET, CLIENT_IP, OLD_BFF_SECRET
 
 pytestmark = pytest.mark.urls("shared.tests.api_urls")
-
-BFF_IP = "10.0.0.5"
-CLIENT_IP = "203.0.113.7"
 
 
 @pytest.fixture(autouse=True)
 def _bff_secrets() -> Iterator[None]:
-    with override_settings(BFF_SHARED_SECRETS=("secret-new", "secret-old")):
+    with override_settings(BFF_SHARED_SECRETS=(BFF_SECRET, OLD_BFF_SECRET)):
         yield
 
 
-def throttle_key(**headers: Any) -> str:
+def throttle_view(**headers: Any) -> dict[str, str]:
     response = APIClient().get("/throttle-key", REMOTE_ADDR=BFF_IP, **headers)
     assert response.status_code == 200
-    key: str = response.json()["key"]
-    return key
+    body: dict[str, str] = response.json()
+    return body
+
+
+def throttle_key(**headers: Any) -> str:
+    return throttle_view(**headers)["key"]
 
 
 def anon_key(ip: str) -> str:
@@ -43,27 +45,28 @@ def test_wrong_secret_uses_remote_addr() -> None:
 
 
 def test_valid_secret_uses_x_client_ip() -> None:
-    key = throttle_key(HTTP_X_BFF_SECRET="secret-new", HTTP_X_CLIENT_IP=CLIENT_IP)
+    body = throttle_view(HTTP_X_BFF_SECRET=BFF_SECRET, HTTP_X_CLIENT_IP=CLIENT_IP)
 
-    assert key == anon_key(CLIENT_IP)
-    assert CLIENT_IP not in key
+    assert body["client_ip"] == CLIENT_IP
+    assert body["key"] == anon_key(CLIENT_IP)
+    assert CLIENT_IP not in body["key"]
 
 
 def test_second_secret_accepted() -> None:
-    key = throttle_key(HTTP_X_BFF_SECRET="secret-old", HTTP_X_CLIENT_IP="2001:db8::1")
+    key = throttle_key(HTTP_X_BFF_SECRET=OLD_BFF_SECRET, HTTP_X_CLIENT_IP="2001:db8::1")
 
     assert key == anon_key("2001:db8::1")
 
 
 def test_malformed_client_ip_uses_remote_addr_and_logs_without_value() -> None:
     with capture_logs() as logs:
-        key = throttle_key(HTTP_X_BFF_SECRET="secret-new", HTTP_X_CLIENT_IP="1.2.3.4, 5.6.7.8")
+        key = throttle_key(HTTP_X_BFF_SECRET=BFF_SECRET, HTTP_X_CLIENT_IP="1.2.3.4, 5.6.7.8")
 
     assert key == anon_key(BFF_IP)
     warnings = [log for log in logs if log["event"] == "client_ip_invalid"]
     assert len(warnings) == 1
     assert "1.2.3.4" not in repr(logs)
-    assert "secret-new" not in repr(logs)
+    assert BFF_SECRET not in repr(logs)
 
 
 def test_anon_quota_is_per_verified_client_ip(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,7 +75,7 @@ def test_anon_quota_is_per_verified_client_ip(monkeypatch: pytest.MonkeyPatch) -
 
     def get(ip: str) -> int:
         response = client.get(
-            "/items", REMOTE_ADDR=BFF_IP, HTTP_X_BFF_SECRET="secret-new", HTTP_X_CLIENT_IP=ip
+            "/paged", REMOTE_ADDR=BFF_IP, HTTP_X_BFF_SECRET=BFF_SECRET, HTTP_X_CLIENT_IP=ip
         )
         return response.status_code
 

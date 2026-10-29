@@ -6,23 +6,14 @@ from typing import Any
 import pytest
 import redis.exceptions
 from django.test import override_settings
-from rest_framework.request import Request
-from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
+from rest_framework.test import APIClient
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 from structlog.testing import capture_logs
 
 from shared.api.throttling import AccountThrottle, AnonThrottle
 from shared.privacy import pii_hmac
-from shared.tests._helpers import BFF_IP, BFF_SECRET, CLIENT_IP
-
-
-def drf_request(user: Any = None) -> Request:
-    django_request = APIRequestFactory().get("/")
-    if user is not None:
-        force_authenticate(django_request, user=user)
-    django_request.client_ip = "203.0.113.7"  # type: ignore[attr-defined]
-    return APIView().initialize_request(django_request)
+from shared.tests._helpers import BFF_IP, BFF_SECRET, CLIENT_IP, drf_request
 
 
 def test_account_throttle_keys_authenticated_user_by_pk() -> None:
@@ -53,12 +44,9 @@ def cache_down(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.urls("shared.tests.api_urls")
 @pytest.mark.usefixtures("cache_down")
 def test_cache_down_allows_request_and_logs_without_ip() -> None:
-    with override_settings(BFF_SHARED_SECRETS=("secret-new",)), capture_logs() as logs:
+    with override_settings(BFF_SHARED_SECRETS=(BFF_SECRET,)), capture_logs() as logs:
         response = APIClient().get(
-            "/items",
-            REMOTE_ADDR="10.0.0.5",
-            HTTP_X_BFF_SECRET="secret-new",
-            HTTP_X_CLIENT_IP="203.0.113.7",
+            "/paged", REMOTE_ADDR=BFF_IP, HTTP_X_BFF_SECRET=BFF_SECRET, HTTP_X_CLIENT_IP=CLIENT_IP
         )
 
     assert response.status_code == 200
@@ -66,7 +54,7 @@ def test_cache_down_allows_request_and_logs_without_ip() -> None:
     assert warnings == [
         {"event": "throttle_backend_unavailable", "scope": "anon", "log_level": "warning"}
     ]
-    for raw in ("203.0.113.7", "10.0.0.5", pii_hmac("203.0.113.7"), "throttle_anon"):
+    for raw in (CLIENT_IP, BFF_IP, pii_hmac(CLIENT_IP), "throttle_anon"):
         assert raw not in repr(logs)
 
 
@@ -78,7 +66,7 @@ def test_cache_down_allows_authenticated_request() -> None:
     client.force_authenticate(user=user)
 
     with capture_logs() as logs:
-        response = client.get("/items")
+        response = client.get("/paged")
 
     assert response.status_code == 200
     warnings = [log for log in logs if log["event"] == "throttle_backend_unavailable"]
@@ -99,7 +87,7 @@ def test_cache_down_json_log_has_no_raw_ip(
 
     with override_settings(BFF_SHARED_SECRETS=(BFF_SECRET,)):
         response = APIClient().get(
-            "/items", REMOTE_ADDR=BFF_IP, HTTP_X_BFF_SECRET=BFF_SECRET, HTTP_X_CLIENT_IP=CLIENT_IP
+            "/paged", REMOTE_ADDR=BFF_IP, HTTP_X_BFF_SECRET=BFF_SECRET, HTTP_X_CLIENT_IP=CLIENT_IP
         )
 
     assert response.status_code == 200

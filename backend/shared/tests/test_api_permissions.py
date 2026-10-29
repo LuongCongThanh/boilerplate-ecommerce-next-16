@@ -4,16 +4,16 @@ from typing import Any, cast
 import pytest
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
-from rest_framework.test import APIRequestFactory
 
 from shared.api.permissions import IsAdmin, IsCustomer, IsStaff
+from shared.tests._helpers import drf_request
 
 MISSING = object()
 
 
 def _request(kind: Any = MISSING, aud: Any = MISSING) -> Request:
     # Account chưa có ở M0: dùng đối tượng giả có `kind` và claims giả có `aud`
-    request = Request(APIRequestFactory().get("/"))
+    request = drf_request()
     user = SimpleNamespace() if kind is MISSING else SimpleNamespace(kind=kind)
     request.user = cast(Any, user)
     request.auth = {} if aud is MISSING else {"aud": aud}
@@ -55,7 +55,7 @@ def test_permission_denies_when_kind_or_aud_missing(
 
 @pytest.mark.parametrize("permission", [IsCustomer, IsStaff, IsAdmin])
 def test_permission_denies_anonymous(permission: type[BasePermission]) -> None:
-    request = Request(APIRequestFactory().get("/"))
+    request = drf_request()
     request.user = cast(Any, None)
     request.auth = None
 
