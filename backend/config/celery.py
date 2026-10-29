@@ -11,6 +11,10 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # Local chạy một worker cho cả 4 queue (07 mục 3.1)
 app.conf.task_queues = [Queue(name) for name in ("default", "events", "emails", "integrations")]
 
+# Không có result backend (07 mục 3.3): tắt hạn kết quả để Beat không tự thêm job
+# celery.backend_cleanup
+app.conf.result_expires = None
+
 # Lịch job thêm ở ticket tạo ra job đó
 app.conf.beat_schedule = {}
 

@@ -124,7 +124,7 @@ Production (RDS) và CI (`postgres:18`) có thể chạy bản major cũ hơn lo
 Kết nối:
 
 - API, IDE, `psql`, pytest chạy trên máy: `localhost:<PG_PORT>`.
-- Container trong Compose (worker, beat, relay, migrate): `host.docker.internal:<PG_PORT>` (mục 7).
+- Container trong Compose (worker, beat, relay, migrate): `host.docker.internal:<PG_PORT>`, vì Compose đặt `DATABASE_HOST` thay host của `DATABASE_URL` (mục 7).
   - Windows (Docker Desktop, PostgreSQL 18 bản EDB): đã xác minh ngày 2026-10-29, không cần sửa cấu hình. Docker Desktop chuyển kết nối qua localhost của máy, nên PostgreSQL thấy client là `127.0.0.1`, và dòng `host all all 127.0.0.1/32` mặc định trong `pg_hba.conf` của EDB đã cho phép.
   - macOS **[Cần xác minh]**. Nếu container không kết nối được thì cách sửa (`listen_addresses`, `pg_hba.conf`) sẽ được ghi ở đây (ticket `.scratch/backend-bootstrap/issues/13-local-postgres-installer-macos.md`).
 
@@ -144,7 +144,7 @@ Các biến chính trong `.env`. Mỗi biến được khai báo trong `config/e
 DJANGO_SETTINGS_MODULE=config.settings.local
 DJANGO_SECRET_KEY=local-only-change-me
 DATABASE_URL=postgres://fashion:fashion@localhost:5432/fashion   # theo output của scripts/setup/postgres.sh hoặc postgres.ps1
-PG_PORT=5432                                                      # Compose dùng để trỏ host.docker.internal
+PG_PORT=5432                                                      # cổng PostgreSQL trên máy, trùng cổng trong DATABASE_URL
 REDIS_PORT=6380                                                   # cổng Redis của Compose mở ra máy
 REDIS_URL=redis://localhost:6380/0
 EMAIL_HOST=localhost
@@ -172,7 +172,7 @@ PAYMENT_PROVIDER_MOMO=fake
 GOOGLE_OAUTH_CLIENT_ID=
 ```
 
-`.env` viết cho tiến trình chạy trên máy (API, pytest, IDE): mọi địa chỉ đều là `localhost`. Container trong Compose ghi đè `DATABASE_URL`, `REDIS_URL`, `EMAIL_HOST` trong khối `environment:` (mục 7), nên không cần sửa `.env` cho container.
+`.env` viết cho tiến trình chạy trên máy (API, pytest, IDE): mọi địa chỉ đều là `localhost`. Container trong Compose ghi đè `REDIS_URL`, `EMAIL_HOST` và đặt `DATABASE_HOST` (thay host của `DATABASE_URL`, giữ user, mật khẩu, cổng, tên DB) trong khối `environment:` (mục 7), nên không cần sửa `.env` cho container và `docker-compose.yml` không chứa mật khẩu.
 
 `DJANGO_SETTINGS_MODULE` trong `.env` chỉ có tác dụng trong Compose, vì Compose nạp `.env` vào biến môi trường của container; khi `.env` được đọc thì settings đã được chọn rồi. Chạy trên máy thì `export` biến này, hoặc dùng mặc định `config.settings.local` của `manage.py`. `wsgi.py` và Celery không có giá trị mặc định: process deploy thiếu biến này thì dừng ngay.
 
@@ -224,11 +224,11 @@ Mỗi lệnh được thêm vào `Makefile` cùng ticket tạo ra lệnh mà nó
 |---|---|---|
 | `make up` / `make down` | Bật / tắt các container; `make up` chạy service `migrate` trước (mục 7) | M0 (ticket 15) |
 | `make run` | Chạy API trên máy (`uv run python manage.py runserver`) | M0 (ticket 15) |
-| `make restart-worker` | Khởi động lại worker, beat, relay sau khi sửa code (Celery không tự reload) | M0 (ticket 15) |
+| `make restart-worker` | Khởi động lại worker, beat (relay từ ticket 10) sau khi sửa code (Celery không tự reload) | M0 (ticket 15) |
 | `make logs s=worker` | Xem log của một service | M0 (ticket 15) |
 | `make shell` | `manage.py shell` chạy trên máy | M0 (ticket 15) |
 | `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) | M0 (ticket 15) |
-| `make db-reset` | Xoá và tạo lại database `fashion` rồi migrate (mục 2.2) | M0 (ticket 15) |
+| `make db-reset` | Xoá và tạo lại database `fashion` (`manage.py reset_db`, chỉ chạy khi `DEBUG` bật, host là `localhost` và server nghe ở loopback) rồi `make migrate` (mục 2.2) | M0 (ticket 15) |
 | `make test` | `pytest -n auto` | M0 (ticket 07) |
 | `make lint` | `ruff check`, `ruff format --check`, `mypy`, `lint-imports`, `scripts/gen_importlinter.py --check` | M0 (ticket 07; `gen_importlinter.py --check` từ ticket 04) |
 | `make fmt` | `ruff format` + `ruff check --fix` | M0 (ticket 07) |
@@ -276,7 +276,7 @@ Team dùng cả **VS Code** và **PyCharm**. Repo commit sẵn cấu hình chung
 | IDE | File được commit | Nội dung |
 |---|---|---|
 | VS Code | `.vscode/launch.json` | "Django (local)": chạy `manage.py runserver` bằng interpreter `.venv`; "Pytest (local)": chạy test bằng interpreter `.venv` |
-| VS Code | `.vscode/extensions.json` | Extension khuyến nghị: Python, Pylance, Ruff, Mypy Type Checker, Docker, EditorConfig, Mermaid preview |
+| VS Code | `.vscode/extensions.json` | Extension khuyến nghị: Python, Pylance, Python Debugger, Ruff, Mypy Type Checker, Docker, EditorConfig, Mermaid preview |
 | PyCharm | `.run/*.run.xml` | Run configuration lưu dạng file dự án: "Pytest" (đã có), "Django server" (thêm ở ticket 15) |
 | Cả hai | `.editorconfig` | Thụt lề 4 dấu cách cho Python, 2 cho YAML/JSON/TOML; LF; UTF-8; xoá khoảng trắng cuối dòng |
 
@@ -295,29 +295,31 @@ Interpreter của cả hai IDE là `backend/.venv`, tạo bằng `uv sync`. Trê
 ## 7. `docker-compose.yml` (rút gọn)
 
 ```yaml
+name: fashion   # tên project cố định; mặc định là tên thư mục (backend), dễ trùng container của project khác
+
 x-container-env: &container-env
   # .env viết cho máy (mục 2.3); trong container, localhost là chính container
-  DATABASE_URL: postgres://fashion:fashion@host.docker.internal:${PG_PORT:-5432}/fashion
+  DATABASE_HOST: host.docker.internal   # thay host của DATABASE_URL trong .env; user, mật khẩu, cổng giữ nguyên
   REDIS_URL: redis://redis:6379/0
   EMAIL_HOST: mailpit
 
-x-app: &app
+x-base: &base
+  image: fashion-backend   # một image chung, Compose không build lại cho từng service
   build: .
   env_file: .env
   environment: *container-env
   extra_hosts: ["host.docker.internal:host-gateway"]   # Docker Desktop đã có sẵn; Docker Engine trên Linux không được hỗ trợ (PostgreSQL chỉ nghe localhost)
   volumes: [".:/app"]   # Celery không tự reload: sửa code xong chạy make restart-worker
+
+x-app: &app
+  <<: *base
   depends_on:
     redis: {condition: service_started}
     migrate: {condition: service_completed_successfully}  # beat cần bảng django_celery_beat, relay cần bảng outbox
 
 services:
   migrate:
-    build: .
-    env_file: .env
-    environment: *container-env
-    extra_hosts: ["host.docker.internal:host-gateway"]
-    volumes: [".:/app"]
+    <<: *base
     command: sh -c "python manage.py migrate && python manage.py sync_beat_schedule"
     restart: "no"
   worker:
@@ -325,16 +327,16 @@ services:
     command: celery -A config worker -Q default,events,emails,integrations -l info  # local: 1 worker cho cả 4 queue (07 mục 3.1)
   beat:
     <<: *app
-    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
-  relay:
+    command: celery -A config beat -l info   # scheduler lấy từ CELERY_BEAT_SCHEDULER của settings
+  relay:   # từ ticket 10
     <<: *app
     command: python manage.py run_outbox_relay
   redis:
-    image: valkey/valkey:8-alpine   # ghim Valkey 8, cùng bản với ElastiCache
+    image: valkey/valkey:8.1.11   # Valkey 8 như ElastiCache, cùng bản với service của CI
     ports: ["${REDIS_PORT:-6380}:6379"]   # không tranh 6379 với Redis/Memurai của project khác trên máy
   mailpit:
-    image: axllent/mailpit
+    image: axllent/mailpit:v1.31.6
     ports: ["1025:1025", "8025:8025"]
 ```
 
-Phiên bản image (`valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Compose không có service `postgres` ([ADR 0015](../adr/0015-local-postgres-on-host.md)) và không có service `api`: API chạy trên máy bằng `make run` ([ADR 0017](../adr/0017-windows-native-dev-api-on-host.md)). `PG_PORT` và `REDIS_PORT` đọc từ `.env`. Service `migrate` chạy một lần rồi thoát; `worker`, `beat`, `relay` chỉ khởi động khi nó thoát thành công, nên DB trống không làm `beat` hay `relay` lỗi liên tục. Migration lỗi thì `make up` dừng ở bước này, xem bằng `make logs s=migrate`. Service `relay` có từ ticket 10 của M0, cùng lúc với lệnh `run_outbox_relay`.
+Image ghim tới bản vá, chỉ chọn bản đã phát hành ít nhất 7 ngày (như cooldown của Dependabot). `Dockerfile` dựng một image cho `migrate`, `worker`, `beat`, `relay` từ `python:3.14.<vá>-slim`, `uv` chép từ `ghcr.io/astral-sh/uv`, cài bằng `uv sync --locked --no-build --no-dev` vào `/opt/venv` (ngoài `/app`, để bind mount `backend/` không đè `.venv` của máy lên venv của container), chạy bằng user `app` không phải root. Image chép tường minh `manage.py`, `config/`, `shared/`, `modules/` (không `COPY . .`) để chạy được khi không bind mount mà không lọt file nhạy cảm; `.dockerignore` giữ `.env`, `.venv` ngoài build context. Compose không có service `postgres` ([ADR 0015](../adr/0015-local-postgres-on-host.md)) và không có service `api`: API chạy trên máy bằng `make run` ([ADR 0017](../adr/0017-windows-native-dev-api-on-host.md)). `REDIS_PORT` đọc từ `.env`. Service `migrate` chạy một lần rồi thoát; `worker`, `beat`, `relay` chỉ khởi động khi nó thoát thành công, nên DB trống không làm `beat` hay `relay` lỗi liên tục. Migration lỗi thì `make up` dừng ở bước này, xem bằng `make logs s=migrate`. Service `relay` có từ ticket 10 của M0, cùng lúc với lệnh `run_outbox_relay`.

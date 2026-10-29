@@ -6,7 +6,6 @@
     "charliermarsh.ruff",
     "ms-python.mypy-type-checker",
     "ms-azuretools.vscode-docker",
-    "ms-vscode-remote.remote-wsl",
     "editorconfig.editorconfig",
     "bierner.markdown-mermaid"
   ]

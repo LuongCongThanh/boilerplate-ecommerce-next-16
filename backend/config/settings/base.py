@@ -38,7 +38,7 @@ MIDDLEWARE = [
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {"default": database_config(env.DATABASE_URL)}
+DATABASES = {"default": database_config(env.DATABASE_URL, host=env.DATABASE_HOST)}
 # Dùng connection pool của Django 5.2 thay cho kết nối giữ lâu (02 mục 3.1). Timeout ngắn để
 # /readyz trả 503 trong timeout 5 giây của health check ALB khi PostgreSQL chết, thay vì chờ
 # 30 giây mặc định của psycopg_pool

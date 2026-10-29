@@ -215,7 +215,7 @@ Thanh toán COD được ghi `succeeded` khi GHN báo đã giao (T11), nhưng ti
 
 | Môi trường | Backend gửi | Ghi chú |
 |---|---|---|
-| Local | SMTP tới **Mailpit**: `mailpit:1025` khi API/worker chạy Compose; `localhost:1025` chỉ khi chạy tiến trình trên host. Giao diện xem mail `http://localhost:8025` | Không email nào ra ngoài |
+| Local | SMTP tới **Mailpit**: worker trong Compose gửi tới `mailpit:1025`; API và tiến trình khác chạy trên máy gửi tới `localhost:1025` ([08](./08-local-development.md) mục 2.3). Giao diện xem mail `http://localhost:8025` | Không email nào ra ngoài |
 | Test | `locmem` | Kiểm tra nội dung email trong test |
 | AWS | **Amazon SES** | Cần xác minh domain (SPF, DKIM, DMARC) và xin thoát sandbox SES |
 

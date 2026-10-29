@@ -75,7 +75,6 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `time-machine` | 3.6.0 | Cố định thời gian khi test (Giữ hàng 15 phút, Hoàn tất sau 7 ngày) |
 | `django-zeal` | 2.3.0 | Phát hiện lỗi N+1 query khi chạy test |
 | `django-test-migrations` | 1.7.0 | Test data migration có `RunPython` ([12-testing-strategy.md](./12-testing-strategy.md) mục 6) |
-| `debugpy` | 1.8.22 | Debug từ IDE vào container |
 | `pip-audit` | 2.10.1 | Kiểm tra lỗ hổng đã công bố trong dependency (chạy trong CI) |
 | `pre-commit` | 4.7.0 | Chạy ruff, mypy, import-linter và các hook `pre-commit-hooks` (`check-yaml`, `check-toml`, `end-of-file-fixer`, `trailing-whitespace`) trước khi commit |
 | `commitizen` | 4.19.3 | Kiểm tra commit message theo Conventional Commits, gắn tag phiên bản, sinh CHANGELOG ([11](./11-git-workflow.md)) |
@@ -148,8 +147,9 @@ backend/
 ├── manage.py
 ├── .env.example                    # mẫu biến môi trường (file .env thật không commit)
 ├── .python-version                 # 3.14
-├── Dockerfile                      # 1 image dùng chung cho api, worker, beat, relay
-├── docker-compose.yml              # api, worker, beat, relay, redis, mailpit (PostgreSQL cài trên máy, xem 08 mục 2.2)
+├── Dockerfile                      # 1 image dùng chung cho worker, beat, relay, migrate (API chạy trên máy, ADR 0017)
+├── .dockerignore                   # không đưa .env, .venv vào image
+├── docker-compose.yml              # migrate, worker, beat, relay, redis, mailpit (PostgreSQL và API chạy trên máy, xem 08 mục 7)
 ├── Makefile                        # lệnh tắt: make up, make test, make lint, make migrate…
 ├── openapi.yaml                    # schema OpenAPI đã commit; CI so với bản sinh lại ([12](./12-testing-strategy.md) mục 5)
 ├── CHANGELOG.md                    # sinh bằng commitizen ([11](./11-git-workflow.md) mục 7)
@@ -159,7 +159,7 @@ backend/
 │
 ├── config/                         # cấu hình project, KHÔNG chứa nghiệp vụ
 │   ├── __init__.py                 # nạp Celery app khi Django khởi động
-│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) và PG_PORT (chỉ Compose dùng, khai báo để pydantic-settings không báo biến thừa khi đọc .env); PII_HMAC_KEYS được parse một lần thành keyring (secret bọc SecretStr)
+│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) PG_PORT (script setup in ra, khai báo để pydantic-settings không báo biến thừa khi đọc .env) và DATABASE_HOST (khác rỗng thì thay host của DATABASE_URL; Compose đặt host.docker.internal); PII_HMAC_KEYS được parse một lần thành keyring (secret bọc SecretStr)
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường
@@ -209,6 +209,7 @@ backend/
 │   │   ├── retry_failed_events.py  # mở lại các delivery failed
 │   │   ├── replay_events.py        # phát lại sự kiện trong outbox theo loại và mốc thời gian (07 mục 1.1)
 │   │   ├── sync_beat_schedule.py   # ghi lịch job từ config/celery.py vào django-celery-beat, tắt job thừa; chạy sau migrate (07 mục 3.2)
+│   │   ├── reset_db.py             # xoá và tạo lại database local cho make db-reset; từ chối khi DEBUG tắt hoặc host không phải localhost
 │   │   └── load_geo.py             # nạp dữ liệu tỉnh/thành, phường/xã
 │   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension)
 │   └── testing/
@@ -540,7 +541,7 @@ CI phải chạy generator ở chế độ kiểm tra cấu hình không bị c�
 | Khoá chính | UUID v7 cho bảng do dự án định nghĩa, trừ `shared_province`, `shared_ward` dùng mã chính thức; không áp lên bảng framework/history sinh tự động (03 mục 0.9). Khoá tự nhiên khác giữ bằng `UNIQUE`. `default` là hàm bọc `shared.models.uuid7` (không trỏ thẳng vào `uuid.uuid7`, để migration không phụ thuộc cách sinh UUID), khai báo trong BaseModel cùng `created_at`, `updated_at`; cách cập nhật bulk và phân biệt default/seed theo 03 mục 0.1/0.3. Model nghiệp vụ không tự khai báo `id` ([ADR 0008](../adr/0008-uuid-v7-primary-keys.md)) |
 | Thời gian | Lưu UTC (`USE_TZ = True`); hiển thị theo `Asia/Ho_Chi_Minh`. Lấy thời điểm hiện tại bằng `django.utils.timezone.now()` |
 | Xoá dữ liệu | Không xoá cứng dữ liệu đã có đơn; dùng `status` / `archived` |
-| Transaction | Chỉ mở ở tầng `services` (và trong consumer của `shared.events`); sự kiện ghi vào outbox cùng transaction. Checkout tạo Order mới khoá Cart → StockItem theo variant_id → Variant theo id → Voucher, so fingerprint giỏ/token và xoá dòng giỏ đã mua cùng transaction. Mọi cart mutation/merge khoá Cart theo id tăng dần; không lấy Cart sau StockItem. Transition trên Order đã tồn tại khoá Order trước rồi StockItem → Variant cần cập nhật → Voucher, không truy cập Cart. **Writer của catalog**: mọi service sửa dữ liệu ảnh hưởng checkout (Giá bán, SKU, snapshot, cân nặng, trạng thái Product, thêm/sửa/xoá SalePrice) phải khoá các Variant bị ảnh hưởng theo id tăng dần trước khi ghi và tăng `checkout_version`; chỉ khoá SalePrice đã có là không đủ để chặn việc thêm SalePrice mới. Quy tắc auth/refresh Account → Token vẫn theo 05 và không được trộn thứ tự ngược |
+| Transaction | Chỉ mở ở tầng `services` (và trong consumer của `shared.events`, và management command hạ tầng của `shared` như `sync_beat_schedule`, cần ghi trọn vẹn); sự kiện ghi vào outbox cùng transaction. Checkout tạo Order mới khoá Cart → StockItem theo variant_id → Variant theo id → Voucher, so fingerprint giỏ/token và xoá dòng giỏ đã mua cùng transaction. Mọi cart mutation/merge khoá Cart theo id tăng dần; không lấy Cart sau StockItem. Transition trên Order đã tồn tại khoá Order trước rồi StockItem → Variant cần cập nhật → Voucher, không truy cập Cart. **Writer của catalog**: mọi service sửa dữ liệu ảnh hưởng checkout (Giá bán, SKU, snapshot, cân nặng, trạng thái Product, thêm/sửa/xoá SalePrice) phải khoá các Variant bị ảnh hưởng theo id tăng dần trước khi ghi và tăng `checkout_version`; chỉ khoá SalePrice đã có là không đủ để chặn việc thêm SalePrice mới. Quy tắc auth/refresh Account → Token vẫn theo 05 và không được trộn thứ tự ngược |
 | Việc ra ngoài DB | **Không gọi HTTP ra ngoài** (GHN, VNPay, MoMo, gửi email) bên trong `transaction.atomic`: gọi trước khi mở transaction (như `quote_fee` khi checkout), hoặc đưa vào Celery task. Code nghiệp vụ (`services`, `handlers.py`) **không đẩy Celery task trực tiếp** (`.delay()`, `.apply_async()`) mà dùng `shared.tasks.enqueue_on_commit(task_name, …)`, để task chỉ chạy khi dữ liệu đã commit và không chạy khi transaction rollback. Đánh đổi: task có thể mất nếu process dừng ngay sau commit hoặc broker lỗi; `enqueue_on_commit` dùng `transaction.on_commit(..., robust=True)`, nên lỗi enqueue broker chỉ được log mà không làm request đã commit trả lỗi API. Việc bắt buộc phải xảy ra phải có bản ghi DB và job quét lại (EventDelivery được relay giao lại; `recover_pending_emails` quét EmailLog và `reconcile_shipments` quét Vận đơn bị kẹt) |
 | Kiểu dữ liệu | Mọi hàm trong `services`, `selectors`, `contracts` có type hints đầy đủ; `mypy --strict` cho `modules/*/services`, `modules/*/selectors` và `contracts`. Dùng cú pháp mới: `list[X]`, `X \| None`, không dùng `List`, `Optional` |
 

@@ -1,0 +1,15 @@
+# Không đưa secret và venv của máy vào image
+.env
+.env.*
+.secrets/
+.venv/
+media/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.import_linter_cache/
+.coverage
+.coverage.*
+htmlcov/
