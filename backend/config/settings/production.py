@@ -1,4 +1,5 @@
-from config.settings.base import *  # noqa: F403
+# Cách tách settings chuẩn của Django: kế thừa mọi giá trị của base rồi ghi đè
+from config.settings.base import *  # noqa: F403  # NOSONAR
 
 # ALLOWED_HOSTS, S3, SES, Sentry và log JSON cấu hình khi dựng hạ tầng AWS (09)
 API_DOCS_ENABLED = False

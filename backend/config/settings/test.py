@@ -1,4 +1,5 @@
-from config.settings.base import *  # noqa: F403
+# Cách tách settings chuẩn của Django: kế thừa mọi giá trị của base rồi ghi đè
+from config.settings.base import *  # noqa: F403  # NOSONAR
 from config.settings.base import DATABASES
 
 ALLOWED_HOSTS = ["testserver", "localhost"]
