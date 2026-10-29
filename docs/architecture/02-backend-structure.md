@@ -682,7 +682,7 @@ Các loại test, marker, coverage và cổng chặn trong CI: xem [12-testing-s
 | Logger | `logger = structlog.get_logger(__name__)` ở đầu file. Không dùng `print` hay `logging.getLogger` |
 | Định dạng | `shared.logging.configure_logging(json=...)` trả setting `LOGGING`: JSON ở test, staging, production; `config.settings.local` in dạng dễ đọc trên terminal |
 | Message | Tên sự kiện tiếng Anh dạng `snake_case`, dữ liệu truyền bằng keyword: `logger.info("order_placed", order_code=code)`. Không dùng f-string hay `%` trong message, để lọc được theo field trên CloudWatch |
-| Context | `request_id`, `user_id`, `order_code` do `django-structlog` và middleware gắn sẵn ([10-nfr.md](./10-nfr.md)); không truyền lại thủ công |
+| Context | `request_id`, `user_id`, `order_code` do `django-structlog` và middleware gắn sẵn ([10-nfr.md](./10-nfr.md)); không truyền lại thủ công. Không gắn IP: `DJANGO_STRUCTLOG_IP_LOGGING_ENABLED = False`, vì log không được chứa IP thô ([05 mục 5](./05-auth-security.md)) |
 | PII | Không log email, SĐT, địa chỉ, token, mật khẩu, payload thanh toán thô. Processor `shared.logging.redact_pii` làm lưới an toàn, không thay cho việc tự kiểm tra: che giá trị của key có chứa `email`, `phone`, `address`, `token`, `password`, `card`, `secret` (khớp chuỗi con, không phân biệt hoa thường, kể cả `contact_phone`, `access_token`, và trong dict/list lồng nhau, kể cả `extra` của log stdlib). Key kết thúc bằng `_hmac` không bị che vì đã là HMAC ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)) |
 | Mức log | Lỗi nghiệp vụ (`DomainError`) log `INFO`. `WARNING` cho tình huống bất thường nhưng đã xử lý (ví dụ dùng phí ship dự phòng). `ERROR` chỉ cho lỗi ngoài dự kiến; Sentry tự bắt exception chưa xử lý |
 
