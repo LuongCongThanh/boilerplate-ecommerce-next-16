@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.http import HttpRequest, HttpResponse
 from django.urls import path
 from rest_framework import serializers
 from rest_framework.exceptions import Throttled
@@ -17,7 +19,10 @@ from shared.exceptions import DomainError
 # Stub của DRF chỉ nhận QuerySet; paginator thật nhận mọi sequence, nên dùng list cho gọn
 ITEMS: Any = [{"id": i} for i in range(1, 251)]
 
-# Urlconf ghi đè ROOT_URLCONF nên phải khai báo lại handler như config/urls.py
+# Urlconf ghi đè ROOT_URLCONF nên phải khai báo lại handler như config/urls.py; test kiểm hai
+# nơi khớp nhau
+handler400 = "shared.api.views.bad_request"
+handler403 = "shared.api.views.permission_denied"
 handler404 = "shared.api.views.not_found"
 handler500 = "shared.api.views.server_error"
 
@@ -101,6 +106,16 @@ class ThrottleKeyView(APIView):
         return Response({"key": AnonThrottle().get_cache_key(request, self)})
 
 
+def suspicious_view(request: HttpRequest) -> HttpResponse:
+    """View Django thường; Django đổi `SuspiciousOperation` thành 400 qua `handler400`."""
+    raise SuspiciousOperation("secret internal detail")
+
+
+def forbidden_view(request: HttpRequest) -> HttpResponse:
+    """View Django thường, ngoài DRF: `PermissionDenied` đi qua `handler403`."""
+    raise PermissionDenied
+
+
 urlpatterns = [
     path("items", ItemListView.as_view()),
     path("validate", ValidateView.as_view()),
@@ -109,4 +124,6 @@ urlpatterns = [
     path("boom", BoomView.as_view()),
     path("private", DefaultPermissionView.as_view()),
     path("throttle-key", ThrottleKeyView.as_view()),
+    path("suspicious", suspicious_view),
+    path("forbidden", forbidden_view),
 ]

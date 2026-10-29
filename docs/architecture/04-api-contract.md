@@ -35,7 +35,7 @@ GET /api/v1/store/products?page=2&page_size=24
 }
 ```
 
-`page_size` mặc định 24, tối đa 100: lớn hơn 100 thì giới hạn ở 100; nhỏ hơn 1 hoặc không phải số nguyên trả `400 VALIDATION_ERROR`.
+`page_size` mặc định 24, tối đa 100: lớn hơn 100 thì giới hạn ở 100; nhỏ hơn 1 hoặc không phải số nguyên trả `400 VALIDATION_ERROR`. `page` nhỏ hơn 1 hoặc không phải số nguyên cũng trả `400 VALIDATION_ERROR` (kèm `details.fields.page`); trang vượt quá cuối trả `404 NOT_FOUND`.
 
 ## 3. Định dạng lỗi
 
@@ -57,7 +57,7 @@ HTTP 409
 
 | HTTP | Khi nào | Ví dụ `code` |
 |---|---|---|
-| 400 | Dữ liệu vào sai định dạng | `VALIDATION_ERROR` (kèm `details.fields`), `INVALID_QUOTE`, `INVALID_RETURN_URL` |
+| 400 | Dữ liệu vào sai định dạng | `VALIDATION_ERROR` (kèm `details.fields`), `INVALID_QUOTE`, `INVALID_RETURN_URL`; `BAD_REQUEST` khi request hỏng ngoài DRF, không gắn được field (ví dụ `SuspiciousOperation`, `handler400`) |
 | 401 | Chưa đăng nhập, token hết hạn | `NOT_AUTHENTICATED`, `TOKEN_EXPIRED` |
 | 403 | Không đủ quyền | `PERMISSION_DENIED` |
 | 404 | Không tìm thấy | `NOT_FOUND`, `ORDER_NOT_FOUND` |

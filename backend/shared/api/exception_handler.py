@@ -1,7 +1,8 @@
 """Mọi lỗi API trả cùng định dạng `ErrorDTO` (04 mục 3, mục 5.1).
 
-`exception_handler` lo lỗi trong view DRF; `shared.api.views` lo route lạ và exception không
-bắt qua `handler404`/`handler500` của Django. Hai nơi dùng chung `error_body`.
+`exception_handler` lo lỗi trong view DRF; `shared.api.views` lo route lạ, lỗi ngoài DRF và
+exception không bắt qua `handler400`/`403`/`404`/`500` của Django. Hai nơi dùng chung
+`error_body`.
 """
 
 from typing import Any

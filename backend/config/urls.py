@@ -5,7 +5,9 @@ from rest_framework.permissions import AllowAny
 
 from shared.health import views as health
 
-# Route lạ và exception không bắt cũng trả ErrorDTO (04 mục 3)
+# Route lạ, lỗi ngoài DRF và exception không bắt cũng trả ErrorDTO (04 mục 3)
+handler400 = "shared.api.views.bad_request"
+handler403 = "shared.api.views.permission_denied"
 handler404 = "shared.api.views.not_found"
 handler500 = "shared.api.views.server_error"
 
