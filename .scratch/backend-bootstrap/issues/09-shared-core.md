@@ -1,6 +1,8 @@
 # Phần dùng chung của `shared`: model cơ sở, tiền, số điện thoại, HMAC, lỗi, logging
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #22
 
 Blocked by: 07
 

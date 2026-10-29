@@ -24,7 +24,7 @@ Cập nhật trong cùng PR đóng ticket. Nguồn sự thật vẫn là dòng `
 | Mốc / feature | Trạng thái | Ticket |
 |---|---|---|
 | [`dev-security-baseline`](../dev-security-baseline/spec.md) | Gần xong | ✅ 01, 02 · 🟡 03 chờ chủ repo tự kiểm tra 3 AC |
-| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07 · 🟡 08 script đã có, chưa chạy trên máy Windows thật · ⬜ 09 (làm tiếp theo) → 16 → 11, 17 · 09 → 12 · 07 + 08 → 15 → 14 · 09 + 15 → 10 → 18 · ⬜ 01–04 làm được · ⏸ 13 macOS, không chặn M0 |
+| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07, 09 · 🟡 08 script đã có, chưa chạy trên máy Windows thật · ⬜ 16 (làm tiếp theo) → 11, 17 · 09 → 12 · 07 + 08 → 15 → 14 · 09 + 15 → 10 → 18 · ⬜ 01–04 làm được · ⏸ 13 macOS, không chặn M0 |
 | **M1** – **M6** | Chưa có spec | Tạo spec khi mốc trước gần xong |
 | **M7** `sandbox-acceptance` | Chưa có spec | ⏸ [01](../sandbox-acceptance/issues/01-load-test-k6-staging.md) k6, `needs-triage` |
 
