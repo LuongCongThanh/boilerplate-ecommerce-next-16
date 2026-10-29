@@ -1,7 +1,7 @@
 # Lệnh hằng ngày (08 mục 3). Mỗi lệnh thêm cùng ticket tạo ra thứ nó gọi.
 # Recipe chỉ gọi `uv run`, `docker compose` hoặc target khác qua `$(MAKE)`, không dùng cú pháp
 # riêng của shell POSIX, để chạy được bằng GNU make trên Windows (ADR 0017).
-.PHONY: test lint fmt up down run restart-worker logs shell makemigrations migrate db-reset
+.PHONY: test lint fmt up down run restart-worker logs shell makemigrations migrate load-geo db-reset
 
 test:
 	uv run pytest -n auto
@@ -45,6 +45,10 @@ makemigrations:
 migrate:
 	uv run python manage.py migrate
 	uv run python manage.py sync_beat_schedule
+
+# Nạp tỉnh/thành, phường/xã sau migrate (08 mục 2.4 bước 4); chạy lại không trùng, không xoá mã cũ
+load-geo:
+	uv run python manage.py load_geo
 
 # Xoá và tạo lại database fashion rồi chạy target migrate (08 mục 2.2); reset_db chỉ chạy với
 # DEBUG bật và host localhost
