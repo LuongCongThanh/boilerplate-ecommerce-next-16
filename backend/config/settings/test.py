@@ -6,7 +6,7 @@ ALLOWED_HOSTS = ["testserver", "localhost"]
 
 # pytest-django tạo test_fashion cho mỗi worker của pytest-xdist; pool giữ kết nối tới DB
 # đang bị xoá nên tắt khi test
-DATABASES["default"]["OPTIONS"] = {}
+DATABASES["default"]["OPTIONS"].pop("pool")
 
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 CELERY_TASK_ALWAYS_EAGER = True

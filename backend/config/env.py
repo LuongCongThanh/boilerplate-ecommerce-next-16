@@ -5,7 +5,8 @@ Mỗi biến được khai báo ở mốc đầu tiên dùng tới nó; `.env.ex
 
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from typing import Any
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
 from pydantic import SecretStr, ValidationError
@@ -19,6 +20,9 @@ class Env(BaseSettings):
     model_config = SettingsConfigDict(extra="forbid")
 
     # Từ M0
+    # Không dùng để chọn settings: lúc đọc .env thì settings đã được chọn. Khai báo để .env
+    # chứa được biến này, vì Compose nạp .env vào biến môi trường của container; chạy trên
+    # máy thì đặt bằng `export` hoặc dùng mặc định `local` của manage.py
     DJANGO_SETTINGS_MODULE: str = "config.settings.local"
     DJANGO_SECRET_KEY: SecretStr
     DATABASE_URL: str
@@ -45,16 +49,24 @@ def get_env() -> Env:
     return load_env()
 
 
-def database_config(url: str) -> dict[str, object]:
-    """Chuyển `postgres://user:pass@host:port/name` thành một mục của `DATABASES`."""
+def database_config(url: str) -> dict[str, Any]:
+    """Chuyển `postgres://user:pass@host:port/name?opt=v` thành một mục của `DATABASES`.
+
+    Tham số query (ví dụ `sslmode=require` cho RDS) được giữ lại trong `OPTIONS`.
+    """
     parts = urlsplit(url)
     if parts.scheme not in {"postgres", "postgresql"}:
         raise ImproperlyConfigured("DATABASE_URL phải bắt đầu bằng postgres://")
+    try:
+        port = parts.port or 5432
+    except ValueError as exc:
+        raise ImproperlyConfigured("DATABASE_URL có port không hợp lệ") from exc
     return {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": unquote(parts.path.lstrip("/")),
         "USER": unquote(parts.username or ""),
         "PASSWORD": unquote(parts.password or ""),
         "HOST": parts.hostname or "",
-        "PORT": str(parts.port or 5432),
+        "PORT": str(port),
+        "OPTIONS": dict(parse_qsl(parts.query)),
     }

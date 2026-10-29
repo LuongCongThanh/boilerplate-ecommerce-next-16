@@ -1,12 +1,10 @@
 """Celery app, queue và lịch job (nguồn chuẩn cho `sync_beat_schedule`, 07 mục 3.2)."""
 
-import os
-
 from celery import Celery
 from kombu import Queue
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
-
+# Không mặc định DJANGO_SETTINGS_MODULE: worker deploy thiếu biến thì Django báo lỗi khi đọc
+# settings, thay vì chạy với settings local (DEBUG = True)
 app = Celery("config")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 

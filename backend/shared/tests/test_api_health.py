@@ -1,6 +1,8 @@
 import pytest
 from django.db import DatabaseError
-from django.test import Client
+from django.test import Client, override_settings
+
+from config.settings import production
 
 
 def test_healthz_returns_ok(client: Client) -> None:
@@ -29,3 +31,19 @@ def test_readyz_returns_503_when_database_unreachable(
     response = client.get("/readyz")
 
     assert response.status_code == 503
+
+
+@pytest.mark.django_db
+@override_settings(
+    SECURE_SSL_REDIRECT=True, SECURE_REDIRECT_EXEMPT=production.SECURE_REDIRECT_EXEMPT
+)
+@pytest.mark.parametrize("path", ["/healthz", "/readyz"])
+def test_health_checks_skip_https_redirect_in_production(client: Client, path: str) -> None:
+    assert client.get(path).status_code == 200
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=True, SECURE_REDIRECT_EXEMPT=production.SECURE_REDIRECT_EXEMPT
+)
+def test_other_paths_still_redirect_to_https_in_production(client: Client) -> None:
+    assert client.get("/api/schema/").status_code == 301

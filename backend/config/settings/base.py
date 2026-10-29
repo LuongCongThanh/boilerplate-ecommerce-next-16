@@ -30,8 +30,11 @@ ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {"default": database_config(env.DATABASE_URL)}
-# Dùng connection pool của Django 5.2 thay cho kết nối giữ lâu (02 mục 3.1)
-DATABASES["default"]["OPTIONS"] = {"pool": True}
+# Dùng connection pool của Django 5.2 thay cho kết nối giữ lâu (02 mục 3.1). Timeout ngắn để
+# /readyz trả 503 trong timeout 5 giây của health check ALB khi PostgreSQL chết, thay vì chờ
+# 30 giây mặc định của psycopg_pool
+DATABASES["default"]["OPTIONS"].setdefault("connect_timeout", 3)
+DATABASES["default"]["OPTIONS"]["pool"] = {"timeout": 3}
 DATABASES["default"]["CONN_MAX_AGE"] = 0
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

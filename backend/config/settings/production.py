@@ -6,6 +6,8 @@ API_DOCS_ENABLED = False
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = True
+# Health check của ALB gọi thẳng target bằng HTTP, không qua chuyển hướng HTTPS
+SECURE_REDIRECT_EXEMPT = [r"^healthz$", r"^readyz$"]
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
