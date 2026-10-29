@@ -30,6 +30,8 @@ class Env(BaseSettings):
     DATABASE_URL: str
     # Chỉ Compose dùng; khai báo để pydantic-settings không báo biến thừa khi đọc .env
     PG_PORT: int = 5432
+    # Chỉ Compose dùng: cổng Redis của Compose mở ra máy, tránh 6379 của project khác
+    REDIS_PORT: int = 6380
     REDIS_URL: str
     EMAIL_HOST: str
     EMAIL_PORT: int
