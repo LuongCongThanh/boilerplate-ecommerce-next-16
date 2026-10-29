@@ -7,8 +7,6 @@
 3. Commit ticket: `docs: report progress on <chủ đề> ticket`.
 4. `state.py transition <T> --to review --next "chạy check máy rồi code-review" --reason "báo cáo đã ghi"`, in điểm clear.
 
-Báo cáo này là nguồn cho phần Notes của PR (phase 6) và cho G2.
-
 ## Xong khi
 
 Mọi AC có một dòng trong bảng AC → bằng chứng; mục Đã làm, Chưa làm, Gap đều có nội dung hoặc ghi "Không"; báo cáo đã commit; `phase` là `review`.

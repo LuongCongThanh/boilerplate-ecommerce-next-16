@@ -9,7 +9,7 @@ Mục tiêu: sau PR này, `docs/` và `.scratch/` mô tả đúng code trên nh�
    - `04-api-contract.md`: endpoint, định dạng lỗi, phân trang.
    - `08-local-development.md`: lệnh `make` (bảng ở mục 3), biến môi trường (mục 2.3), `.env.example`.
    - `12-testing-strategy.md`: marker, fixture, cổng chặn CI.
-3. **Domain.** Thuật ngữ mới → `GLOSSARY.md`; quyết định kiến trúc lâu dài → ADR; cả hai qua `mattpocock-skills:domain-modeling`. Trái ADR → nói rõ.
+3. **Domain.** Thuật ngữ mới → `GLOSSARY.md`; quyết định kiến trúc lâu dài → ADR; cả hai qua `mattpocock-skills:domain-modeling`.
 4. **Ticket.** `## Quyết định` khớp code cuối cùng (chữ ký hàm, hành vi đổi khi review). Việc ngoài phạm vi phát hiện được → ticket mới `needs-triage`.
 5. **Code nhỏ cùng loại**: thứ phase này lộ ra trong phạm vi ticket (tên lệch tài liệu đã chốt, comment sai) thì sửa code, chạy lại test liên quan.
 6. Commit `docs: sync <tài liệu> with <thay đổi>`. Ghi mục *Tài liệu đã cập nhật* vào báo cáo.
