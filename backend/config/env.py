@@ -28,7 +28,11 @@ class Env(BaseSettings):
     DJANGO_SETTINGS_MODULE: str = "config.settings.local"
     DJANGO_SECRET_KEY: SecretStr
     DATABASE_URL: str
-    # Chỉ Compose dùng; khai báo để pydantic-settings không báo biến thừa khi đọc .env
+    # Khác rỗng thì thay host của DATABASE_URL: container trong Compose đặt host.docker.internal
+    # để không phải ghi DATABASE_URL có mật khẩu vào docker-compose.yml
+    DATABASE_HOST: str = ""
+    # Script setup in ra cùng DATABASE_URL; không code nào đọc (cổng nằm trong DATABASE_URL).
+    # Khai báo để pydantic-settings không báo biến thừa khi đọc .env
     PG_PORT: int = 5432
     # Chỉ Compose dùng: cổng Redis của Compose mở ra máy, tránh 6379 của project khác
     REDIS_PORT: int = 6380
@@ -74,10 +78,11 @@ def get_env() -> Env:
     return load_env()
 
 
-def database_config(url: str) -> dict[str, Any]:
+def database_config(url: str, host: str = "") -> dict[str, Any]:
     """Chuyển `postgres://user:pass@host:port/name?opt=v` thành một mục của `DATABASES`.
 
-    Tham số query (ví dụ `sslmode=require` cho RDS) được giữ lại trong `OPTIONS`.
+    Tham số query (ví dụ `sslmode=require` cho RDS) được giữ lại trong `OPTIONS`. `host` khác
+    rỗng thì thay host của URL (container trong Compose gọi PostgreSQL trên máy).
     """
     parts = urlsplit(url)
     if parts.scheme not in {"postgres", "postgresql"}:
@@ -91,7 +96,7 @@ def database_config(url: str) -> dict[str, Any]:
         "NAME": unquote(parts.path.lstrip("/")),
         "USER": unquote(parts.username or ""),
         "PASSWORD": unquote(parts.password or ""),
-        "HOST": parts.hostname or "",
+        "HOST": host or parts.hostname or "",
         "PORT": str(port),
         "OPTIONS": dict(parse_qsl(parts.query)),
     }

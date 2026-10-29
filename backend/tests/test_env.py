@@ -97,3 +97,15 @@ def test_redis_port_is_accepted_and_defaults_to_6380(tmp_path: Path) -> None:
 
     assert load_env(env_file=env_file).REDIS_PORT == 6390
     assert load_env(env_file=None).REDIS_PORT == 6380
+
+
+@pytest.mark.usefixtures("m0_env")
+def test_database_host_is_accepted_and_defaults_to_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Container trong Compose đặt DATABASE_HOST thay vì ghi DATABASE_URL có mật khẩu
+    assert load_env(env_file=None).DATABASE_HOST == ""
+
+    monkeypatch.setenv("DATABASE_HOST", "host.docker.internal")
+
+    assert load_env(env_file=None).DATABASE_HOST == "host.docker.internal"
