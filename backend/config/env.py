@@ -36,7 +36,8 @@ class Env(BaseSettings):
     # Dạng `kid2:s2,kid1:s1`, không phải JSON: NoDecode để pydantic-settings không tự decode
     PII_HMAC_KEYS: Annotated[tuple[tuple[str, SecretStr], ...], NoDecode]
     STOREFRONT_ORIGIN: str
-    BFF_SHARED_SECRET: SecretStr
+    # 1 hoặc 2 secret cách nhau bằng dấu phẩy để xoay không gián đoạn (05 mục 5)
+    BFF_SHARED_SECRET: Annotated[tuple[SecretStr, ...], NoDecode]
 
     @field_validator("PII_HMAC_KEYS", mode="before")
     @classmethod
@@ -45,6 +46,17 @@ class Env(BaseSettings):
             return value
         # Bọc secret trong SecretStr để repr của Env và lỗi validate không lộ secret
         return tuple((kid, SecretStr(secret)) for kid, secret in parse_keyring(value))
+
+    @field_validator("BFF_SHARED_SECRET", mode="before")
+    @classmethod
+    def _parse_bff_secrets(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        secrets = [secret.strip() for secret in value.split(",")]
+        # Thông báo lỗi không chứa secret
+        if not 1 <= len(secrets) <= 2 or not all(secrets):
+            raise ValueError("cần 1 hoặc 2 secret không rỗng, cách nhau bằng dấu phẩy")
+        return tuple(SecretStr(secret) for secret in secrets)
 
 
 def load_env(env_file: Path | None = BASE_DIR / ".env") -> Env:

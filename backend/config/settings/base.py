@@ -8,6 +8,8 @@ env = get_env()
 SECRET_KEY = env.DJANGO_SECRET_KEY.get_secret_value()
 # Keyring cho shared.privacy.pii_hmac; khoá đầu dùng cho giá trị mới (ADR 0016)
 PII_HMAC_KEYS = tuple((kid, secret.get_secret_value()) for kid, secret in env.PII_HMAC_KEYS)
+# Secret Next.js gửi trong X-BFF-Secret; 2 giá trị khi đang xoay (05 mục 5)
+BFF_SHARED_SECRETS = tuple(secret.get_secret_value() for secret in env.BFF_SHARED_SECRET)
 DEBUG = False
 ALLOWED_HOSTS: list[str] = []
 
@@ -28,6 +30,8 @@ MIDDLEWARE = [
     # Chọn ngôn ngữ theo Accept-Language, mặc định LANGUAGE_CODE; phải đứng trước Common
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # Gán request.client_ip cho throttle; đứng trước RequestMiddleware để log dùng được
+    "shared.api.client_ip.ClientIpMiddleware",
     "django_structlog.middlewares.RequestMiddleware",
 ]
 
@@ -78,6 +82,12 @@ REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "shared.api.pagination.StandardPagination",
     "EXCEPTION_HANDLER": "shared.api.exception_handler.exception_handler",
+    # Khoá theo pii_hmac(request.client_ip) hoặc Tài khoản (05 mục 5)
+    "DEFAULT_THROTTLE_CLASSES": [
+        "shared.api.throttling.AnonThrottle",
+        "shared.api.throttling.AccountThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {"anon": "120/min", "account": "300/min"},
 }
 
 SPECTACULAR_SETTINGS = {

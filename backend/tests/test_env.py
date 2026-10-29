@@ -59,3 +59,29 @@ def test_malformed_keyring_names_variable_without_secret(monkeypatch: pytest.Mon
         load_env(env_file=None)
 
     assert "top-secret" not in str(exc_info.value)
+
+
+@pytest.mark.usefixtures("m0_env")
+def test_bff_secret_accepts_two_values_for_rotation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BFF_SHARED_SECRET", "new-secret, old-secret")
+
+    env = load_env(env_file=None)
+
+    assert [secret.get_secret_value() for secret in env.BFF_SHARED_SECRET] == [
+        "new-secret",
+        "old-secret",
+    ]
+    assert "new-secret" not in repr(env)
+
+
+@pytest.mark.parametrize("raw", ["", " , ", "a,,b", "a,b,c"])
+@pytest.mark.usefixtures("m0_env")
+def test_bff_secret_rejects_empty_or_more_than_two_values(
+    monkeypatch: pytest.MonkeyPatch, raw: str
+) -> None:
+    monkeypatch.setenv("BFF_SHARED_SECRET", raw)
+
+    with pytest.raises(ImproperlyConfigured, match="BFF_SHARED_SECRET") as exc_info:
+        load_env(env_file=None)
+
+    assert "a,b" not in str(exc_info.value)

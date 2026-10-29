@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from shared.api.throttling import AnonThrottle
 from shared.exceptions import DomainError
 
 # Stub của DRF chỉ nhận QuerySet; paginator thật nhận mọi sequence, nên dùng list cho gọn
@@ -90,6 +91,16 @@ class DefaultPermissionView(APIView):
         return Response({})
 
 
+class ThrottleKeyView(APIView):
+    """Trả khoá mà `AnonThrottle` dùng cho request này, để test IP mà throttle thấy."""
+
+    permission_classes = (AllowAny,)
+    throttle_classes = ()
+
+    def get(self, request: Request) -> Response:
+        return Response({"key": AnonThrottle().get_cache_key(request, self)})
+
+
 urlpatterns = [
     path("items", ItemListView.as_view()),
     path("validate", ValidateView.as_view()),
@@ -97,4 +108,5 @@ urlpatterns = [
     path("throttled", ThrottledView.as_view()),
     path("boom", BoomView.as_view()),
     path("private", DefaultPermissionView.as_view()),
+    path("throttle-key", ThrottleKeyView.as_view()),
 ]
