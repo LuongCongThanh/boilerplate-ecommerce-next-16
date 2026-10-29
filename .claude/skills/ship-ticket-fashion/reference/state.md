@@ -1,0 +1,47 @@
+# State
+
+`.git/ship-ticket-fashion/<feature>-<NN>.json`, tạo ở phase 1 bằng `state.py init`. Đọc file này ở phase 1 và khi ghi một field lần đầu.
+
+```json
+{
+  "ticket": ".scratch/backend-bootstrap/issues/16-shared-api-layer.md",
+  "feature": "backend-bootstrap", "num": 16,
+  "branch": "feat/shared-api-layer", "mode": "full",
+  "phase": "code", "next": "S2: viết test 404 trả ErrorDTO rồi exception_handler",
+  "gates": { "g1": "2026-10-29", "g2": null },
+  "slices": [
+    { "id": "S1", "acs": [4], "dependsOn": [], "status": "done",
+      "seam": "GET list endpoint qua APIClient",
+      "tests": ["tests/shared/api/test_pagination.py::test_page_size_capped_at_100"],
+      "handoff": ["StandardPagination trong shared/api/pagination.py"] },
+    { "id": "S2", "acs": [1], "dependsOn": ["S1"], "status": "code", "seam": "…", "tests": ["…"] }
+  ],
+  "currentSlice": "S2",
+  "untestable": { "3": "cần Redis thật; kiểm tay bằng make up rồi tắt redis" },
+  "userRequested": [{ "date": "2026-10-29", "request": "…" }],
+  "notes": {},
+  "pr": null,
+  "transitions": [{ "from": "grill", "to": "code", "at": "2026-10-29T10:00:00", "reason": "G1 approved" }]
+}
+```
+
+- `acs`: số thứ tự của AC trong mục `## Acceptance criteria` của ticket, đếm từ 1.
+- `tests`: id pytest tính từ `backend/` (`<file>::<test>` hoặc `<file>::<Class>::<test>`). `check_ac_trace.py` kiểm tra file và hàm tồn tại.
+- `untestable`: AC không test tự động được ở đây, kèm lý do và cách kiểm tay; báo cáo liệt kê chúng ở mục *Chưa làm*.
+- `status` của slice: `todo` → `code` → `done`. Slice phụ thuộc nhau tạo thành DAG; `state.py check` từ chối id trùng, `dependsOn` không tồn tại và vòng lặp.
+- `handoff`: tối đa 5 dòng mỗi slice, chỉ những gì slice sau dùng lại (tên export, quyết định). Không ghi nhật ký làm việc.
+- `next`: đúng một việc cụ thể tiếp theo, viết lại sau mỗi bước.
+- `phase`: `grill | code | report | review | sync | ship | done | retro | closed`.
+- `pr`: số PR, ghi ở phase 6.
+- `transitions`, `gates`: chỉ `state.py transition` ghi.
+
+Lệnh:
+
+```bash
+python S/scripts/state.py init <T> --branch <nhánh> --mode lite|full
+python S/scripts/state.py set <T> mode=lite slices.S1.status=done 'next=S2: …' currentSlice=S2
+python S/scripts/state.py push <T> 'slices=[{"id":"S3","acs":[2],"dependsOn":[],"status":"todo"}]'
+python S/scripts/state.py check <T>
+```
+
+Giá trị parse được thành JSON thì lưu dạng JSON (`[4]`, `null`, `true`), ngược lại lưu chuỗi. Đường dẫn `slices.S1.x` chọn slice theo `id`. `push` thêm từng phần tử của list vào cuối field list.
