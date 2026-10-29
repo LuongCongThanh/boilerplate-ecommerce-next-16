@@ -56,15 +56,13 @@ PostgreSQL: xem mục 2.2.
 
 #### Windows
 
-Trên Windows làm thẳng trên Windows, **không dùng WSL2** ([ADR 0017](../adr/0017-windows-native-dev-api-on-host.md)). Lệnh trong tài liệu này chạy được trong PowerShell 7 hoặc Git Bash.
+Trên Windows làm thẳng trên Windows, **không dùng WSL2** ([ADR 0017](../adr/0017-windows-native-dev-api-on-host.md)). Lệnh `make`, `uv run` và `docker compose` trong tài liệu này chạy được trong PowerShell 7 hoặc Git Bash; lệnh shell thuần (ví dụ `bash scripts/...`) chạy trong Git Bash.
 
 1. **Công cụ**, cài bằng winget (PowerShell):
    ```powershell
    winget install Git.Git astral-sh.uv ezwinports.make Docker.DockerDesktop
    git config --global core.autocrlf false   # .gitattributes đã quy định LF/CRLF cho từng loại file
    ```
-   `openssl` có sẵn trong Git Bash (`C:\Program Files\Git\usr\bin\openssl.exe`).
-
 2. **PostgreSQL**: xem mục 2.2.
 
 3. **Clone repo** vào bất kỳ thư mục nào trên ổ Windows. Nên chọn đường dẫn không có dấu cách.
@@ -180,29 +178,33 @@ GOOGLE_OAUTH_CLIENT_ID=
 
 `BFF_SHARED_SECRET` phải trùng với giá trị cấu hình ở Next.js local. Next.js gửi secret này trong header `X-BFF-Secret` kèm `X-Client-IP`, và Django chỉ tin `X-Client-IP` khi secret đúng và IP là IPv4/IPv6 hợp lệ ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Biến nhận 1 hoặc 2 secret cách nhau bằng dấu phẩy (2 khi đang xoay, [05 mục 5](./05-auth-security.md)); rỗng hoặc hơn 2 thì Django dừng lúc khởi động. Gọi thẳng `localhost:8000` từ Swagger UI hay `curl` vẫn chạy được, chỉ là throttle tính theo IP của máy gọi.
 
-Từ M1, sinh khoá JWT cho local:
+Từ M1, sinh khoá JWT cho local, chạy từ `backend/` (dùng `cryptography`, dependency có từ M1; chạy được trên mọi shell):
 
 ```bash
-mkdir -p .secrets && openssl genpkey -algorithm ed25519 -out .secrets/jwt_ed25519.pem
+uv run python -c "from pathlib import Path; from cryptography.hazmat.primitives import serialization as s; from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey; Path('.secrets').mkdir(exist_ok=True); Path('.secrets/jwt_ed25519.pem').open('xb').write(Ed25519PrivateKey.generate().private_bytes(s.Encoding.PEM, s.PrivateFormat.PKCS8, s.NoEncryption()))"
 ```
 
-Khoá RefreshReplay độc lập JWT, tạo một lần cho local và không commit. Chạy từ backend/ sau khi có .secrets/:
+Khoá RefreshReplay độc lập JWT, tạo một lần cho local và không commit. Chạy từ `backend/`:
 
 ```bash
-uv run python -c "from pathlib import Path; import secrets; Path('.secrets/refresh_replay.key').open('xb').write(secrets.token_bytes(32))"
+uv run python -c "from pathlib import Path; import secrets; Path('.secrets').mkdir(exist_ok=True); Path('.secrets/refresh_replay.key').open('xb').write(secrets.token_bytes(32))"
 ```
 
-Lệnh từ chối ghi đè key đã có; không tạo lại mỗi lần khởi động. Key có ID để xoay và các API replica phải cùng đọc được key còn hiệu lực trong cửa sổ replay. STOREFRONT_ORIGIN chỉ là origin tin cậy, không kèm path/query/userinfo; payment return path do backend cố định.
+Hai lệnh từ chối ghi đè key đã có; không tạo lại mỗi lần khởi động. Key có ID để xoay và các API replica phải cùng đọc được key còn hiệu lực trong cửa sổ replay. STOREFRONT_ORIGIN chỉ là origin tin cậy, không kèm path/query/userinfo; payment return path do backend cố định.
 
 ### 2.4. Chạy
 
-```bash
-make up             # docker compose up -d --build; service migrate chạy migration và sync_beat_schedule trước khi worker, beat, relay khởi động (mục 7)
-make load-geo       # nạp 34 tỉnh/thành và phường/xã
-make create-admin   # tạo tài khoản Admin
-make seed           # (từ M1) tạo Kho, danh mục, Sản phẩm mẫu; Voucher mẫu từ M2
-make run            # chạy API trên máy: uv run python manage.py runserver, tự reload khi sửa code
-```
+Lần đầu, sau khi đã có PostgreSQL (mục 2.2) và `.env` (mục 2.3). Mọi lệnh chạy từ `backend/`; cột "Có từ" giống mục 3, lệnh chưa tới mốc thì chưa dùng được.
+
+| Bước | Lệnh | Làm gì | Có từ |
+|---|---|---|---|
+| 1 | `uv sync` | Tạo `backend/.venv` với Python 3.14 và dependency (cả nhóm dev) | M0 (ticket 07) |
+| 2 | `uv run pre-commit install` | Cài hook `pre-commit` và `commit-msg` vào `.git/hooks`, một lần cho mỗi bản clone ([11](./11-git-workflow.md) mục 3.4) | M0 (ticket 07) |
+| 3 | `make up` | `docker compose up -d --build`; service `migrate` chạy migration và `sync_beat_schedule` trước khi worker, beat, relay khởi động (mục 7) | M0 (ticket 15) |
+| 4 | `make load-geo` | Nạp 34 tỉnh/thành và phường/xã | M0 (ticket 17) |
+| 5 | `make create-admin` | Tạo Tài khoản Admin | M0 (ticket 12) |
+| 6 | `make seed` | Tạo Kho, danh mục, Sản phẩm mẫu; Voucher mẫu từ M2 | M1 |
+| 7 | `make run` | Chạy API trên máy (`uv run python manage.py runserver`), tự reload khi sửa code | M0 (ticket 15) |
 
 `make migrate` chỉ cần khi đã có migration mới mà không muốn khởi động lại container.
 
@@ -234,6 +236,26 @@ Mỗi lệnh được thêm vào `Makefile` cùng ticket tạo ra lệnh mà nó
 | `make create-admin` | Tạo Tài khoản Admin (`manage.py create_staff --admin`) | M0 (ticket 12) |
 | `make seed` | Tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu | M1 (Voucher mẫu từ M2) |
 | `make tunnel` | Mở Cloudflare Tunnel để nghiệm thu với sandbox ([06](./06-integrations.md) mục 8) | M7 |
+
+### 3.1. Lệnh không qua `make`
+
+Chạy từ `backend/`, trừ khi ghi khác. Đều dùng được từ M0 (ticket 07).
+
+| Lệnh | Làm gì |
+|---|---|
+| `uv sync` | Cập nhật `.venv` theo `uv.lock`, ví dụ sau khi `git pull` có đổi dependency |
+| `uv sync --locked` | Như CI: báo lỗi nếu `uv.lock` lệch `pyproject.toml` |
+| `uv run pytest <file>` / `uv run pytest <file>::<tên_test>` | Chạy một file hoặc một test; thêm `-x` để dừng ở test lỗi đầu tiên |
+| `uv run python manage.py check` | System check của Django và của dự án (`shared/checks.py`) |
+| `uv run python manage.py check --deploy --settings=config.settings.production` | Kiểm tra cấu hình bảo mật của production; với giá trị local sẽ có cảnh báo (secret ngắn, `ALLOWED_HOSTS` rỗng) |
+| `uv run python manage.py <lệnh>` | Lệnh quản trị khác: `showmigrations`, `sqlmigrate`, `dbshell`… |
+| `uv run pip-audit --strict` | Quét lỗ hổng dependency như job `backend` của CI; gọi mạng nên không gộp vào `make lint` |
+| `uv run pre-commit install` | Cài hook vào `.git/hooks`, một lần cho mỗi bản clone (mục 2.4) |
+| `uv run pre-commit run --all-files` | Chạy mọi hook trên toàn repo, ví dụ sau khi đổi `.pre-commit-config.yaml` |
+| `curl http://localhost:8000/healthz` / `curl http://localhost:8000/readyz` | API đang chạy / API kết nối được PostgreSQL (`readyz` không kiểm tra Redis) |
+| Từ gốc repo: `bash scripts/setup/postgres.sh` (macOS) hoặc `pwsh scripts/setup/postgres.ps1` (Windows) | Tạo hoặc sửa role và database `fashion` (mục 2.2); chạy lại nhiều lần vẫn an toàn |
+
+Lệnh release (`cz bump`, `cz changelog`) xem [11 mục 5.3](./11-git-workflow.md#53-release).
 
 ## 4. Debug
 

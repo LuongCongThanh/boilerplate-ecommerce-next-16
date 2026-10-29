@@ -81,6 +81,7 @@ Hai loại nhãn còn lại trong tài liệu:
 | [0014](./docs/adr/0014-refresh-single-successor.md) | Refresh chỉ có một successor, trả lại response mã hoá trong cửa sổ 10 giây |
 | [0015](./docs/adr/0015-local-postgres-on-host.md) | PostgreSQL ở local cài trên máy, bản major mới nhất |
 | [0016](./docs/adr/0016-erasure-evidence-phone-hmac.md) | Bằng chứng tuân thủ giữ HMAC số điện thoại, không giữ số thô sau khi ẩn danh |
+| [0017](./docs/adr/0017-windows-native-dev-api-on-host.md) | Windows dev không qua WSL2, API chạy trên máy |
 
 ### Cấu hình cho agent (`docs/agents/`)
 
