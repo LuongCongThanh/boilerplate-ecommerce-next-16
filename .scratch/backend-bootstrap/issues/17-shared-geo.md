@@ -36,3 +36,40 @@ Chốt khi grilling ngày 30/10/2026.
 - [ ] `make load-geo` chạy hai lần liên tiếp không lỗi, không trùng dữ liệu.
 - [ ] Endpoint địa giới trả array không phân trang.
 - [ ] Mã tỉnh không tồn tại trả 404 dạng `ErrorDTO`.
+
+## Comments
+
+### Báo cáo 30/10/2026
+
+**Nhánh:** `feat/geo-administrative-units` · **PR:** chưa mở · **Mode:** full
+
+#### Đã làm
+
+| AC | Bằng chứng |
+| --- | --- |
+| 1. `make load-geo` chạy hai lần không lỗi, không trùng | `shared/tests/test_load_geo.py::test_load_geo_twice_creates_no_duplicates`, `::test_codes_are_zero_padded`, `::test_rerun_updates_renamed_and_keeps_missing_codes`. Kiểm tay trên DB local: lần 1 tạo 34 tỉnh/thành, 3321 phường/xã; lần 2 `unchanged` 34/3321; DB còn đúng 34/3321, mã đầu `01`/`00004`. Chạy lệnh của recipe (`uv run python manage.py load_geo`) vì máy không có `make` trong PATH |
+| 2. Endpoint trả array không phân trang | `shared/tests/test_geo_api.py::test_provinces_returns_unpaginated_array_ordered_by_code`, `::test_wards_of_province_returns_unpaginated_array`, `::test_geo_endpoints_are_public` |
+| 3. Mã tỉnh không tồn tại trả 404 `ErrorDTO` | `shared/tests/test_geo_api.py::test_wards_of_unknown_province_returns_404_error_dto` |
+
+Lint xanh (ruff check, ruff format, mypy, lint-imports) · test: 162 passed trong 6.50s. Chạy lệnh tương đương recipe của `make lint` / `make test` vì không có `make` trong PATH.
+
+#### Chưa làm
+
+- Không
+
+#### Gap
+
+- `lint-imports` trên Windows lỗi `UnicodeEncodeError` (cp1252) khi in tên contract tiếng Việt, chạy với `PYTHONUTF8=1` thì xanh. Có từ trước ticket này.
+- `docs/architecture/02-backend-structure.md` chưa có `shared/geo/urls.py`; cập nhật ở phase sync.
+
+#### Thay đổi theo yêu cầu
+
+- Không
+
+#### Review
+
+Chưa review.
+
+#### Tài liệu đã cập nhật
+
+- Chưa (phase sync)
