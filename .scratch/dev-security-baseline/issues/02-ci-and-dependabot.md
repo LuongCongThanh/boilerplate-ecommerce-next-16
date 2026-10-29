@@ -1,8 +1,10 @@
 # CI workflow, CodeQL, Dependabot và trivy
 
-Status: needs-info
+Status: resolved
 
 Spec: [spec.md](../spec.md)
+
+**PR:** #4
 
 ## Việc cần làm
 
@@ -24,8 +26,8 @@ Spec: [spec.md](../spec.md)
 - [x] Workflow chạy xanh trên một PR thử vào `dev`.
 - [x] Không workflow nào dùng `pull_request_target`; quyền mặc định là `contents: read`.
 - [x] Mọi `uses:` của action bên thứ ba đều là SHA 40 ký tự.
-- [ ] Dependabot nhận đủ 3 hệ sinh thái (xem tab Insights → Dependency graph → Dependabot).
-- [ ] CodeQL hiện kết quả trong tab Security.
+- [x] Dependabot nhận đủ 3 hệ sinh thái (xem tab Insights → Dependency graph → Dependabot). Chuyển sang [backend-bootstrap/14](../../backend-bootstrap/issues/14-trivy-and-dependabot-backend.md) vì `uv` và `docker` cần `backend/`.
+- [x] CodeQL hiện kết quả trong tab Security.
 - [x] Có job trivy, hoặc có comment ghi lý do hoãn.
 
 ## Comments
@@ -36,3 +38,4 @@ Spec: [spec.md](../spec.md)
 - Chưa làm job `trivy` vì chưa có `backend/Dockerfile`. Ticket giữ `needs-info` cho tới khi có Dockerfile.
 - Ba AC còn lại (CI xanh trên PR, Dependabot nhận 3 hệ sinh thái, CodeQL hiện ở tab Security) chỉ kiểm được sau khi mở PR trên GitHub.
 - SonarCloud báo 12 issue `S8541` (thiếu `--no-build`) và `S8544` (không khoá phiên bản) ở các lệnh `uv`. Đã sửa: `uv sync --locked --no-build` một lần, sau đó gọi thẳng công cụ trong `.venv`; backend khai báo `[tool.uv] package = false`. PR #4 xanh toàn bộ, kể cả SonarCloud.
+- 29/10/2026: CodeQL đã có kết quả trên GitHub (PR #17, #18, #19). Đóng ticket; job `trivy` và việc xác nhận Dependabot cho `uv`/`docker` chuyển sang [backend-bootstrap/14](../../backend-bootstrap/issues/14-trivy-and-dependabot-backend.md), `Blocked by: 07`.
