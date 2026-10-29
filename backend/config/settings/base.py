@@ -25,6 +25,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Chọn ngôn ngữ theo Accept-Language, mặc định LANGUAGE_CODE; phải đứng trước Common
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django_structlog.middlewares.RequestMiddleware",
 ]
@@ -70,10 +72,12 @@ EMAIL_PORT = env.EMAIL_PORT
 REST_FRAMEWORK: dict[str, object] = {
     # Chưa có xác thực ở M0; JWT thêm ở M1
     "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "DEFAULT_PERMISSION_CLASSES": [],
+    # Mặc định từ chối; view công khai tự khai báo AllowAny (05 mục 4)
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "shared.api.pagination.StandardPagination",
+    "EXCEPTION_HANDLER": "shared.api.exception_handler.exception_handler",
 }
 
 SPECTACULAR_SETTINGS = {
