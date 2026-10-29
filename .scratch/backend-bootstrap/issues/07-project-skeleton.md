@@ -1,8 +1,10 @@
 # Khung project backend: pyproject, settings, health check, lint và CI
 
-Status: ready-for-agent
+Status: resolved
 
 Spec: [spec.md](../spec.md)
+
+**PR:** #20
 
 ## Việc cần làm
 
@@ -25,7 +27,7 @@ Spec: [spec.md](../spec.md)
 ## Acceptance criteria
 
 - [x] `make lint` (ruff check, ruff format --check, mypy, lint-imports) và `make test` qua ở local.
-- [ ] Job `backend` trong `.github/workflows/ci.yml` bắt đầu chạy thật (đã có `backend/pyproject.toml`), dùng PostgreSQL và Valkey của `services:`, và xanh.
+- [x] Job `backend` trong `.github/workflows/ci.yml` bắt đầu chạy thật (đã có `backend/pyproject.toml`), dùng PostgreSQL và Valkey của `services:`, và xanh.
 - [x] `pre-commit run --all-files` chạy ruff, mypy, import-linter trên `backend/` và qua.
 - [x] Thiếu một biến bắt buộc của M0 trong `.env` thì Django báo lỗi rõ tên biến ngay khi khởi động. Không có biến nào của M1 trở đi bị bắt buộc.
 - [x] `11` không còn nhãn **[Cần xác minh]** về cờ của `cz`.
@@ -40,4 +42,4 @@ Spec: [spec.md](../spec.md)
   - `cz` 4.19.3: `--files-only` đã deprecate, `11` đổi sang `--version-files-only`.
   - Không cài `django.contrib.auth`, `sessions`, `admin`; DRF tạm để `UNAUTHENTICATED_USER = None` cho tới khi có JWT ở M1.
   - Bỏ extra `compatible-mypy` của các gói stub vì `djangorestframework-stubs` giới hạn `mypy<2.4`; đã ghi vào `02` mục 3.2.
-  - Còn AC CI: kiểm khi mở PR.
+  - Job `backend` xanh trên PR #20, dùng `postgres:18.6` và `valkey/valkey:8.1.11` của `services:`.
