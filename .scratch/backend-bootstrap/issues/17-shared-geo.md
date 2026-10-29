@@ -1,6 +1,8 @@
 # Địa giới hành chính: Tỉnh/thành, Phường/xã, `load_geo` và endpoint
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #31
 
 Blocked by: 16
 
@@ -34,15 +36,15 @@ Chốt khi grilling ngày 30/10/2026.
 
 ## Acceptance criteria
 
-- [ ] `make load-geo` chạy hai lần liên tiếp không lỗi, không trùng dữ liệu.
-- [ ] Endpoint địa giới trả array không phân trang.
-- [ ] Mã tỉnh không tồn tại trả 404 dạng `ErrorDTO`.
+- [x] `make load-geo` chạy hai lần liên tiếp không lỗi, không trùng dữ liệu.
+- [x] Endpoint địa giới trả array không phân trang.
+- [x] Mã tỉnh không tồn tại trả 404 dạng `ErrorDTO`.
 
 ## Comments
 
 ### Báo cáo 30/10/2026
 
-**Nhánh:** `feat/geo-administrative-units` · **PR:** chưa mở · **Mode:** full
+**Nhánh:** `feat/geo-administrative-units` · **PR:** #31 · **Mode:** full
 
 #### Đã làm
 
