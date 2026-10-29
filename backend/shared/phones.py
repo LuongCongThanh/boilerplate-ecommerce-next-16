@@ -9,9 +9,9 @@ INVALID_PHONE_MESSAGE = _("Số điện thoại không hợp lệ")
 
 # Chỉ chữ số và dấu phân cách thường gặp; số trong nước bắt đầu bằng `0`, số quốc tế bằng `+`.
 # Chặn trước khi gọi `phonenumbers.parse` vì thư viện tự đổi chữ cái thành số, tự bỏ extension
-# và tự đoán mã nước khi thiếu `+`
-_ALLOWED_FORMAT = re.compile(r"\s*\+?[\d\s().-]+")
-_SEPARATORS = re.compile(r"[\s().-]")
+# và tự đoán mã nước khi thiếu `+`. `re.ASCII` để `\d` không khớp chữ số Unicode (full-width, Ả Rập)
+_ALLOWED_FORMAT = re.compile(r"\s*\+?[\d\s().-]+", re.ASCII)
+_SEPARATORS = re.compile(r"[\s().-]", re.ASCII)
 
 
 class InvalidPhoneNumber(ValueError):
@@ -35,7 +35,8 @@ def normalize_vn_phone(raw: str) -> str:
     if not _ALLOWED_FORMAT.fullmatch(raw):
         raise InvalidPhoneNumber
     compact = _SEPARATORS.sub("", raw)
-    if not compact.startswith(("0", "+")):
+    # `00` là đầu quay số quốc tế: thiếu `+` trước mã nước, phonenumbers sẽ tự đoán
+    if not compact.startswith(("0", "+")) or compact.startswith("00"):
         raise InvalidPhoneNumber
     try:
         number = phonenumbers.parse(compact, "VN")

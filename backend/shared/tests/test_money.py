@@ -24,6 +24,17 @@ def test_arithmetic_keeps_currency() -> None:
     assert -Money(100) == Money(-100)
 
 
+def test_sum_of_money_list() -> None:
+    assert sum([Money(100), Money(200), Money(-50)]) == Money(250)
+
+
+def test_rejects_adding_non_zero_int() -> None:
+    with pytest.raises(TypeError):
+        5 + Money(100)  # type: ignore[operator]
+    with pytest.raises(TypeError):
+        Money(100) + 0  # type: ignore[operator]
+
+
 def test_rejects_multiplying_by_float() -> None:
     with pytest.raises(TypeError):
         Money(100) * 1.5  # type: ignore[operator]

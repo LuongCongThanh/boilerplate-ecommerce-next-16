@@ -37,6 +37,12 @@ class Money:
         self._check_same_currency(other)
         return type(self)(self.amount + other.amount, self.currency)
 
+    def __radd__(self, other: object) -> Self:
+        # `sum()` bắt đầu từ số 0; chỉ nhận đúng 0, không mở cửa cộng Money với int bất kỳ
+        if type(other) is int and other == 0:
+            return self
+        return NotImplemented
+
     def __sub__(self, other: object) -> Self:
         if not isinstance(other, Money):
             return NotImplemented

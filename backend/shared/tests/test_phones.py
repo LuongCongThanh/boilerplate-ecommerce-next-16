@@ -25,6 +25,9 @@ def test_accepts_vietnamese_landline() -> None:
         "0901-CALL-ME",  # phonenumbers tự đổi chữ thành số
         "0901234567 ext 12",  # phonenumbers tự bỏ extension
         "84901234567",  # thiếu `+`, không tự đoán mã nước
+        "0084901234567",  # đầu quay số quốc tế `00` thay cho `+`
+        "+" + chr(0xFF18) + chr(0xFF14) + "901234567",  # chữ số full-width
+        "+" + chr(0x0668) + chr(0x0664) + "901234567",  # chữ số Ả Rập
         "+84 901+234567",
     ],
 )

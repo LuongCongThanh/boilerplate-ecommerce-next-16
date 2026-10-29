@@ -34,7 +34,13 @@ def test_parse_keyring_keeps_order_and_allows_colon_in_secret() -> None:
     assert parse_keyring("k2:a:b, k1:c") == (("k2", "a:b"), ("k1", "c"))
 
 
-@pytest.mark.parametrize("raw", ["", "k1", "k1:", ":secret", "k1:a,k1:b", "k1:a,"])
+def test_parse_keyring_strips_whitespace_around_kid_and_secret() -> None:
+    assert parse_keyring("k2 : a , k1:b") == (("k2", "a"), ("k1", "b"))
+
+
+@pytest.mark.parametrize(
+    "raw", ["", "k1", "k1:", ":secret", "k1:a,k1:b", "k1:a,", " :a", "k1: ", "k1 :a,k1:b"]
+)
 def test_parse_keyring_rejects_malformed(raw: str) -> None:
     with pytest.raises(ValueError):  # noqa: PT011  # thông báo khác nhau theo từng lỗi
         parse_keyring(raw)

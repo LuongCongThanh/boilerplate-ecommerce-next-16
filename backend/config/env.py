@@ -50,7 +50,9 @@ def parse_keyring(raw: str) -> tuple[tuple[str, str], ...]:
     """
     keys: list[tuple[str, str]] = []
     for entry in raw.split(","):
-        kid, sep, secret = entry.strip().partition(":")
+        kid, sep, secret = entry.partition(":")
+        # kid đi vào giá trị lưu DB (`<kid>:<hex>`) nên không được giữ khoảng trắng thừa
+        kid, secret = kid.strip(), secret.strip()
         if not sep or not kid or not secret:
             raise ValueError("mỗi khoá phải có dạng kid:secret, kid và secret không rỗng")
         if any(kid == seen for seen, _ in keys):
