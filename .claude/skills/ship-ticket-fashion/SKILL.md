@@ -1,7 +1,7 @@
 ---
 name: ship-ticket-fashion
-description: Làm hoặc làm tiếp một ticket `.scratch/` của Fashion Store từ grilling tới merge, kèm retro skill. Dùng khi người dùng nói "làm ticket NN", "làm tiếp", hoặc hỏi tiến độ / ticket tiếp theo.
-argument-hint: "[<feature>/<NN> | <NN>] [grill|code|report|review|sync|ship|done|retro]"
+description: Làm một ticket `.scratch/<feature>/issues/NN-*.md` của Fashion Store từ grilling tới merge, kèm retro skill; tạo spec và ticket cho module chưa có ticket. Dùng khi người dùng nói "làm ticket NN", "làm tiếp", "làm module X", hoặc hỏi tiến độ / ticket tiếp theo.
+argument-hint: "[<feature>/<NN> | <NN> | <module>] [grill|code|report|review|sync|ship|done|retro]"
 ---
 
 # ship-ticket-fashion
@@ -12,8 +12,8 @@ Mọi tin nhắn cho người dùng viết tiếng Việt. Mỗi lần chạy đ
 
 ## Đầu mỗi lần chạy
 
-1. `python S/scripts/state.py start [<T>]`, chạy riêng. Script in ticket, phase, `next`, slice, gate, các cờ (`BRANCH RED`, `DIRTY`, `BEHIND`, `SLICE OPEN`) và các dòng `READ <file>`. Output này thay cho việc đọc file state.
-   - `NO STATE` kèm frontier → chưa có ticket đang làm: báo tiến độ (`python S/scripts/progress.py`), hỏi người dùng chọn ticket (lựa chọn khuyên dùng là ticket đầu frontier), rồi vào phase 1. Frontier rỗng, hoặc mốc chỉ còn ticket bị chặn hay cần người → `phases/0-plan.md`.
+1. `python S/scripts/state.py start [<T>]`, chạy riêng. Tham số là tên module hoặc mốc (`catalog`, `M1`) chưa có ticket trong `.scratch/` → `phases/0-plan.md`. Script in ticket, phase, `next`, slice, gate, các cờ (`BRANCH RED`, `DIRTY`, `BEHIND`, `SLICE OPEN`) và các dòng `READ <file>`. Output này thay cho việc đọc file state.
+   - `NO STATE` kèm frontier → chưa có ticket đang làm: báo tiến độ (`python S/scripts/progress.py`), hỏi người dùng chọn ticket (lựa chọn khuyên dùng là ticket đầu frontier), rồi vào phase 1. Có ticket `needs-triage` → cùng lần hỏi, hỏi từng ticket: `ready-for-agent`, `ready-for-human`, `wontfix` hay để sau (`docs/agents/triage-labels.md`); ghi dòng `Status:` theo câu trả lời và commit cùng ticket ở phase 1 bước 9. Frontier rỗng, hoặc mốc chỉ còn ticket bị chặn hay cần người → `phases/0-plan.md`.
 2. Đọc mọi file sau `READ` bằng Read tool, mỗi file một lần gọi.
 3. Bắt đầu từ `next`. Tham số `[phase]` ghi đè phase, trừ khi gate chưa được duyệt.
 
@@ -32,7 +32,7 @@ Mọi tin nhắn cho người dùng viết tiếng Việt. Mỗi lần chạy đ
 | 1 | grill | `phases/1-grill.md` | `grill-with-docs`; `codebase-design` khi có module / interface mới | nhánh, `## Quyết định`, slice, ⛔G1 |
 | 2 | code | `phases/2-code.md` | `tdd` | mọi slice xanh |
 | 3 | report | `phases/3-report.md` | — | báo cáo trong `## Comments` của ticket |
-| 4 | review | `phases/4-review.md` | `code-review` | mọi finding có kết luận |
+| 4 | review | `phases/4-review.md` | `code-review`; `code-review` dựng sẵn (trục Bug) | mọi finding có kết luận |
 | 5 | sync | `phases/5-sync.md` | `domain-modeling` khi có thuật ngữ / ADR mới | tài liệu khớp code, ⛔G2 |
 | 6 | ship | `phases/6-ship.md` | — | PR mở, ticket đóng trong PR, CI xanh |
 | 7 | done | `phases/7-done.md` | — | merge khi người dùng bảo |
@@ -67,7 +67,7 @@ Script từ chối nhảy cóc phase, vào `code` khi chưa có G1, vào `ship` 
 
 Gate xong khi mọi điểm mở có câu trả lời và đã ghi vào ticket hoặc state.
 
-**Cần người dùng** là quyết định ngoài gate: thay đổi ngoài phạm vi ticket, sửa file `shared` mà ticket không nhắc, test đỏ ngoài ticket, hook chặn mà không sửa được trong phạm vi, mâu thuẫn với ADR. Hỏi ngay bằng `AskUserQuestion`.
+*Cần người dùng* (quyết định ngoài gate) định nghĩa ở `reference/rules.md`.
 
 ## Sub-agent
 
@@ -77,7 +77,7 @@ Phiên chính điều phối. Việc đọc nhiều file hoặc chạy nhiều l
 | --- | --- | --- |
 | Phase 1, bản đồ code (`Explore`) | một | như full |
 | Phase 2, mỗi slice | một cho mỗi slice | phiên chính |
-| Phase 4, hai trục của `code-review` | do skill đó tạo | như full |
+| Phase 4, ba trục review | do skill review tạo | như full |
 | Phase 4, vòng sửa khi finding đổi code | một cho mọi vòng | như full |
 
 Gate, tài liệu, ship, done, retro chạy ở phiên chính: retro cần thấy những gì phiên này đã vấp.

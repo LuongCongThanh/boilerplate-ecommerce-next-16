@@ -1,6 +1,7 @@
 # Quy tắc (mọi phase)
 
 - **Phạm vi = acceptance criteria + điều người dùng yêu cầu.** Chỉ sửa code mà một AC, mục `## Việc cần làm` hoặc mục `## Quyết định` của ticket đòi hỏi. Người dùng yêu cầu thêm thì làm, ghi vào `userRequested` của state và mục *Thay đổi theo yêu cầu* của báo cáo, test như một AC. Việc tốt nhưng ngoài phạm vi → ticket mới `needs-triage` cùng feature, số tiếp theo.
+- **`docs/` là nguồn chuẩn** (đã chốt cho MVP): code làm theo tài liệu. *Tài liệu chi phối* của một file code là các mục quy định cách viết nó: `docs/architecture/` (bản đồ ở `docs/architecture/README.md`), quy tắc trong `docs/business/`, ADR trong `docs/adr/`. Phase 1 ghi chúng vào `## Quyết định`; code và review đối chiếu với chúng. Ticket cố ý làm khác tài liệu → ghi lý do trong `## Quyết định`, sửa tài liệu trong cùng PR ở phase 5.
 - **Mỗi loại kiến thức một chỗ.**
   - Quyết định của ticket → `## Quyết định` của ticket (bảng Chủ đề | Quyết định).
   - Quyết định ảnh hưởng ngoài ticket (API của `shared`, tách ticket, đổi phạm vi) → **Decisions-so-far** của `.scratch/mvp-roadmap/map.md`.
@@ -9,16 +10,11 @@
   - Slice, `next`, ánh xạ AC → test → state.
   - Kết quả (đã làm, chưa làm, gap) → báo cáo trong `## Comments` của ticket.
   - Điều máy kiểm tra được → test, script trong `S/scripts/`, rule lint hoặc hook.
-- **Tài liệu tiếng Việt**, giữ tiếng Anh cho từ khoá kỹ thuật và tên trong code. Tên nhánh, commit, tiêu đề PR tiếng Anh theo Conventional Commits (`docs/architecture/11-git-workflow.md`).
-- **Code lệch tài liệu thì sửa tài liệu trong cùng PR** (`docs/` đã chốt cho MVP).
-- **Mâu thuẫn ADR** thì nói rõ, theo `docs/agents/domain.md`.
+- **Cần người dùng** là quyết định ngoài gate: thay đổi ngoài phạm vi; sửa `backend/shared/` mà ticket không nhắc; test đỏ ngoài ticket chưa chứng minh được là đỏ sẵn trên `origin/dev`; hook chặn không sửa được trong phạm vi; tài liệu thiếu, mâu thuẫn nhau, hoặc code buộc phải trái ADR (`docs/agents/domain.md`). Phiên chính hỏi ngay bằng `AskUserQuestion`; sub-agent làm theo `reference/sub-agent.md`.
 - **Nói với người dùng**: một mã người dùng không tự viết thì kèm nghĩa bên cạnh: `AC2 (fail-open khi Redis tắt)`, `ticket 15 (Docker Compose local)`.
-- **Test**: gọi skill này nghĩa là đồng ý chạy test. Lệnh chạy trong `backend/`.
-  - Trong slice: chỉ file test của slice, `uv run pytest <path> -x`.
-  - Cuối phase 2, mỗi vòng sửa ở phase 4, trước G2: `make lint` và `make test` qua `run_logged.py`.
-  - Test đỏ ngoài ticket: chứng minh nó đỏ trên `origin/dev` (`git stash`, chạy, `git stash pop`) rồi ghi một dòng vào báo cáo; chưa chứng minh được thì là *Cần người dùng*.
-- **Tiết kiệm token**: mỗi lượt gửi lại toàn bộ context, nên lượt cuối phiên đắt gấp nhiều lần lượt đầu.
+- **Test**: gọi skill này nghĩa là đồng ý chạy test. Lệnh chạy trong `backend/`. Test đỏ ngoài ticket: chứng minh nó đỏ trên `origin/dev` (`git stash`, chạy, `git stash pop`) rồi ghi một dòng vào báo cáo.
+- **Tiết kiệm token**:
   - Lệnh dài chạy qua `python S/scripts/run_logged.py --label <tên> --cwd backend -- <lệnh>`: log ghi vào `.git/ship-ticket-fashion/logs/`, chỉ in dòng tóm tắt; đỏ thì in đoạn cuối. Cần thêm thì `grep -n` hoặc Read có `offset` trên file log.
-  - Field state ghi bằng `state.py set` / `push`, nhiều field trong một lần gọi. Tài liệu Markdown sửa bằng Edit tool.
-  - Không đưa nội dung `.env`, secret, token ra output.
+  - Ghi nhiều field state trong một lần `state.py set` / `push`.
+  - Giữ nội dung `.env`, secret, token ngoài output.
 - **Windows**: shell là PowerShell và Git Bash. Gặp lỗi về đường dẫn, quoting hoặc lệnh → đọc `gotchas/windows-shell.md`.

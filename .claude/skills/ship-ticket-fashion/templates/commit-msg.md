@@ -8,8 +8,7 @@
 Refs: .scratch/<feature>/issues/NN-<slug>.md
 ```
 
-- `type`, `scope`: `docs/architecture/11-git-workflow.md` mục 3. Hook `commitizen` chặn sai định dạng.
+- `type`, `scope`, `BREAKING CHANGE`: `docs/architecture/11-git-workflow.md` mục 3. Hook `commitizen` chặn sai định dạng.
 - Commit của slice: `feat` / `fix` / `refactor` / `test` theo việc slice làm. Commit chỉ đổi ticket hoặc tài liệu: `docs: …`.
-- Đổi API hoặc contract sự kiện: thêm `!` sau scope và dòng `BREAKING CHANGE:` trong footer.
 
 Ví dụ: `feat(shared): return ErrorDTO for unhandled API errors`
