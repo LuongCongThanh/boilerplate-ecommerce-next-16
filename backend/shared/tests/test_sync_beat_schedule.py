@@ -4,7 +4,12 @@ from typing import Any
 import pytest
 from celery.schedules import crontab
 from django.core.management import call_command
-from django_celery_beat.models import CrontabSchedule, IntervalSchedule, PeriodicTask
+from django_celery_beat.models import (
+    CrontabSchedule,
+    IntervalSchedule,
+    PeriodicTask,
+    SolarSchedule,
+)
 from structlog.testing import capture_logs
 
 from config.celery import app
@@ -117,3 +122,20 @@ def test_db_frequency_differing_from_code_is_corrected() -> None:
         "shared.every_minute_job": ["interval"],
         "shared.nightly_job": ["crontab"],
     }
+
+
+def test_db_job_on_other_schedule_type_is_switched_to_code_schedule() -> None:
+    sunrise = SolarSchedule.objects.create(event="sunrise", latitude=10.8, longitude=106.7)
+    PeriodicTask.objects.create(
+        name="shared.every_minute_job", task="shared.tasks.every_minute_job", solar=sunrise
+    )
+
+    call_command("sync_beat_schedule")
+
+    every_minute = PeriodicTask.objects.get(name="shared.every_minute_job")
+    assert every_minute.solar is None
+    assert every_minute.interval is not None
+    assert (every_minute.interval.every, every_minute.interval.period) == (
+        60,
+        IntervalSchedule.SECONDS,
+    )

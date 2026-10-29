@@ -39,6 +39,9 @@ def _sync_job(name: str, entry: dict[str, Any]) -> None:
         "task": entry["task"],
         "interval": interval,
         "crontab": cron,
+        # PeriodicTask chỉ nhận một loại lịch: bỏ solar, clocked nếu job trong DB đang dùng
+        "solar": None,
+        "clocked": None,
         "queue": entry.get("options", {}).get("queue"),
         "enabled": True,
     }
