@@ -20,6 +20,7 @@
       "args": ["-x", "-q"],
       "cwd": "${workspaceFolder}/backend",
       "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}/backend/.venv/Scripts/python.exe" },
       "justMyCode": false,
       "django": true
     }

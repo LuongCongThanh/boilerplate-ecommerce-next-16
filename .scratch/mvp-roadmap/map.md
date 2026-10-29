@@ -54,7 +54,7 @@ Các mục phụ thuộc bên ngoài, gắn vào mốc cần chúng. Không mụ
 
 | Mục | Nguồn | Mốc cần |
 |---|---|---|
-| Container gọi được PostgreSQL trên host: Windows (WSL `networkingMode=mirrored`) | [08](../../docs/architecture/08-local-development.md), ticket [08](../backend-bootstrap/issues/08-local-postgres-installer.md) | M0 |
+| Container gọi được PostgreSQL trên host: Windows (bộ cài EDB; đã xác minh 2026-10-29, không cần sửa `pg_hba.conf`) | [08](../../docs/architecture/08-local-development.md), ticket [08](../backend-bootstrap/issues/08-local-postgres-installer.md) | M0 |
 | Container gọi được PostgreSQL trên host: macOS | [08](../../docs/architecture/08-local-development.md), ticket [13](../backend-bootstrap/issues/13-local-postgres-installer-macos.md) | Khi có người dùng Mac, không chặn mốc nào |
 | Tham số, mã kết quả, chữ ký hiện hành của VNPay và MoMo | [06 mục 2–3](../../docs/architecture/06-integrations.md) | M3 (Fake theo tài liệu), M7 (sandbox) |
 | GHN: địa chỉ 2 cấp, cơ chế xác thực webhook, chống trùng `client_order_code` | [06 mục 4](../../docs/architecture/06-integrations.md#4-ghn), [04 mục 4.3](../../docs/architecture/04-api-contract.md#43-webhook-apiv1webhooks) | M4 (Fake), M7 (sandbox); US-1004 bỏ được nếu GHN đã dùng 2 cấp |
