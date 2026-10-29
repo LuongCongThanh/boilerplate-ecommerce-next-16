@@ -163,10 +163,10 @@ backend/
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường
-│   │   ├── local.py                # DEBUG, Django Admin read-only, FAKE_PROVIDERS_ENABLED, Mailpit
+│   │   ├── local.py                # DEBUG, FAKE_PROVIDERS_ENABLED, Mailpit
 │   │   ├── test.py                 # DB test, Celery chạy đồng bộ, hash mật khẩu nhanh, FAKE_PROVIDERS_ENABLED
 │   │   └── production.py           # bảo mật, S3, SES, Sentry, log JSON
-│   ├── urls.py                     # gốc URL: /api/v1/store, /api/v1/backoffice, /api/v1/webhooks, /api/schema, /api/docs, /healthz, /readyz; chỉ local và test: /admin, /dev/fake-gateway. Include api/<nhánh>/urls.py của từng module con
+│   ├── urls.py                     # gốc URL: /api/v1/store, /api/v1/backoffice, /api/v1/webhooks, /api/schema, /api/docs, /healthz, /readyz; chỉ local và test: /dev/fake-gateway. Include api/<nhánh>/urls.py của từng module con
 │   ├── celery.py                   # khởi tạo Celery, định nghĩa queue và lịch job (nguồn chuẩn cho sync_beat_schedule, 07 mục 3.2); autodiscover_tasks(["shared", "shared.events", "modules.identity", …]) vì mặc định Celery chỉ tìm <app>.tasks
 │   └── wsgi.py                     # gunicorn chạy WSGI, worker gthread
 │
@@ -219,7 +219,6 @@ backend/
 │   ├── __init__.py
 │   ├── apps.py                     # ModulesConfig.ready(): nạp handlers.py của mọi module con
 │   ├── models.py                   # import model của mọi module con để Django nhận ra
-│   ├── admin.py                    # Django Admin read-only, chỉ bật ở local
 │   ├── migrations/                 # MỘT chuỗi migrations cho mọi module con
 │   ├── management/commands/
 │   │   ├── seed_catalog.py         # tạo dữ liệu mẫu cho local
@@ -244,7 +243,7 @@ backend/
     └── flows/                      # test xuyên module: checkout → thanh toán → giao → hoàn tất
 ```
 
-> **Lưu ý của cách A (một app `modules`)**: Django chỉ tìm `migrations/`, `management/commands/`, `templates/` và `admin.py` ở **gốc app**. Vì vậy các thư mục này nằm ở `modules/` chứ không nằm trong từng module con ([ADR 0006](../adr/0006-modular-monolith.md)). Hai chỗ khác cũng chỉ tìm ở gốc app: Django chỉ nhận model qua `<app>/models.py` (nên `modules/models.py` và `shared/models.py` phải import model của package con), và `autodiscover_tasks()` của Celery chỉ tìm `<app>/tasks.py` (nên `config/celery.py` liệt kê từng package).
+> **Lưu ý của cách A (một app `modules`)**: Django chỉ tìm `migrations/`, `management/commands/` và `templates/` ở **gốc app**. Vì vậy các thư mục này nằm ở `modules/` chứ không nằm trong từng module con ([ADR 0006](../adr/0006-modular-monolith.md)). Hai chỗ khác cũng chỉ tìm ở gốc app: Django chỉ nhận model qua `<app>/models.py` (nên `modules/models.py` và `shared/models.py` phải import model của package con), và `autodiscover_tasks()` của Celery chỉ tìm `<app>/tasks.py` (nên `config/celery.py` liệt kê từng package).
 
 > **Gốc repo** (ngoài `backend/`) chứa `docs/`, `.github/`, `.scratch/` và `.pre-commit-config.yaml`. pre-commit chỉ đọc file cấu hình ở gốc repo, nên hook cho backend (ruff, mypy, import-linter) khai báo ở đó với `files: ^backend/`, không có file `.pre-commit-config.yaml` riêng trong `backend/`.
 
@@ -280,7 +279,6 @@ modules/ordering/
 │   └── orders.py         # list_orders_for_customer, find_order_for_guest, list_orders_backoffice (lọc theo Cờ cần xử lý)
 ├── handlers.py           # nghe sự kiện: payment-succeeded, payment-failed, refund-recorded, shipment-created, shipment-creation-failed, shipment-delivered, shipment-returned, email-verified, customer-erased
 ├── tasks.py              # cancel_expired_pending_orders, complete_delivered_orders, purge_expired_guest_carts, compute_best_sellers
-├── admin.py              # đăng ký Django Admin read-only (được modules/admin.py nạp)
 ├── api/
 │   ├── permissions.py    # IsOrderOwner: JWT của Khách hàng chủ đơn, hoặc X-Lookup-Token JWT Ed25519; xác minh qua identity.contracts, kiểm tra sub khớp Mã đơn (05 mục 2)
 │   ├── store/
@@ -316,7 +314,6 @@ modules/ordering/
 | `api/*/views.py` | `APIView` hoặc `GenericAPIView`: phân quyền, gọi serializer, gọi service/selector | `services`, `selectors`, `serializers` | `ModelViewSet` tự động CRUD; truy vấn ORM trực tiếp |
 | `api/*/urls.py` | Khai báo route | `views` | — |
 | `api/permissions.py` | Permission class gắn với nghiệp vụ của module, ví dụ `IsOrderOwner` (permission chung chỉ dựa vào `kind`/`aud` nằm ở `shared/api/permissions.py`) | `selectors` của chính module; public contract chỉ đọc của module lớp dưới, ví dụ `identity.contracts.verify_order_lookup_token` | Ghi dữ liệu, gọi contract ghi hoặc import auth/model nội bộ module khác |
-| `admin.py` | `ModelAdmin` read-only | `models` | Cho phép sửa |
 | `tests/` | Test service (nhiều nhất), handler, API | Mọi thứ của module, `shared.testing`; `tests.factories` và `contracts` của module lớp dưới | `models`, `services`, `selectors`, `api` của module khác ([12-testing-strategy.md](./12-testing-strategy.md) mục 4) |
 
 ### 6.2. Ví dụ luồng một request

@@ -26,6 +26,9 @@ M1 có identity lõi vì endpoint back-office của catalog và inventory cần 
 - 29/10/2026: Bằng chứng tuân thủ giữ HMAC số điện thoại sau ẩn danh ([ADR 0016](../../docs/adr/0016-erasure-evidence-phone-hmac.md)).
 - 29/10/2026: Hoá đơn điện tử giữ xuất thủ công ở MVP; kế toán xác nhận trước go-live.
 - 29/10/2026: ADR 0019 đổi số thành [0015](../../docs/adr/0015-local-postgres-on-host.md).
+- 29/10/2026: Không dùng Django Admin ở mọi môi trường, kể cả local; xem dữ liệu bằng `psql`/IDE ([ADR 0004](../../docs/adr/0004-custom-nextjs-admin.md)).
+- 29/10/2026: Biến môi trường và lệnh `Makefile` thêm ở mốc dùng tới, không khai báo trước ([08](../../docs/architecture/08-local-development.md) mục 2.3 và 3).
+- 29/10/2026: Compose có service `migrate` chạy trước các service app.
 
 ## Fog
 
@@ -33,7 +36,8 @@ Các mục phụ thuộc bên ngoài, gắn vào mốc cần chúng. Không mụ
 
 | Mục | Nguồn | Mốc cần |
 |---|---|---|
-| Container gọi được PostgreSQL trên host (WSL `networkingMode=mirrored`, macOS) | [08](../../docs/architecture/08-local-development.md), ticket [08](../backend-bootstrap/issues/08-local-postgres-installer.md) | M0 |
+| Container gọi được PostgreSQL trên host: Windows (WSL `networkingMode=mirrored`) | [08](../../docs/architecture/08-local-development.md), ticket [08](../backend-bootstrap/issues/08-local-postgres-installer.md) | M0 |
+| Container gọi được PostgreSQL trên host: macOS | [08](../../docs/architecture/08-local-development.md), ticket [13](../backend-bootstrap/issues/13-local-postgres-installer-macos.md) | Khi có người dùng Mac, không chặn mốc nào |
 | Cờ của `cz` theo bản `commitizen` được pin | [11](../../docs/architecture/11-git-workflow.md) | M0 |
 | Tham số, mã kết quả, chữ ký hiện hành của VNPay và MoMo | [06 mục 2–3](../../docs/architecture/06-integrations.md) | M3 (Fake theo tài liệu), M7 (sandbox) |
 | GHN: địa chỉ 2 cấp, cơ chế xác thực webhook, chống trùng `client_order_code` | [06 mục 4](../../docs/architecture/06-integrations.md#4-ghn), [04 mục 4.3](../../docs/architecture/04-api-contract.md#43-webhook-apiv1webhooks) | M4 (Fake), M7 (sandbox); US-1004 bỏ được nếu GHN đã dùng 2 cấp |
