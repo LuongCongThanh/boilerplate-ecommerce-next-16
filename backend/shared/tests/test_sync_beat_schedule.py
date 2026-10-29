@@ -46,10 +46,8 @@ def test_empty_db_creates_every_job_from_code() -> None:
     assert every_minute.queue == "events"
     assert every_minute.crontab is None
     assert every_minute.interval is not None
-    assert (every_minute.interval.every, every_minute.interval.period) == (
-        60,
-        IntervalSchedule.SECONDS,
-    )
+    assert every_minute.interval.every == 60
+    assert every_minute.interval.period == IntervalSchedule.SECONDS
 
     nightly = PeriodicTask.objects.get(name="shared.nightly_job")
     assert nightly.task == "shared.tasks.nightly_job"
@@ -57,11 +55,9 @@ def test_empty_db_creates_every_job_from_code() -> None:
     assert nightly.queue is None
     assert nightly.interval is None
     assert nightly.crontab is not None
-    assert (nightly.crontab.minute, nightly.crontab.hour, str(nightly.crontab.timezone)) == (
-        "30",
-        "3",
-        "Asia/Ho_Chi_Minh",
-    )
+    assert nightly.crontab.minute == "30"
+    assert nightly.crontab.hour == "3"
+    assert str(nightly.crontab.timezone) == "Asia/Ho_Chi_Minh"
 
     assert sorted(log["name"] for log in logs if log["event"] == "beat_job_created") == sorted(
         CODE_SCHEDULE
@@ -77,7 +73,8 @@ def test_second_run_changes_nothing() -> None:
         call_command("sync_beat_schedule")
 
     assert list(PeriodicTask.objects.order_by("name").values()) == before
-    assert (IntervalSchedule.objects.count(), CrontabSchedule.objects.count()) == schedules_before
+    schedules_after = (IntervalSchedule.objects.count(), CrontabSchedule.objects.count())
+    assert schedules_after == schedules_before
     assert logs == []
 
 
@@ -110,13 +107,12 @@ def test_db_frequency_differing_from_code_is_corrected() -> None:
 
     every_minute = PeriodicTask.objects.get(name="shared.every_minute_job")
     assert every_minute.interval is not None
-    assert (every_minute.interval.every, every_minute.interval.period) == (
-        60,
-        IntervalSchedule.SECONDS,
-    )
+    assert every_minute.interval.every == 60
+    assert every_minute.interval.period == IntervalSchedule.SECONDS
     nightly.refresh_from_db()
     assert nightly.crontab is not None
-    assert (nightly.crontab.minute, nightly.crontab.hour) == ("30", "3")
+    assert nightly.crontab.minute == "30"
+    assert nightly.crontab.hour == "3"
     updated = {log["name"]: log["fields"] for log in logs if log["event"] == "beat_job_updated"}
     assert updated == {
         "shared.every_minute_job": ["interval"],
@@ -135,7 +131,5 @@ def test_db_job_on_other_schedule_type_is_switched_to_code_schedule() -> None:
     every_minute = PeriodicTask.objects.get(name="shared.every_minute_job")
     assert every_minute.solar is None
     assert every_minute.interval is not None
-    assert (every_minute.interval.every, every_minute.interval.period) == (
-        60,
-        IntervalSchedule.SECONDS,
-    )
+    assert every_minute.interval.every == 60
+    assert every_minute.interval.period == IntervalSchedule.SECONDS

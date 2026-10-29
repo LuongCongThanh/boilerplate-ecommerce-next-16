@@ -86,7 +86,7 @@ Lint (`ruff check`, `ruff format --check`, `mypy`, `lint-imports`) xanh · test:
 
 - 30/10/2026, SonarCloud Blocker `docker-compose.yml:10` (mật khẩu PostgreSQL ghi cứng): thêm `Env.DATABASE_HOST`, `database_config(url, host=…)`; Compose chỉ đặt `DATABASE_HOST: host.docker.internal`. Test: `tests/test_database_url.py::test_host_argument_overrides_host_of_url`, `tests/test_env.py::test_database_host_is_accepted_and_defaults_to_empty`; kiểm tay `docker compose up -d --build`: `migrate` Exited(0), worker/beat Up.
 - 30/10/2026, SonarCloud High `Dockerfile:26` (`COPY . .`): chép tường minh `manage.py`, `config/`, `shared/`, `modules/`; kiểm tay `ls /app` trong image chỉ còn các mục đó cùng `pyproject.toml`, `uv.lock`, `.python-version`.
-- 30/10/2026, SonarCloud thứ tự assert trong `test_sync_beat_schedule.py`: chưa sửa; mọi assert đã là `actual == expected`, cần số dòng Sonar báo.
+- 30/10/2026, SonarCloud thứ tự assert trong `test_sync_beat_schedule.py`: 6 assert có tuple ở vế trái (Sonar coi là giá trị kỳ vọng) tách thành từng assert `actual == expected`; hành vi test không đổi, 5 test xanh.
 
 - Sửa tài liệu ngoài *Việc cần làm* ở commit `8687733` (lệnh JWT, 08 §2.4, §3.1, comment pre-commit, README): giữ trong PR theo quyết định sau review.
 
