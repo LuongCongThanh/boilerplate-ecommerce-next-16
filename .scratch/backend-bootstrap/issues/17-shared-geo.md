@@ -23,11 +23,12 @@ Chốt khi grilling ngày 30/10/2026.
 | Tài liệu chi phối | `shared/geo/models.py`, `shared/migrations/0002_*`: 03 §1.1–1.2, ADR 0008 (không kế thừa `BaseModel`). `shared/models.py`: 02 §4 (import model của `geo/`). `load_geo.py`, `Makefile`: 03 §0.7 bước 4, 08 §(bảng lệnh `make load-geo`), 02 §3 (`vietnam-provinces` 2026.9.0). `shared/geo/api.py`, `shared/geo/urls.py`, `config/urls.py`: 04 §4.1, §5.1, §5.6 (`GeoDTO`), 02 §4 (`config/urls.py`). Test: 12 |
 | Dependency | `vietnam-provinces>=2026.9.0` trong `pyproject.toml`, cùng kiểu ràng buộc với các package khác; `uv.lock` ghim bản 2026.9.0 |
 | Định dạng mã | Mã Cục Thống kê có số 0 đứng đầu: tỉnh 2 chữ số (`01`), phường/xã 5 chữ số (`00004`). Package trả int enum nên `load_geo` đệm khi đọc. Mã này là FK của Địa chỉ, Đơn hàng và ánh xạ GHN sau này |
-| Model | `Province(code CharField(10) PK, name CharField(255))`; `Ward(code CharField(10) PK, province FK → Province db_column="province_code" PROTECT related_name="wards", name CharField(255))`. Bảng `shared_province`, `shared_ward`; index của FK là index `province_code` của 03. `shared/models.py` import hai model này |
-| `load_geo` | Upsert trong một transaction bằng `bulk_create(update_conflicts=True)` của Django: thêm mã mới, cập nhật tên đổi. Không xoá mã không còn trong nguồn (03 §0.7 bước 4), chỉ log cảnh báo `geo_stale_codes` kèm số lượng. Log `geo_loaded` với số dòng thêm, sửa, giữ nguyên cho tỉnh và phường/xã. Cấu trúc theo `sync_beat_schedule` |
+| Model | `Province(code CharField(10) PK, name CharField(255))`; `Ward(code CharField(10) PK, province FK → Province db_column="province_code" PROTECT related_name="wards", name CharField(255))`. Bảng `shared_province`, `shared_ward` khai báo bằng `Meta.db_table` (02 §9.2); index của FK là index `province_code` của 03. `shared/models.py` import hai model này |
+| `load_geo` | Upsert trong một transaction bằng `bulk_create(update_conflicts=True)` của Django theo khoá chính: thêm mã mới, cập nhật tên đổi; với phường/xã cập nhật cả tỉnh (`province_id`) để phường/xã chuyển tỉnh trong nguồn vẫn đúng (thêm khi review). Không xoá mã không còn trong nguồn (03 §0.7 bước 4), chỉ log cảnh báo `geo_stale_codes` kèm số lượng. Log `geo_loaded` với số dòng thêm, sửa, giữ nguyên cho tỉnh và phường/xã. Cấu trúc theo `sync_beat_schedule` |
 | `make load-geo` | `uv run python manage.py load_geo`, chạy local như `make migrate`; Compose không tự chạy (08 giữ là bước 4 riêng) |
 | Route | `config/urls.py` thêm `api/v1/store/geo/` include `shared/geo/urls.py`; path không có `/` cuối như 04 và `/healthz`. Đây là route `api/v1/store/` đầu tiên; module sau tự thêm include của mình |
-| View | `shared/geo/api.py`: `ListAPIView` với `permission_classes = (AllowAny,)`, `pagination_class = None`, throttle mặc định (`anon`). Serializer liệt kê đúng `code`, `name` (04 §5.1). Truy vấn ở `shared/geo/selectors.py` |
+| View | `shared/geo/api.py`: `ListAPIView` với `permission_classes = (AllowAny,)`, `pagination_class = None`, throttle mặc định (`anon`). Serializer `GeoOutput` liệt kê đúng `code`, `name` với `max_length` 10/255, component OpenAPI tên `GeoDTO` qua `extend_schema_serializer` (04 §5.1, §5.6; hậu tố `DTO` của class dành cho pydantic, 02 §9.2). Response lỗi trong OpenAPI để ticket [22](./22-openapi-error-responses.md). Truy vấn ở `shared/geo/selectors.py`: `list_provinces()`, `province_exists(*, code)`, `list_wards(*, province_code)` |
+| Test | `shared/tests/test_load_geo.py`, `shared/tests/test_api_geo.py`; dữ liệu qua `ProvinceFactory`, `WardFactory` ở `shared/testing/factories.py`. Test của `load_geo` giả lập `vietnam-provinces` bằng monkeypatch (ngoại lệ của 12 §1: package dữ liệu chạy trong process, giả lập để tạo nhánh đổi tên, chuyển tỉnh, mã cũ); số đếm dữ liệu thật lấy từ package, không viết cứng |
 | Thứ tự | Theo mã tăng dần, không phụ thuộc collation |
 | 404 | Tỉnh không tồn tại → `NotFound` → `ErrorDTO` `NOT_FOUND` qua `exception_handler` của ticket 16. Tỉnh có nhưng chưa có phường/xã → `[]` |
 
@@ -60,7 +61,6 @@ Lint xanh (ruff check, ruff format, mypy, lint-imports) · test: 163 passed tron
 #### Gap
 
 - `lint-imports` trên Windows lỗi `UnicodeEncodeError` (cp1252) khi in tên contract tiếng Việt, chạy với `PYTHONUTF8=1` thì xanh. Có từ trước ticket này.
-- `docs/architecture/02-backend-structure.md` chưa có `shared/geo/urls.py`; cập nhật ở phase sync.
 - Mã đã mất khỏi nguồn vẫn được giữ và vẫn hiện ở endpoint (hệ quả của quyết định upsert không xoá). Nếu đợt sắp xếp địa giới sau xoá phường/xã, cần cách ẩn mã cũ.
 - Endpoint mới chỉ thử với Guest; chưa có fixture Customer/Staff/Admin (12 §2.4) vì `identity` chưa dựng.
 - OpenAPI chưa khai báo response lỗi `ErrorDTO`: tách ticket [22](./22-openapi-error-responses.md).
@@ -92,4 +92,5 @@ Lint xanh (ruff check, ruff format, mypy, lint-imports) · test: 163 passed tron
 
 #### Tài liệu đã cập nhật
 
-- Chưa (phase sync)
+- `docs/architecture/02-backend-structure.md`: cây `shared/geo/` thêm `urls.py`, chữ ký selector; ghi chú `load_geo`, migration `0002_geo`, `ProvinceFactory`/`WardFactory`
+- Ticket này: `## Quyết định` thêm cập nhật tỉnh của phường/xã, `db_table`, `GeoDTO`, mục Test (ngoại lệ giả lập package)
