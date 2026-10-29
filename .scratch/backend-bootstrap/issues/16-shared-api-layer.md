@@ -1,6 +1,8 @@
 # Lớp API dùng chung: định dạng lỗi, phân trang, quyền, IP client, throttling, i18n
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #24
 
 Blocked by: 09
 
@@ -35,16 +37,16 @@ Chốt khi grilling ngày 29/10/2026.
 
 ## Acceptance criteria
 
-- [ ] Mọi lỗi không bắt (kể cả 404, 405, lỗi validate của DRF) trả đúng shape `ErrorDTO` có `request_id`.
-- [ ] Thiếu hoặc sai `X-BFF-Secret` thì throttle dùng IP kết nối; đúng secret thì dùng `X-Client-IP`.
-- [ ] Redis tắt thì request vẫn qua throttle (fail-open) và có log cảnh báo không chứa IP thô.
-- [ ] `page_size` lớn hơn 100 bị giới hạn ở 100.
+- [x] Mọi lỗi không bắt (kể cả 404, 405, lỗi validate của DRF) trả đúng shape `ErrorDTO` có `request_id`.
+- [x] Thiếu hoặc sai `X-BFF-Secret` thì throttle dùng IP kết nối; đúng secret thì dùng `X-Client-IP`.
+- [x] Redis tắt thì request vẫn qua throttle (fail-open) và có log cảnh báo không chứa IP thô.
+- [x] `page_size` lớn hơn 100 bị giới hạn ở 100.
 
 ## Comments
 
 ### Báo cáo 29/10/2026
 
-**Nhánh:** `feat/shared-api-layer` · **PR:** chưa mở · **Mode:** full
+**Nhánh:** `feat/shared-api-layer` · **PR:** #24 · **Mode:** full
 
 #### Đã làm
 
