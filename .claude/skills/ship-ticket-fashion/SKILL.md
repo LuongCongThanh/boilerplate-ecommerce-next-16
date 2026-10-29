@@ -32,7 +32,7 @@ Mọi tin nhắn cho người dùng viết tiếng Việt. Mỗi lần chạy đ
 | 1 | grill | `phases/1-grill.md` | `grill-with-docs`; `codebase-design` khi có module / interface mới | nhánh, `## Quyết định`, slice, ⛔G1 |
 | 2 | code | `phases/2-code.md` | `tdd` | mọi slice xanh |
 | 3 | report | `phases/3-report.md` | — | báo cáo trong `## Comments` của ticket |
-| 4 | review | `phases/4-review.md` | `code-review` | mọi finding có kết luận |
+| 4 | review | `phases/4-review.md` | `code-review`; `code-review` dựng sẵn (trục Bug) | mọi finding có kết luận |
 | 5 | sync | `phases/5-sync.md` | `domain-modeling` khi có thuật ngữ / ADR mới | tài liệu khớp code, ⛔G2 |
 | 6 | ship | `phases/6-ship.md` | — | PR mở, ticket đóng trong PR, CI xanh |
 | 7 | done | `phases/7-done.md` | — | merge khi người dùng bảo |
@@ -67,7 +67,7 @@ Script từ chối nhảy cóc phase, vào `code` khi chưa có G1, vào `ship` 
 
 Gate xong khi mọi điểm mở có câu trả lời và đã ghi vào ticket hoặc state.
 
-**Cần người dùng** là quyết định ngoài gate: thay đổi ngoài phạm vi ticket, sửa file `shared` mà ticket không nhắc, test đỏ ngoài ticket, hook chặn mà không sửa được trong phạm vi, mâu thuẫn với ADR. Hỏi ngay bằng `AskUserQuestion`.
+*Cần người dùng* (quyết định ngoài gate) định nghĩa ở `reference/rules.md`.
 
 ## Sub-agent
 
@@ -77,7 +77,7 @@ Phiên chính điều phối. Việc đọc nhiều file hoặc chạy nhiều l
 | --- | --- | --- |
 | Phase 1, bản đồ code (`Explore`) | một | như full |
 | Phase 2, mỗi slice | một cho mỗi slice | phiên chính |
-| Phase 4, hai trục của `code-review` | do skill đó tạo | như full |
+| Phase 4, ba trục review | do skill review tạo | như full |
 | Phase 4, vòng sửa khi finding đổi code | một cho mọi vòng | như full |
 
 Gate, tài liệu, ship, done, retro chạy ở phiên chính: retro cần thấy những gì phiên này đã vấp.
