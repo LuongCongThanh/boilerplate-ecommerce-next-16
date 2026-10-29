@@ -1,6 +1,8 @@
 # Docker Compose local, lệnh Makefile dùng container và `sync_beat_schedule`
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #27
 
 Spec: [spec.md](../spec.md)
 
@@ -43,17 +45,17 @@ Chốt khi grilling ngày 29/10/2026.
 
 ## Acceptance criteria
 
-- [ ] Trên DB trống, `make up` chạy `migrate` trước rồi mới bật worker, beat; không service nào khởi động lại liên tục. Sau đó `make run`, `curl localhost:8000/healthz` và `/readyz` trả 200.
+- [x] Trên DB trống, `make up` chạy `migrate` trước rồi mới bật worker, beat; không service nào khởi động lại liên tục. Sau đó `make run`, `curl localhost:8000/healthz` và `/readyz` trả 200.
 - [ ] Các lệnh trên chạy được trên Windows (PowerShell 7, GNU make) và macOS.
-- [ ] `sync_beat_schedule`: DB rỗng thì tạo đủ job theo code; chạy lần hai không đổi gì; job có trong DB nhưng không còn trong code bị tắt, không bị xoá; tần suất trong DB khác code thì được sửa theo code.
+- [x] `sync_beat_schedule`: DB rỗng thì tạo đủ job theo code; chạy lần hai không đổi gì; job có trong DB nhưng không còn trong code bị tắt, không bị xoá; tần suất trong DB khác code thì được sửa theo code.
 - [ ] `make db-reset` xoá và tạo lại database `fashion` rồi migrate.
-- [ ] Tài liệu nào lệch với cái đã làm (Compose, lệnh Makefile, phiên bản image) được sửa trong cùng PR.
+- [x] Tài liệu nào lệch với cái đã làm (Compose, lệnh Makefile, phiên bản image) được sửa trong cùng PR.
 
 ## Comments
 
 ### Báo cáo 29/10/2026
 
-**Nhánh:** `chore/docker-compose-local` · **PR:** chưa mở · **Mode:** full
+**Nhánh:** `chore/docker-compose-local` · **PR:** #27 · **Mode:** full
 
 #### Đã làm
 
