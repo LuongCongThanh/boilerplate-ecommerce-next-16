@@ -24,7 +24,7 @@ Cập nhật trong cùng PR đóng ticket. Nguồn sự thật vẫn là dòng `
 | Mốc / feature | Trạng thái | Ticket |
 |---|---|---|
 | [`dev-security-baseline`](../dev-security-baseline/spec.md) | Gần xong | ✅ 01, 02 · 🟡 03 chờ chủ repo tự kiểm tra 3 AC |
-| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07, 09 · 🟡 08 script đã có, chưa chạy trên máy Windows thật · ⬜ 16 (làm tiếp theo) → 11, 17 · 09 → 12 · 07 + 08 → 15 → 14 · 09 + 15 → 10 → 18 · ⬜ 01–04 làm được · ⏸ 13 macOS, không chặn M0 |
+| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07, 08, 09 · 🟡 16 đang làm → 11, 17 · 09 → 12 · 07 + 08 → 15 → 14 · 09 + 15 → 10 → 18 · ⬜ 01–04 làm được · ⏸ 13 macOS, không chặn M0 |
 | **M1** – **M6** | Chưa có spec | Tạo spec khi mốc trước gần xong |
 | **M7** `sandbox-acceptance` | Chưa có spec | ⏸ [01](../sandbox-acceptance/issues/01-load-test-k6-staging.md) k6, `needs-triage` |
 
@@ -48,6 +48,7 @@ Ký hiệu: ✅ `resolved` · 🟡 đang dở · ⬜ chưa làm · ⏸ để sau
 - 29/10/2026: Tách ticket lớn của M0: 07 → 07 + 15 (Compose), `gen_importlinter.py` gộp vào 04; 09 → 09 + 16 (lớp API) + 17 (địa giới); 10 → 10 + 18 (lệnh vận hành).
 - 29/10/2026: `sync_beat_schedule` làm ở ticket 15 vì service `migrate` gọi nó; service `relay` thêm vào Compose ở ticket 10 cùng `run_outbox_relay`.
 - 29/10/2026: Ticket 09 chốt API của `shared` (keyring nhiều khoá, `Money`, `DomainError.http_status`, `redact_pii`, manager giữ `updated_at`); chi tiết ở [09](../backend-bootstrap/issues/09-shared-core.md#quyết-định).
+- 29/10/2026: Ticket 16 chốt API của `shared.api`: `page_size` > 100 giới hạn ở 100 (sửa 04 mục 5.1), 405 là `METHOD_NOT_ALLOWED`, quyền mặc định `IsAuthenticated` ngay từ M0, `BFF_SHARED_SECRET` nhận tối đa 2 secret, khoá throttle là `pii_hmac(client_ip)`; chi tiết ở [16](../backend-bootstrap/issues/16-shared-api-layer.md#quyết-định). Tin `X-Request-ID` từ BFF tách sang ticket [19](../backend-bootstrap/issues/19-trust-upstream-request-id.md) (`needs-triage`).
 
 ## Fog
 
