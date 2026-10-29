@@ -23,10 +23,10 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args: object, **options: object) -> None:
         provinces = [
-            Province(code=f"{int(p.code):02d}", name=p.name) for p in SourceProvince.iter_all()
+            Province(code=_province_code(p.code), name=p.name) for p in SourceProvince.iter_all()
         ]
         wards = [
-            Ward(code=f"{int(w.code):05d}", province_id=f"{int(w.province_code):02d}", name=w.name)
+            Ward(code=_ward_code(w.code), province_id=_province_code(w.province_code), name=w.name)
             for w in SourceWard.iter_all()
         ]
         province_counts, stale_provinces = _upsert(Province, provinces, ["name"])
@@ -34,6 +34,14 @@ class Command(BaseCommand):
         if stale_provinces or stale_wards:
             logger.warning("geo_stale_codes", provinces=stale_provinces, wards=stale_wards)
         logger.info("geo_loaded", provinces=province_counts, wards=ward_counts)
+
+
+def _province_code(n: int) -> str:
+    return f"{int(n):02d}"
+
+
+def _ward_code(n: int) -> str:
+    return f"{int(n):05d}"
 
 
 def _upsert[M: models.Model](
@@ -50,7 +58,10 @@ def _upsert[M: models.Model](
         if row.pk in existing and tuple(getattr(row, f) for f in fields) != existing[row.pk]
     ]
     model._default_manager.bulk_create(
-        created + updated, update_conflicts=True, unique_fields=["code"], update_fields=fields
+        created + updated,
+        update_conflicts=True,
+        unique_fields=[model._meta.pk.name],
+        update_fields=fields,
     )
     counts = {
         "created": len(created),
