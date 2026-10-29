@@ -1,7 +1,7 @@
 ---
 name: ship-ticket-fashion
-description: Làm hoặc làm tiếp một ticket `.scratch/` của Fashion Store từ grilling tới merge, kèm retro skill. Dùng khi người dùng nói "làm ticket NN", "làm tiếp", hoặc hỏi tiến độ / ticket tiếp theo.
-argument-hint: "[<feature>/<NN> | <NN>] [grill|code|report|review|sync|ship|done|retro]"
+description: Làm một ticket `.scratch/<feature>/issues/NN-*.md` của Fashion Store từ grilling tới merge, kèm retro skill; tạo spec và ticket cho module chưa có ticket. Dùng khi người dùng nói "làm ticket NN", "làm tiếp", "làm module X", hoặc hỏi tiến độ / ticket tiếp theo.
+argument-hint: "[<feature>/<NN> | <NN> | <module>] [grill|code|report|review|sync|ship|done|retro]"
 ---
 
 # ship-ticket-fashion
@@ -12,8 +12,8 @@ Mọi tin nhắn cho người dùng viết tiếng Việt. Mỗi lần chạy đ
 
 ## Đầu mỗi lần chạy
 
-1. `python S/scripts/state.py start [<T>]`, chạy riêng. Script in ticket, phase, `next`, slice, gate, các cờ (`BRANCH RED`, `DIRTY`, `BEHIND`, `SLICE OPEN`) và các dòng `READ <file>`. Output này thay cho việc đọc file state.
-   - `NO STATE` kèm frontier → chưa có ticket đang làm: báo tiến độ (`python S/scripts/progress.py`), hỏi người dùng chọn ticket (lựa chọn khuyên dùng là ticket đầu frontier), rồi vào phase 1. Frontier rỗng, hoặc mốc chỉ còn ticket bị chặn hay cần người → `phases/0-plan.md`.
+1. `python S/scripts/state.py start [<T>]`, chạy riêng. Tham số là tên module hoặc mốc (`catalog`, `M1`) chưa có ticket trong `.scratch/` → `phases/0-plan.md`. Script in ticket, phase, `next`, slice, gate, các cờ (`BRANCH RED`, `DIRTY`, `BEHIND`, `SLICE OPEN`) và các dòng `READ <file>`. Output này thay cho việc đọc file state.
+   - `NO STATE` kèm frontier → chưa có ticket đang làm: báo tiến độ (`python S/scripts/progress.py`), hỏi người dùng chọn ticket (lựa chọn khuyên dùng là ticket đầu frontier), rồi vào phase 1. Có ticket `needs-triage` → cùng lần hỏi, hỏi từng ticket: `ready-for-agent`, `ready-for-human`, `wontfix` hay để sau (`docs/agents/triage-labels.md`); ghi dòng `Status:` theo câu trả lời và commit cùng ticket ở phase 1 bước 9. Frontier rỗng, hoặc mốc chỉ còn ticket bị chặn hay cần người → `phases/0-plan.md`.
 2. Đọc mọi file sau `READ` bằng Read tool, mỗi file một lần gọi.
 3. Bắt đầu từ `next`. Tham số `[phase]` ghi đè phase, trừ khi gate chưa được duyệt.
 

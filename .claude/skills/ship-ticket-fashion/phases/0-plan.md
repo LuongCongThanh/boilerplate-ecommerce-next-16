@@ -1,6 +1,6 @@
 # Phase 0 — lập kế hoạch mốc tiếp theo
 
-Dùng khi frontier của mốc hiện tại rỗng hoặc sắp rỗng, hoặc người dùng muốn tách lại ticket. Theo `.scratch/mvp-roadmap/map.md`, spec của mốc sau tạo khi mốc trước gần xong, để spec dựa trên code đã có. Không có state riêng: kết quả là các file trong `.scratch/`.
+Dùng khi frontier của mốc hiện tại rỗng hoặc sắp rỗng, người dùng muốn làm một module chưa có ticket (lấy mốc chứa module đó), hoặc muốn tách lại ticket. Theo `.scratch/mvp-roadmap/map.md`, spec của mốc sau tạo khi mốc trước gần xong, để spec dựa trên code đã có. Không có state riêng: kết quả là các file trong `.scratch/`.
 
 ## Tạo spec cho mốc mới
 
