@@ -33,7 +33,7 @@
 - `next`: đúng một việc cụ thể tiếp theo, viết lại sau mỗi bước.
 - `phase`: `grill | code | report | review | sync | ship | done | retro | closed`.
 - `pr`: số PR, ghi ở phase 6.
-- `transitions`, `gates`: chỉ `state.py transition` ghi.
+- `phase`, `transitions`, `gates`: chỉ `state.py transition` ghi; `set` / `push` từ chối các field này. `--gate g1` chỉ dùng ở `grill → code`, `--gate g2` chỉ ở `sync → ship`.
 
 Lệnh:
 

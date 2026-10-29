@@ -33,24 +33,8 @@ def diff_size(numstat: str) -> int:
     return total
 
 
-def main() -> int:
-    sys.stdout.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("ticket")
-    args = parser.parse_args()
-
-    feature, ticket = resolve(args.ticket)
-    state = load_state(feature.slug, ticket.num) or {}
-    results: list[tuple[str, str]] = []
-
-    branch = git("branch", "--show-current")
-    if state and branch != state.get("branch"):
-        results.append(("FAIL", f"nhánh {branch} khác nhánh của state {state.get('branch')}"))
-    results.append(("OK" if BRANCH.match(branch) else "WARN", f"tên nhánh {branch}"))
-
-    dirty = git("status", "--porcelain").splitlines()
-    results.append(("FAIL" if dirty else "OK", f"{len(dirty)} file chưa commit"))
-
+def compare_with_dev() -> list[tuple[str, str]]:
+    results = []
     behind = int(git("rev-list", "--count", "HEAD..origin/dev") or 0)
     results.append(
         (
@@ -70,6 +54,32 @@ def main() -> int:
     results.append(
         ("WARN" if size > MAX_LINES else "OK", f"{size} dòng đổi (không tính migration, file sinh)")
     )
+    return results
+
+
+def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("ticket")
+    args = parser.parse_args()
+
+    feature, ticket = resolve(args.ticket)
+    state = load_state(feature.slug, ticket.num) or {}
+    results: list[tuple[str, str]] = []
+
+    branch = git("branch", "--show-current")
+    if state and branch != state.get("branch"):
+        results.append(("FAIL", f"nhánh {branch} khác nhánh của state {state.get('branch')}"))
+    results.append(("OK" if BRANCH.match(branch) else "WARN", f"tên nhánh {branch}"))
+
+    dirty = git("status", "--porcelain").splitlines()
+    results.append(("FAIL" if dirty else "OK", f"{len(dirty)} file chưa commit"))
+
+    # git() trả "" khi lỗi: thiếu origin/dev thì mọi phép so sánh bên dưới thành 0 và báo OK sai.
+    if not git("rev-parse", "--verify", "--quiet", "origin/dev"):
+        results.append(("FAIL", "không thấy origin/dev (chạy git fetch origin dev)"))
+    else:
+        results.extend(compare_with_dev())
 
     for level, message in results:
         print(f"{level} {message}")

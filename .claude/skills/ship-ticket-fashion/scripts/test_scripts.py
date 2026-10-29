@@ -3,7 +3,7 @@
 python -m unittest discover -s .claude/skills/ship-ticket-fashion/scripts
 """
 
-# ruff: noqa: PT009
+# ruff: noqa: PT009, PT027
 from __future__ import annotations
 
 import tempfile
@@ -90,6 +90,20 @@ class TicketParsing(unittest.TestCase):
         self.assertIn("- [x] lỗi trả ErrorDTO", text)
         self.assertEqual(ticked, ["lỗi trả ErrorDTO"])
 
+    def test_close_adds_pr_line_even_when_report_says_not_opened(self):
+        report = (
+            "\n### Báo cáo 29/10/2026\n\n**Nhánh:** `feat/x` · **PR:** chưa mở · **Mode:** lite\n"
+        )
+        text, _ = close(TICKET + report, 31)
+        self.assertIn("Status: resolved\n\n**PR:** #31", text)
+        self.assertIn("· **PR:** #31 · **Mode:** lite", text)
+        self.path.write_text(text, encoding="utf-8")
+        self.assertEqual(parse_ticket(self.path).pr, "#31")
+
+    def test_close_keeps_existing_pr_line(self):
+        text, _ = close(TICKET.replace("Status: ready-for-agent", "Status: x\n\n**PR:** #7"), 31)
+        self.assertNotIn("#31", text)
+
 
 class StateMachine(unittest.TestCase):
     def test_code_needs_g1(self):
@@ -106,6 +120,18 @@ class StateMachine(unittest.TestCase):
     def test_ship_needs_g2_and_review_may_return_to_code(self):
         self.assertIsNotNone(check_transition(make_state(phase="sync"), "ship", None))
         self.assertIsNone(check_transition(make_state(phase="review"), "code", None))
+
+    def test_gate_only_on_its_own_edge(self):
+        self.assertIn("--gate g2", check_transition(make_state(phase="report"), "review", "g2"))
+        self.assertIn("--gate g1", check_transition(make_state(phase="sync"), "ship", "g1"))
+        self.assertIsNone(check_transition(make_state(phase="sync"), "ship", "g2"))
+
+    def test_set_cannot_write_phase_gates_or_transitions(self):
+        for item in ("phase=ship", "gates.g2=2026-10-29", "transitions=[]"):
+            with self.assertRaises(SystemExit):
+                apply(make_state(), [item], push=False)
+        with self.assertRaises(SystemExit):
+            apply(make_state(), ["transitions={}"], push=True)
 
     def test_validate_rejects_cycles_and_unknown_acs(self):
         slices = [

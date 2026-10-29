@@ -15,8 +15,11 @@ from pathlib import Path
 def close(text: str, pr: int) -> tuple[str, list[str]]:
     if not re.search(r"^Status:", text, re.M):
         raise SystemExit("Ticket không có dòng Status:")
+    # Báo cáo (phase 3) có "**PR:** chưa mở": thay bằng số PR, và chỉ dòng **PR:** #<số>
+    # đứng riêng mới tính là đã có dòng PR của ticket.
+    text = re.sub(r"(\*\*PR:\*\*) (?!#\d)[^·\n]*?(?=\s*·|\s*$)", rf"\1 #{pr}", text, flags=re.M)
     status_line = "Status: resolved"
-    if not re.search(r"\*\*PR:\*\*", text):
+    if not re.search(r"^\*\*PR:\*\* #\d+\s*$", text, re.M):
         status_line += f"\n\n**PR:** #{pr}"
     text = re.sub(r"^Status:.*$", status_line, text, count=1, flags=re.M)
 

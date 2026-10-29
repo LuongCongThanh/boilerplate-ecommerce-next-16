@@ -23,6 +23,8 @@ from progress import frontier, load_features
 SKILL = ".claude/skills/ship-ticket-fashion"
 PHASES = ["grill", "code", "report", "review", "sync", "ship", "done", "retro", "closed"]
 BACK_EDGES = {("review", "code"), ("sync", "code"), ("sync", "review")}
+GATE_EDGES = {"g1": ("grill", "code"), "g2": ("sync", "ship")}
+TRANSITION_ONLY = ("phase", "gates", "transitions")  # set/push không được ghi
 PHASE_FILES = {
     "grill": "1-grill",
     "code": "2-code",
@@ -95,6 +97,8 @@ def check_transition(state: dict, to: str, gate: str | None) -> str | None:
     step_ok = PHASES.index(to) == PHASES.index(current) + 1 or (current, to) in BACK_EDGES
     if not step_ok:
         return f"không đi được {current} → {to}"
+    if gate and GATE_EDGES[gate] != (current, to):
+        return f"--gate {gate} chỉ dùng cho {' → '.join(GATE_EDGES[gate])}"
     gates = state["gates"]
     if to == "code" and current == "grill" and not (gates.get("g1") or gate == "g1"):
         return "vào code cần G1 (--gate g1)"
@@ -139,6 +143,8 @@ def apply(state: dict, assignments: list[str], push: bool) -> None:
         if "=" not in item:
             raise SystemExit(f"cần dạng key=value: {item}")
         path, _, raw = item.partition("=")
+        if path.split(".", 1)[0] in TRANSITION_ONLY:
+            raise SystemExit(f"{path}: chỉ state.py transition được ghi")
         container, key = locate(state, path)
         value = parse_value(raw)
         if push:
