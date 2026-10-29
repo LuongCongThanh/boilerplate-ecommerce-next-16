@@ -159,7 +159,7 @@ backend/
 │
 ├── config/                         # cấu hình project, KHÔNG chứa nghiệp vụ
 │   ├── __init__.py                 # nạp Celery app khi Django khởi động
-│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) và PG_PORT (chỉ Compose dùng, khai báo để pydantic-settings không báo biến thừa khi đọc .env); PII_HMAC_KEYS được parse một lần thành keyring (secret bọc SecretStr)
+│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) PG_PORT (script setup in ra, khai báo để pydantic-settings không báo biến thừa khi đọc .env) và DATABASE_HOST (khác rỗng thì thay host của DATABASE_URL; Compose đặt host.docker.internal); PII_HMAC_KEYS được parse một lần thành keyring (secret bọc SecretStr)
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường

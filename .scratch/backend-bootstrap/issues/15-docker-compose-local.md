@@ -39,8 +39,9 @@ Chốt khi grilling ngày 29/10/2026.
 | `sync_beat_schedule` | Tên `PeriodicTask` là key của `beat_schedule`. Hỗ trợ lịch crontab và interval; job trong DB đang dùng `solar`/`clocked` được chuyển về lịch của code. Đồng bộ `task`, lịch, `queue`, `enabled`; job trong DB không còn trong code thì `enabled=False`. Mỗi thay đổi ghi một dòng log |
 | `celery.backend_cleanup` | Đặt `result_expires = None` trong `config/celery.py` để Beat không tự thêm job này (không có result backend, 07 mục 3.3). Khác *Việc cần làm*: thêm một dòng cấu hình Celery |
 | `debugpy` | Bỏ package khỏi nhóm dev và bảng ở 02. Giữ extension VS Code `ms-python.debugpy` và `"type": "debugpy"` trong `launch.json` (debugger của IDE, không phải package) |
-| Thêm sau review (29/10) | Giữ `.dockerignore` (không đưa `.env`, `.venv` vào image), `COPY . .` trong Dockerfile (image chạy được khi không bind mount, ticket 14 quét image này), `name: fashion` trong Compose (tên container không trùng project khác ở thư mục `backend`); 08 mục 7 sửa theo |
+| Thêm sau review (29/10) | Giữ `.dockerignore` (không đưa `.env`, `.venv` vào image), chép code vào image (image chạy được khi không bind mount, ticket 14 quét image này; sau SonarCloud đổi sang chép tường minh), `name: fashion` trong Compose (tên container không trùng project khác ở thư mục `backend`); 08 mục 7 sửa theo |
 | Transaction trong command | `sync_beat_schedule` giữ `@transaction.atomic` (đồng bộ lịch phải trọn vẹn); 02 §9.1 thêm ngoại lệ cho management command hạ tầng của `shared` |
+| SonarCloud PR #27 (30/10) | Compose không ghi `DATABASE_URL` có mật khẩu: `Env.DATABASE_HOST` (mặc định rỗng) thay host của `DATABASE_URL`, container đặt `host.docker.internal`. Dockerfile chép tường minh `manage.py`, `config/`, `shared/`, `modules/` thay cho `COPY . .` |
 | Commit `8687733` | Sửa tài liệu ngoài *Việc cần làm* (lệnh JWT, 08 §2.4, §3.1, comment pre-commit, README) giữ trong PR, ghi ngoài phạm vi ở Notes |
 
 ## Acceptance criteria
@@ -78,12 +79,14 @@ Lint (`ruff check`, `ruff format --check`, `mypy`, `lint-imports`) xanh · test:
 - `make db-reset` cắt mọi kết nối (`WITH (FORCE)`), Compose không đặt restart policy nên beat có thể thoát; nếu đúng vậy thì tài liệu ghi chạy `make restart-worker` sau `db-reset`.
 - `.env` tạo trước ticket này vẫn có `REDIS_URL=redis://redis:6379/0`, `EMAIL_HOST=mailpit`; phải đổi sang `redis://localhost:6380/0` và `localhost` theo `.env.example`.
 - Image trong `docker-compose.yml` chưa có ecosystem `docker-compose` trong Dependabot: tách thành ticket [20](./20-dependabot-compose-images.md) (`needs-triage`).
-- Ngoài *Việc cần làm*: thêm `.dockerignore` (không đưa `.env`, `.venv` vào image), `COPY . .` trong Dockerfile (image chạy được khi không bind mount, ticket 14 quét image này), `name: fashion` trong Compose; ghim image ở bản đã phát hành ≥ 7 ngày: `python:3.14.9-slim`, `ghcr.io/astral-sh/uv:0.13.5`, `valkey/valkey:8.1.11`, `axllent/mailpit:v1.31.6`.
+- Ngoài *Việc cần làm*: thêm `.dockerignore` (không đưa `.env`, `.venv` vào image), chép code vào image (image chạy được khi không bind mount, ticket 14 quét image này; sau SonarCloud đổi sang chép tường minh), `name: fashion` trong Compose; ghim image ở bản đã phát hành ≥ 7 ngày: `python:3.14.9-slim`, `ghcr.io/astral-sh/uv:0.13.5`, `valkey/valkey:8.1.11`, `axllent/mailpit:v1.31.6`.
 - `django-celery-beat` không có type hints: thêm `django_celery_beat.*` vào override `ignore_missing_imports` của mypy.
 
 #### Thay đổi theo yêu cầu
 
-- Không
+- 30/10/2026, SonarCloud Blocker `docker-compose.yml:10` (mật khẩu PostgreSQL ghi cứng): thêm `Env.DATABASE_HOST`, `database_config(url, host=…)`; Compose chỉ đặt `DATABASE_HOST: host.docker.internal`. Test: `tests/test_database_url.py::test_host_argument_overrides_host_of_url`, `tests/test_env.py::test_database_host_is_accepted_and_defaults_to_empty`; kiểm tay `docker compose up -d --build`: `migrate` Exited(0), worker/beat Up.
+- 30/10/2026, SonarCloud High `Dockerfile:26` (`COPY . .`): chép tường minh `manage.py`, `config/`, `shared/`, `modules/`; kiểm tay `ls /app` trong image chỉ còn các mục đó cùng `pyproject.toml`, `uv.lock`, `.python-version`.
+- 30/10/2026, SonarCloud thứ tự assert trong `test_sync_beat_schedule.py`: chưa sửa; mọi assert đã là `actual == expected`, cần số dòng Sonar báo.
 
 - Sửa tài liệu ngoài *Việc cần làm* ở commit `8687733` (lệnh JWT, 08 §2.4, §3.1, comment pre-commit, README): giữ trong PR theo quyết định sau review.
 
