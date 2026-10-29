@@ -21,9 +21,14 @@ class BaseQuerySet[M: models.Model](models.QuerySet[M]):
         return super().update(**kwargs)
 
     def bulk_update(self, objs: Any, fields: Any, batch_size: int | None = None) -> int:
-        # Không tự gán thay bên gọi: mỗi object có thể đã mang `updated_at` riêng
+        # `fields` có thể là generator: đổi sang list trước khi kiểm tra để không dùng hết nó.
+        # Bên gọi có `updated_at` trong `fields` thì giữ giá trị riêng của từng object
+        objs, fields = list(objs), list(fields)
         if "updated_at" not in fields:
-            raise ValueError("bulk_update phải có 'updated_at' trong fields (03 mục 0.1)")
+            now = timezone.now()
+            for obj in objs:
+                obj.updated_at = now
+            fields.append("updated_at")
         return super().bulk_update(objs, fields, batch_size=batch_size)
 
 

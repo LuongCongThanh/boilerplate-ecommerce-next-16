@@ -56,12 +56,27 @@ def test_queryset_update_sets_updated_at() -> None:
 
 
 @pytest.mark.usefixtures("widget_table")
-def test_bulk_update_requires_updated_at_in_fields() -> None:
+def test_bulk_update_sets_updated_at_when_missing_from_fields() -> None:
     widget = Widget.objects.create(name="a")
+    past = timezone.now() - timedelta(days=1)
+    Widget.objects.filter(pk=widget.pk).update(updated_at=past)
+    widget.refresh_from_db()
     widget.name = "b"
 
-    with pytest.raises(ValueError, match="updated_at"):
-        Widget.objects.bulk_update([widget], ["name"])
+    assert Widget.objects.bulk_update([widget], (f for f in ["name"])) == 1
 
-    widget.updated_at = timezone.now()
-    assert Widget.objects.bulk_update([widget], ["name", "updated_at"]) == 1
+    widget.refresh_from_db()
+    assert widget.name == "b"
+    assert widget.updated_at > past
+
+
+@pytest.mark.usefixtures("widget_table")
+def test_bulk_update_keeps_caller_updated_at() -> None:
+    widget = Widget.objects.create(name="a")
+    chosen = timezone.now() - timedelta(hours=1)
+    widget.updated_at = chosen
+
+    Widget.objects.bulk_update([widget], ["updated_at"])
+
+    widget.refresh_from_db()
+    assert widget.updated_at == chosen

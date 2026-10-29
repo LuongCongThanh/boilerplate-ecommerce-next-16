@@ -596,12 +596,16 @@ select = [
     "RUF",      # rule riêng của ruff
     "S",        # flake8-bandit: code nguy hiểm (eval, pickle, shell=True, SQL ghép chuỗi…)
 ]
+# Lỗi đặt tên theo nghiệp vụ (`OutOfStock`, `RetryLater`), không bắt hậu tố Error (02 mục 6.1)
+ignore = ["N818"]
 
 [tool.ruff.lint.per-file-ignores]
 # Test được dùng assert và mật khẩu giả viết cứng. "**/" để khớp cả modules/<module>/tests/,
 # không chỉ backend/tests/
 "**/tests/**" = ["S101", "S105", "S106"]
 "conftest.py" = ["S105", "S106"]
+# Migration theo khuôn Django sinh ra: `dependencies`, `operations` là list ở mức class
+"**/migrations/**" = ["RUF012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["config", "shared", "modules"]

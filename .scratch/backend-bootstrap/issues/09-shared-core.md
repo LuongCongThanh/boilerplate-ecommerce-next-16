@@ -29,10 +29,10 @@ Chốt khi grilling ngày 29/10/2026.
 | `PII_HMAC_KEYS` | `kid2:secret2,kid1:secret1`, khoá đầu dùng cho giá trị mới. `config/env.py` kiểm tra lúc khởi động: không rỗng, `kid` không trùng, `kid` và secret không rỗng. `manage.py check --deploy` (`shared.E001`) đòi mỗi secret từ 32 byte; local và CI dùng khoá ngắn được |
 | `shared.privacy` | `pii_hmac(value)` dùng khoá đầu; `pii_hmac_candidates(value)` trả giá trị với mọi khoá để tra bằng `__in`. Không tự chuẩn hoá đầu vào |
 | `Money` | Frozen dataclass; chỉ nhận `int` thật (từ chối `float`, `bool`, `Decimal`, `str`); cho phép số âm; `+`, `-`, `* int`, so sánh, chỉ giữa cùng `currency`; không có phép chia; chỉ `"VND"` |
-| Số điện thoại | Mọi số hợp lệ thuộc VN, kể cả số cố định; từ chối số nước ngoài. Ném `InvalidPhoneNumber(ValueError)`, serializer đổi thành `400 VALIDATION_ERROR`; thông báo không chứa số gốc |
-| `DomainError` | `code`, `http_status` (mặc định 422), `message` (`gettext_lazy`) là thuộc tính lớp; `__init__(message=None, details=None)`. `RetryLater` không kế thừa `DomainError` |
+| Số điện thoại | Mọi số hợp lệ thuộc VN, kể cả số cố định; từ chối số nước ngoài. Chỉ nhận chữ số và dấu phân cách, bắt đầu bằng `0` hoặc `+`: từ chối chữ cái, extension và số thiếu `+` trước mã nước để `phonenumbers` không tự đoán. Ném `InvalidPhoneNumber(ValueError)`, serializer đổi thành `400 VALIDATION_ERROR`; thông báo bọc `gettext_lazy`, không chứa số gốc |
+| `DomainError` | `code`, `http_status` (mặc định 422), `message` (`gettext_lazy`) là thuộc tính lớp; `__init__(message=None, details=None)`. Khác chữ ký `DomainError(code, message, details)` ở mục Việc cần làm: `code` cố định theo lớp lỗi nên không truyền lúc ném. `RetryLater` không kế thừa `DomainError` |
 | `redact_pii` | Khớp chuỗi con không phân biệt hoa thường với `email, phone, address, token, password, card, secret`; xử lý dict/list lồng nhau và `extra` của log stdlib; key đuôi `_hmac` không che. `configure_logging(json=...)`: local in dễ đọc, nơi khác JSON |
-| `updated_at` | Manager của BaseModel: `update()` tự gán `updated_at` nếu thiếu; `bulk_update()` báo lỗi nếu `fields` thiếu `updated_at` |
+| `updated_at` | Manager của BaseModel: `update()` tự gán `updated_at` nếu thiếu; `bulk_update()` thiếu `updated_at` trong `fields` thì gán `timezone.now()` cho mọi object rồi thêm field (báo lỗi như bản đầu vẫn để DB giữ mốc cũ khi bên gọi quên gán giá trị); có sẵn thì giữ giá trị của từng object |
 | Migration | `CreateExtension` cho ba extension; `public.immutable_unaccent(text)` gọi `public.unaccent` có schema, có reverse. Chưa thêm `django.contrib.postgres` vào `INSTALLED_APPS` (M1 thêm khi cần lookup) |
 
 ## Acceptance criteria
@@ -42,6 +42,7 @@ Chốt khi grilling ngày 29/10/2026.
 - [x] `Money` từ chối float.
 - [x] Log có key `email`, `phone`, `token` bị che.
 - [x] Sau migrate, ba extension và hàm `immutable_unaccent` có trong DB.
-- [x] `QuerySet.update` của BaseModel tự cập nhật `updated_at`; `bulk_update` thiếu `updated_at` bị từ chối.
+- [x] `QuerySet.update` và `bulk_update` của BaseModel tự cập nhật `updated_at` khi bên gọi không truyền.
+- [x] Số có chữ cái, extension hoặc thiếu `+` trước mã nước bị từ chối.
 - [x] `pii_hmac_candidates` tìm được giá trị ghi bằng khoá cũ sau khi xoay khoá.
 - [x] `check --deploy` báo lỗi khi secret trong `PII_HMAC_KEYS` ngắn hơn 32 byte.

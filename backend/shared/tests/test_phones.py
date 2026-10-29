@@ -22,6 +22,10 @@ def test_accepts_vietnamese_landline() -> None:
         "090123",  # thiếu số, không tự đoán
         "09012345678901",
         "+1 650 253 0000",  # số hợp lệ của nước khác
+        "0901-CALL-ME",  # phonenumbers tự đổi chữ thành số
+        "0901234567 ext 12",  # phonenumbers tự bỏ extension
+        "84901234567",  # thiếu `+`, không tự đoán mã nước
+        "+84 901+234567",
     ],
 )
 def test_rejects_invalid_or_foreign_number(raw: str) -> None:
