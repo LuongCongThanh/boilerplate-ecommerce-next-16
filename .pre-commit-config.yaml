@@ -1,4 +1,4 @@
-# Cài một lần: pre-commit install
+# Cài một lần, chạy trong backend/: uv run pre-commit install (pre-commit nằm trong nhóm dev)
 # Xem docs/architecture/11-git-workflow.md mục 3.4 và 8.
 default_install_hook_types: [pre-commit, commit-msg]
 
