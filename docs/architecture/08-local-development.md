@@ -151,7 +151,7 @@ REDIS_PORT=6380                                                   # cổng Redis
 REDIS_URL=redis://localhost:6380/0
 EMAIL_HOST=localhost
 EMAIL_PORT=1025
-PII_HMAC_KEYS=local-pii-1:local-pii-secret                # kid:secret, khoá đầu dùng cho giá trị mới, không xoá khoá cũ (ADR 0016)
+PII_HMAC_KEYS=local-pii-1:local-pii-secret                # kid:secret, nhiều khoá cách nhau bằng dấu phẩy, khoá đầu dùng cho giá trị mới, không xoá khoá cũ (ADR 0016); `check --deploy` đòi secret từ 32 byte
 STOREFRONT_ORIGIN=http://localhost:3000
 BFF_SHARED_SECRET=local-bff-secret
 

@@ -1,0 +1,82 @@
+from collections.abc import Iterator
+from datetime import timedelta
+
+import pytest
+from django.db import connection, models
+from django.utils import timezone
+
+from shared.models import BaseModel
+
+
+class Widget(BaseModel):
+    name = models.CharField(max_length=20)
+
+    class Meta:
+        app_label = "shared"
+        db_table = "shared_test_widget"
+
+
+@pytest.fixture
+def widget_table(db: None) -> Iterator[None]:
+    # Model chỉ dùng trong test, không có migration
+    with connection.schema_editor() as editor:
+        editor.create_model(Widget)
+    yield
+    with connection.schema_editor() as editor:
+        editor.delete_model(Widget)
+
+
+@pytest.mark.usefixtures("widget_table")
+def test_assigns_uuid7_and_both_timestamps() -> None:
+    widget = Widget.objects.create(name="a")
+
+    assert widget.id.version == 7
+    assert widget.created_at is not None
+    assert widget.updated_at is not None
+
+
+@pytest.mark.usefixtures("widget_table")
+def test_bulk_create_fills_timestamps() -> None:
+    Widget.objects.bulk_create([Widget(name="a"), Widget(name="b")])
+
+    assert not Widget.objects.filter(updated_at__isnull=True).exists()
+
+
+@pytest.mark.usefixtures("widget_table")
+def test_queryset_update_sets_updated_at() -> None:
+    widget = Widget.objects.create(name="a")
+    past = timezone.now() - timedelta(days=1)
+    Widget.objects.filter(pk=widget.pk).update(updated_at=past)
+
+    Widget.objects.filter(pk=widget.pk).update(name="b")
+
+    widget.refresh_from_db()
+    assert widget.updated_at > past
+    assert widget.created_at < widget.updated_at
+
+
+@pytest.mark.usefixtures("widget_table")
+def test_bulk_update_sets_updated_at_when_missing_from_fields() -> None:
+    widget = Widget.objects.create(name="a")
+    past = timezone.now() - timedelta(days=1)
+    Widget.objects.filter(pk=widget.pk).update(updated_at=past)
+    widget.refresh_from_db()
+    widget.name = "b"
+
+    assert Widget.objects.bulk_update([widget], (f for f in ["name"])) == 1
+
+    widget.refresh_from_db()
+    assert widget.name == "b"
+    assert widget.updated_at > past
+
+
+@pytest.mark.usefixtures("widget_table")
+def test_bulk_update_keeps_caller_updated_at() -> None:
+    widget = Widget.objects.create(name="a")
+    chosen = timezone.now() - timedelta(hours=1)
+    widget.updated_at = chosen
+
+    Widget.objects.bulk_update([widget], ["updated_at"])
+
+    widget.refresh_from_db()
+    assert widget.updated_at == chosen

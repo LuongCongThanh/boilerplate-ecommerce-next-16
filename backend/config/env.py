@@ -5,12 +5,14 @@ Mỗi biến được khai báo ở mốc đầu tiên dùng tới nó; `.env.ex
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
-from pydantic import SecretStr, ValidationError
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import SecretStr, ValidationError, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+from shared.privacy import parse_keyring
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,9 +33,18 @@ class Env(BaseSettings):
     REDIS_URL: str
     EMAIL_HOST: str
     EMAIL_PORT: int
-    PII_HMAC_KEYS: SecretStr
+    # Dạng `kid2:s2,kid1:s1`, không phải JSON: NoDecode để pydantic-settings không tự decode
+    PII_HMAC_KEYS: Annotated[tuple[tuple[str, SecretStr], ...], NoDecode]
     STOREFRONT_ORIGIN: str
     BFF_SHARED_SECRET: SecretStr
+
+    @field_validator("PII_HMAC_KEYS", mode="before")
+    @classmethod
+    def _parse_keyring(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        # Bọc secret trong SecretStr để repr của Env và lỗi validate không lộ secret
+        return tuple((kid, SecretStr(secret)) for kid, secret in parse_keyring(value))
 
 
 def load_env(env_file: Path | None = BASE_DIR / ".env") -> Env:

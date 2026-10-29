@@ -52,7 +52,7 @@ Phiên bản được kiểm tra trên PyPI ngày **25/10/2026**. Dấu **—** 
 | `django-pghistory` | 3.9.2 | Lịch sử thay đổi (Đơn hàng, Thanh toán, Tồn kho, cấu hình vận hành). Chỉ theo dõi danh sách field tường minh, không chụp raw payload hay PII trực tiếp (03 mục 10.1) | Dùng trigger PostgreSQL nên bắt được cả `bulk_update` |
 | `httpx` | — | Gọi API VNPay, MoMo, GHN | Hỗ trợ timeout và retry rõ ràng; test bằng `respx` |
 | `Pillow` | 13.0.0 | Xử lý ảnh Sản phẩm | Bắt buộc cho `ImageField` |
-| `phonenumbers` | — | Parse, validate số Việt Nam và chuẩn hoá E.164 trong `shared.phones` | Dùng chung cho lưu, tra cứu, giới hạn Voucher và xác định đối tượng ẩn danh; pin bản tương thích khi bootstrap |
+| `phonenumbers` | 9.0.42 | Parse, validate số Việt Nam và chuẩn hoá E.164 trong `shared.phones` | Dùng chung cho lưu, tra cứu, giới hạn Voucher và xác định đối tượng ẩn danh |
 | `django-storages[s3]` + `boto3` | 1.14.6 / — | Lưu ảnh trên S3 (chỉ ở AWS) | Ở local lưu ra ổ đĩa (`FileSystemStorage`) |
 | `vietnam-provinces` | 2026.9.0 | Dữ liệu 34 tỉnh/thành và phường/xã (sau 07/2025) | Đã cập nhật theo cấu trúc 2 cấp |
 | `structlog` + `django-structlog` | 26.1.0 / 11.0.0 | Log JSON có `request_id` | Dễ tìm kiếm log trên CloudWatch |
@@ -159,7 +159,7 @@ backend/
 │
 ├── config/                         # cấu hình project, KHÔNG chứa nghiệp vụ
 │   ├── __init__.py                 # nạp Celery app khi Django khởi động
-│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) và PG_PORT (chỉ Compose dùng, khai báo để pydantic-settings không báo biến thừa khi đọc .env)
+│   ├── env.py                      # class Env (pydantic-settings) đọc và kiểm tra biến môi trường, gồm APP_ENV (local | test | staging | production) và PG_PORT (chỉ Compose dùng, khai báo để pydantic-settings không báo biến thừa khi đọc .env); PII_HMAC_KEYS được parse một lần thành keyring (secret bọc SecretStr)
 │   ├── settings/
 │   │   ├── __init__.py
 │   │   ├── base.py                 # cấu hình chung mọi môi trường
@@ -176,8 +176,8 @@ backend/
 │   ├── models.py                   # uuid7(), BaseModel: id UUID v7, created_at, updated_at; IdempotencyKey; import model của events/ và geo/ để Django nhận ra
 │   ├── money.py                    # value object Money(amount: int, currency="VND")
 │   ├── phones.py                   # normalize_vn_phone: chuẩn hoá số điện thoại dùng chung, không import modules (03 mục 0.6)
-│   ├── privacy.py                  # pii_hmac(value) -> "<kid>:<hex>" bằng keyring PII_HMAC_KEYS (ADR 0016); dùng cho bằng chứng sau ẩn danh, IP trong log, key failure ledger
-│   ├── exceptions.py               # DomainError(code, message, details), RetryLater (handler báo consumer thử lại sau, không kế thừa DomainError) và các lỗi chung
+│   ├── privacy.py                  # pii_hmac(value) -> "<kid>:<hex>" bằng khoá đầu của keyring PII_HMAC_KEYS; pii_hmac_candidates(value) -> giá trị theo mọi khoá để tra cứu dữ liệu cũ khi xoay khoá; parse_keyring đọc chuỗi `kid2:s2,kid1:s1` (ADR 0016); dùng cho bằng chứng sau ẩn danh, IP trong log, key failure ledger
+│   ├── exceptions.py               # DomainError (thuộc tính lớp code, http_status mặc định 422; khởi tạo nhận message, details tuỳ chọn), RetryLater (handler báo consumer thử lại sau, không kế thừa DomainError) và các lỗi chung
 │   ├── tasks.py                    # enqueue_on_commit(task_name, **kwargs): đẩy Celery task theo tên sau khi transaction commit (on_commit robust=True: broker lỗi thì chỉ log); purge_old_outbox_events (chỉ xoá sự kiện đã kết thúc mọi delivery, cùng các delivery đó), purge_idempotency_keys
 │   ├── events/
 │   │   ├── __init__.py             # API công khai: publish(), handles(), get_delivery_outcomes(), delivery_lag() (tuổi của công việc giao sự kiện đã tới hạn mà chưa xử lý, không tính failed hay pending đang chờ retry; job T4 dùng, 07 mục 1.1.1)
@@ -202,14 +202,15 @@ backend/
 │   │   └── i18n.py                 # chọn ngôn ngữ theo Accept-Language (vi mặc định)
 │   ├── health/
 │   │   └── views.py                # /healthz (sống), /readyz (kết nối được PostgreSQL)
-│   ├── logging.py                  # cấu hình structlog, processor redact_pii che PII
+│   ├── logging.py                  # configure_logging(json=...) cấu hình structlog, processor redact_pii che PII
+│   ├── checks.py                   # system check shared.E001 (--deploy): mỗi secret của PII_HMAC_KEYS dài ít nhất 32 byte
 │   ├── management/commands/
 │   │   ├── run_outbox_relay.py     # tiến trình relay chạy liên tục
 │   │   ├── retry_failed_events.py  # mở lại các delivery failed
 │   │   ├── replay_events.py        # phát lại sự kiện trong outbox theo loại và mốc thời gian (07 mục 1.1)
 │   │   ├── sync_beat_schedule.py   # ghi lịch job từ config/celery.py vào django-celery-beat, tắt job thừa; chạy sau migrate (07 mục 3.2)
 │   │   └── load_geo.py             # nạp dữ liệu tỉnh/thành, phường/xã
-│   ├── migrations/
+│   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension)
 │   └── testing/
 │       ├── factories.py            # factory gốc
 │       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (api_client…); fixture cần Tài khoản nằm ở backend/conftest.py
@@ -304,7 +305,7 @@ modules/ordering/
 | `contracts.py` | Các hàm công khai (ví dụ `reserve_stock(...)`) và DTO pydantic đầu vào/ra. Đây là thứ **duy nhất** module khác được gọi (module khác chỉ được import thêm `events.py` và `exceptions.py`); chỉ đưa vào những gì module khác thực sự cần. Docstring của các hàm ghi dữ liệu nêu rõ: gọi trong transaction của bên gọi được không, khoá dòng nào, ném lỗi gì | `services`, `selectors` của chính module; `contracts` của module lớp dưới | Trả về model Django ra ngoài (phải trả DTO) |
 | `events.py` | Class sự kiện, ví dụ `OrderPlacedV1(DomainEvent)` có `event_type = "ordering.order-placed"`, `schema_version = 1` | `shared.events.base` | Logic nghiệp vụ |
 | `constants.py` | `TextChoices` và hằng số | — | Import model |
-| `exceptions.py` | Lỗi nghiệp vụ, kế thừa `shared.exceptions.DomainError`, mỗi lỗi có `code` tiếng Anh, ví dụ `OUT_OF_STOCK`. Riêng lỗi báo consumer thử lại sau (ví dụ `TransitionNotYetValid`) kế thừa `shared.exceptions.RetryLater`. Lỗi thuộc module ném ra nó: `OutOfStock` thuộc `inventory`, module lớp trên import `inventory.exceptions` để bắt, không khai báo lại | `shared.exceptions` | Import model |
+| `exceptions.py` | Lỗi nghiệp vụ, kế thừa `shared.exceptions.DomainError`. Mỗi lớp lỗi khai báo `code` tiếng Anh (ví dụ `OUT_OF_STOCK`), `http_status` (409 hoặc 422 theo [04](./04-api-contract.md) mục 3, mặc định 422) và `message` mặc định bọc `gettext_lazy`; khi ném có thể truyền `message`, `details` riêng. Riêng lỗi báo consumer thử lại sau (ví dụ `TransitionNotYetValid`) kế thừa `shared.exceptions.RetryLater`. Lỗi thuộc module ném ra nó: `OutOfStock` thuộc `inventory`, module lớp trên import `inventory.exceptions` để bắt, không khai báo lại | `shared.exceptions` | Import model |
 | `models/` | Field, ràng buộc DB (`UniqueConstraint`, `CheckConstraint`), index, `Meta.db_table` có tiền tố module (ví dụ `ordering_order`), property đơn giản | `shared.models`, `models/` của module lớp dưới (chỉ để khai báo FK, mục 6.3) | Logic nghiệp vụ, gọi API ngoài, gửi email, override `save()` để làm việc phụ; tự khai báo `id` trên model nghiệp vụ thay vì kế thừa BaseModel. Hai bảng địa giới và model framework/history theo ngoại lệ 03 mục 0.1/0.9 |
 | `services/` | Mỗi nghiệp vụ ghi là một hàm có tham số keyword; phần ghi DB chạy trong `transaction.atomic`, phát sự kiện qua `shared.events.publish`. Hàm điều phối tích hợp chia thành các transaction ngắn, không bọc toàn hàm khi có HTTP | Model của chính module, `contracts` của module lớp dưới | Nhận `request`; import `api/`; gọi HTTP ra ngoài bên trong `transaction.atomic`; đẩy Celery task trực tiếp (phải qua `shared.tasks.enqueue_on_commit`); import `tasks.py` (đẩy task theo tên, để không có vòng import `services` ↔ `tasks`); truy vấn đi vào model của module khác (mục 6.3) |
 | `selectors/` | Hàm truy vấn đọc, tối ưu bằng `select_related`, `prefetch_related` | Model của chính module; hàm **chỉ đọc** trong `contracts` của module lớp dưới (mục 6.3) | Ghi dữ liệu; gọi hàm ghi trong `contracts`; truy vấn đi vào model của module khác (mục 6.3) |
@@ -596,12 +597,16 @@ select = [
     "RUF",      # rule riêng của ruff
     "S",        # flake8-bandit: code nguy hiểm (eval, pickle, shell=True, SQL ghép chuỗi…)
 ]
+# Lỗi đặt tên theo nghiệp vụ (`OutOfStock`, `RetryLater`), không bắt hậu tố Error (02 mục 6.1)
+ignore = ["N818"]
 
 [tool.ruff.lint.per-file-ignores]
 # Test được dùng assert và mật khẩu giả viết cứng. "**/" để khớp cả modules/<module>/tests/,
 # không chỉ backend/tests/
 "**/tests/**" = ["S101", "S105", "S106"]
 "conftest.py" = ["S105", "S106"]
+# Migration theo khuôn Django sinh ra: `dependencies`, `operations` là list ở mức class
+"**/migrations/**" = ["RUF012"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["config", "shared", "modules"]
@@ -675,9 +680,10 @@ Các loại test, marker, coverage và cổng chặn trong CI: xem [12-testing-s
 | Chủ đề | Quy ước |
 |---|---|
 | Logger | `logger = structlog.get_logger(__name__)` ở đầu file. Không dùng `print` hay `logging.getLogger` |
+| Định dạng | `shared.logging.configure_logging(json=...)` trả setting `LOGGING`: JSON ở test, staging, production; `config.settings.local` in dạng dễ đọc trên terminal |
 | Message | Tên sự kiện tiếng Anh dạng `snake_case`, dữ liệu truyền bằng keyword: `logger.info("order_placed", order_code=code)`. Không dùng f-string hay `%` trong message, để lọc được theo field trên CloudWatch |
 | Context | `request_id`, `user_id`, `order_code` do `django-structlog` và middleware gắn sẵn ([10-nfr.md](./10-nfr.md)); không truyền lại thủ công |
-| PII | Không log email, SĐT, địa chỉ, token, mật khẩu, payload thanh toán thô. Processor `shared.logging.redact_pii` che các key `email`, `phone`, `address`, `token`, `password`, `card` làm lưới an toàn, không thay cho việc tự kiểm tra |
+| PII | Không log email, SĐT, địa chỉ, token, mật khẩu, payload thanh toán thô. Processor `shared.logging.redact_pii` làm lưới an toàn, không thay cho việc tự kiểm tra: che giá trị của key có chứa `email`, `phone`, `address`, `token`, `password`, `card`, `secret` (khớp chuỗi con, không phân biệt hoa thường, kể cả `contact_phone`, `access_token`, và trong dict/list lồng nhau, kể cả `extra` của log stdlib). Key kết thúc bằng `_hmac` không bị che vì đã là HMAC ([ADR 0016](../adr/0016-erasure-evidence-phone-hmac.md)) |
 | Mức log | Lỗi nghiệp vụ (`DomainError`) log `INFO`. `WARNING` cho tình huống bất thường nhưng đã xử lý (ví dụ dùng phí ship dự phòng). `ERROR` chỉ cho lỗi ngoài dự kiến; Sentry tự bắt exception chưa xử lý |
 
 ```python

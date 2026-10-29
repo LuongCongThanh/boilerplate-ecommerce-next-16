@@ -36,3 +36,26 @@ def test_missing_required_variable_names_it(monkeypatch: pytest.MonkeyPatch) -> 
 
     with pytest.raises(ImproperlyConfigured, match="BFF_SHARED_SECRET"):
         load_env(env_file=None)
+
+
+@pytest.mark.usefixtures("m0_env")
+def test_parses_keyring_once_and_hides_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PII_HMAC_KEYS", "k2:secret-2,k1:secret-1")
+
+    env = load_env(env_file=None)
+
+    assert [(kid, secret.get_secret_value()) for kid, secret in env.PII_HMAC_KEYS] == [
+        ("k2", "secret-2"),
+        ("k1", "secret-1"),
+    ]
+    assert "secret-2" not in repr(env)
+
+
+@pytest.mark.usefixtures("m0_env")
+def test_malformed_keyring_names_variable_without_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PII_HMAC_KEYS", "k1:top-secret,k1:other")
+
+    with pytest.raises(ImproperlyConfigured, match="PII_HMAC_KEYS") as exc_info:
+        load_env(env_file=None)
+
+    assert "top-secret" not in str(exc_info.value)
