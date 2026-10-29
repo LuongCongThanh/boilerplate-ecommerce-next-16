@@ -11,8 +11,8 @@ def list_provinces() -> QuerySet[Province]:
     return Province.objects.order_by("code")
 
 
-def find_province(*, code: str) -> Province | None:
-    return Province.objects.filter(code=code).first()
+def province_exists(*, code: str) -> bool:
+    return Province.objects.filter(code=code).exists()
 
 
 def list_wards(*, province_code: str) -> QuerySet[Ward]:

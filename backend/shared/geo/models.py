@@ -10,6 +10,9 @@ class Province(models.Model):
     code = models.CharField(primary_key=True, max_length=10)
     name = models.CharField(max_length=255)
 
+    class Meta:
+        db_table = "shared_province"
+
     def __str__(self) -> str:
         return self.name
 
@@ -20,6 +23,9 @@ class Ward(models.Model):
         Province, on_delete=models.PROTECT, related_name="wards", db_column="province_code"
     )
     name = models.CharField(max_length=255)
+
+    class Meta:
+        db_table = "shared_ward"
 
     def __str__(self) -> str:
         return self.name

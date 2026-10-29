@@ -5,8 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    initial = True
-
     dependencies = [
         ("shared", "0001_postgres_extensions"),
     ]
@@ -18,6 +16,9 @@ class Migration(migrations.Migration):
                 ("code", models.CharField(max_length=10, primary_key=True, serialize=False)),
                 ("name", models.CharField(max_length=255)),
             ],
+            options={
+                "db_table": "shared_province",
+            },
         ),
         migrations.CreateModel(
             name="Ward",
@@ -34,5 +35,8 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
+            options={
+                "db_table": "shared_ward",
+            },
         ),
     ]
