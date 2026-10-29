@@ -75,7 +75,7 @@ Lint (`ruff check`, `ruff format --check`, `mypy`, `lint-imports`) xanh · test:
 
 - `make db-reset` cắt mọi kết nối (`WITH (FORCE)`), Compose không đặt restart policy nên beat có thể thoát; nếu đúng vậy thì tài liệu ghi chạy `make restart-worker` sau `db-reset`.
 - `.env` tạo trước ticket này vẫn có `REDIS_URL=redis://redis:6379/0`, `EMAIL_HOST=mailpit`; phải đổi sang `redis://localhost:6380/0` và `localhost` theo `.env.example`.
-- Image trong `docker-compose.yml` chưa có ecosystem `docker-compose` trong Dependabot; thuộc ticket 14.
+- Image trong `docker-compose.yml` chưa có ecosystem `docker-compose` trong Dependabot: tách thành ticket [20](./20-dependabot-compose-images.md) (`needs-triage`).
 - Ngoài *Việc cần làm*: thêm `.dockerignore` (không đưa `.env`, `.venv` vào image), `COPY . .` trong Dockerfile (image chạy được khi không bind mount, ticket 14 quét image này), `name: fashion` trong Compose; ghim image ở bản đã phát hành ≥ 7 ngày: `python:3.14.9-slim`, `ghcr.io/astral-sh/uv:0.13.5`, `valkey/valkey:8.1.11`, `axllent/mailpit:v1.31.6`.
 - `django-celery-beat` không có type hints: thêm `django_celery_beat.*` vào override `ignore_missing_imports` của mypy.
 
