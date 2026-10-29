@@ -1,4 +1,5 @@
 import pytest
+from django.core.management import call_command
 from django.db import connection
 
 
@@ -15,3 +16,19 @@ def test_extensions_and_immutable_unaccent_exist_after_migrate() -> None:
     assert {"unaccent", "pg_trgm", "btree_gist"} <= extensions
     assert volatility == ("i",)
     assert unaccented == ("ao thun do",)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_reverse_drops_function_but_keeps_extensions() -> None:
+    try:
+        call_command("migrate", "shared", "zero", verbosity=0)
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM pg_proc WHERE proname = 'immutable_unaccent'")
+            function = cursor.fetchone()
+            cursor.execute("SELECT extname FROM pg_extension")
+            extensions = {row[0] for row in cursor.fetchall()}
+    finally:
+        call_command("migrate", "shared", verbosity=0)
+
+    assert function is None
+    assert {"unaccent", "pg_trgm", "btree_gist"} <= extensions
