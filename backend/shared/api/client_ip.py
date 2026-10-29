@@ -12,8 +12,12 @@ from collections.abc import Callable
 import structlog
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
+from rest_framework.request import Request
 
 logger = structlog.get_logger(__name__)
+
+# Tên thuộc tính middleware gán lên request; đọc qua get_client_ip
+CLIENT_IP_ATTR = "client_ip"
 
 
 def _secret_matches(provided: str) -> bool:
@@ -40,10 +44,16 @@ def resolve_client_ip(request: HttpRequest) -> str:
         return remote_addr
 
 
+def get_client_ip(request: HttpRequest | Request) -> str:
+    """IP mà `ClientIpMiddleware` đã xác minh; nhận cả `Request` của DRF."""
+    client_ip: str = getattr(request, CLIENT_IP_ATTR)
+    return client_ip
+
+
 class ClientIpMiddleware:
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        request.client_ip = resolve_client_ip(request)  # type: ignore[attr-defined]
+        setattr(request, CLIENT_IP_ATTR, resolve_client_ip(request))
         return self.get_response(request)

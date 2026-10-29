@@ -1,8 +1,10 @@
 """Throttle cơ sở của API (05 mục 5).
 
-Khoá theo IP dùng `pii_hmac(request.client_ip)`, không bao giờ là IP thô; `client_ip` do
-`shared.api.client_ip.ClientIpMiddleware` gán. Cache lỗi thì fail-open: cho request qua và
-log `throttle_backend_unavailable` chỉ kèm scope. Scope riêng thêm ở mốc dùng tới.
+Khoá theo IP dùng `pii_hmac(get_client_ip(request))`, không bao giờ là IP thô; IP do
+`shared.api.client_ip.ClientIpMiddleware` gán. Hạn mức của từng scope nằm ở
+`REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]` trong settings. Cache lỗi thì fail-open: cho
+request qua và log `throttle_backend_unavailable` chỉ kèm scope. Scope riêng thêm ở mốc dùng
+tới.
 """
 
 from typing import TYPE_CHECKING, Any
@@ -12,6 +14,7 @@ from redis.exceptions import RedisError
 from rest_framework.request import Request
 from rest_framework.throttling import SimpleRateThrottle
 
+from shared.api.client_ip import get_client_ip
 from shared.privacy import pii_hmac
 
 if TYPE_CHECKING:
@@ -41,12 +44,12 @@ class ClientIpRateThrottle(FailOpenRateThrottle):
     """Đếm theo IP đã xác minh, khoá là HMAC của IP."""
 
     def get_cache_key(self, request: Request, view: APIView) -> str | None:
-        client_ip: str = request.client_ip  # type: ignore[attr-defined]
-        return self.cache_format % {"scope": self.scope, "ident": pii_hmac(client_ip)}
+        ident = pii_hmac(get_client_ip(request))
+        return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
 class AnonThrottle(ClientIpRateThrottle):
-    """Request ẩn danh: 120/phút/IP."""
+    """Request ẩn danh, đếm theo IP; hạn mức ở `DEFAULT_THROTTLE_RATES["anon"]`."""
 
     scope = "anon"
 
@@ -57,7 +60,10 @@ class AnonThrottle(ClientIpRateThrottle):
 
 
 class AccountThrottle(FailOpenRateThrottle):
-    """Request đã đăng nhập: 300/phút/Tài khoản; ẩn danh không bị lớp này đếm."""
+    """Request đã đăng nhập, đếm theo Tài khoản; hạn mức ở `DEFAULT_THROTTLE_RATES["account"]`.
+
+    Request ẩn danh không bị lớp này đếm.
+    """
 
     scope = "account"
 

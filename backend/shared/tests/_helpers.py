@@ -6,6 +6,8 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
+from shared.api.client_ip import CLIENT_IP_ATTR
+
 BFF_IP = "10.0.0.5"
 CLIENT_IP = "203.0.113.7"
 BFF_SECRET = "secret-new"
@@ -17,7 +19,7 @@ def drf_request(user: Any = None, client_ip: str = CLIENT_IP) -> Request:
     django_request = APIRequestFactory().get("/")
     if user is not None:
         force_authenticate(django_request, user=user)
-    django_request.client_ip = client_ip  # type: ignore[attr-defined]
+    setattr(django_request, CLIENT_IP_ATTR, client_ip)
     return APIView().initialize_request(django_request)
 
 
