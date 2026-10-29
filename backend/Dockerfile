@@ -23,7 +23,11 @@ WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --locked --no-build --no-dev
 
-COPY . .
+# Chép tường minh phần code chạy được, không chép cả thư mục (tránh lọt file nhạy cảm vào image)
+COPY manage.py ./
+COPY config ./config
+COPY shared ./shared
+COPY modules ./modules
 
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin app
 USER app
