@@ -48,6 +48,40 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    services:
+      postgres:
+        image: postgres:18.6
+        # Container chỉ sống trong job và chỉ mở trên localhost của runner,
+        # nên không đặt mật khẩu thay vì viết cứng một mật khẩu vào workflow
+        env:
+          POSTGRES_USER: fashion
+          POSTGRES_DB: fashion
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U fashion"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: valkey/valkey:8.1.11
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    # Giá trị giả cho CI; không commit file .env (08 mục 2.3)
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      DJANGO_SECRET_KEY: ci-only-not-secret
+      DATABASE_URL: postgres://fashion@localhost:5432/fashion
+      REDIS_URL: redis://localhost:6379/0
+      EMAIL_HOST: localhost
+      EMAIL_PORT: "1025"
+      PII_HMAC_KEYS: ci-pii-1:ci-pii-secret
+      STOREFRONT_ORIGIN: http://localhost:3000
+      BFF_SHARED_SECRET: ci-bff-secret
     defaults:
       run:
         working-directory: backend

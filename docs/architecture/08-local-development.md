@@ -169,6 +169,8 @@ PAYMENT_PROVIDER_MOMO=fake
 GOOGLE_OAUTH_CLIENT_ID=
 ```
 
+`DJANGO_SETTINGS_MODULE` trong `.env` chỉ có tác dụng trong Compose, vì Compose nạp `.env` vào biến môi trường của container; khi `.env` được đọc thì settings đã được chọn rồi. Chạy trên máy thì `export` biến này, hoặc dùng mặc định `config.settings.local` của `manage.py`. `wsgi.py` và Celery không có giá trị mặc định: process deploy thiếu biến này thì dừng ngay.
+
 `BFF_SHARED_SECRET` phải trùng với giá trị cấu hình ở Next.js local. Next.js gửi secret này trong header `X-BFF-Secret` kèm `X-Client-IP`, và Django chỉ tin `X-Client-IP` khi secret đúng ([ADR 0009](../adr/0009-nextjs-bff-django-private.md)). Gọi thẳng `localhost:8000` từ Swagger UI hay `curl` vẫn chạy được, chỉ là throttle tính theo IP của máy gọi.
 
 Từ M1, sinh khoá JWT cho local:
@@ -210,15 +212,15 @@ Mỗi lệnh được thêm vào `Makefile` cùng ticket tạo ra lệnh mà nó
 
 | Lệnh | Làm gì | Có từ |
 |---|---|---|
-| `make up` / `make down` | Bật / tắt các container; `make up` chạy service `migrate` trước (mục 7) | M0 (ticket 07) |
-| `make logs s=worker` | Xem log của một service | M0 (ticket 07) |
-| `make shell` | `manage.py shell` trong container api | M0 (ticket 07) |
-| `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) | M0 (ticket 07) |
-| `make db-reset` | Xoá và tạo lại database `fashion` rồi migrate (mục 2.2) | M0 (ticket 07) |
+| `make up` / `make down` | Bật / tắt các container; `make up` chạy service `migrate` trước (mục 7) | M0 (ticket 15) |
+| `make logs s=worker` | Xem log của một service | M0 (ticket 15) |
+| `make shell` | `manage.py shell` trong container api | M0 (ticket 15) |
+| `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) | M0 (ticket 15) |
+| `make db-reset` | Xoá và tạo lại database `fashion` rồi migrate (mục 2.2) | M0 (ticket 15) |
 | `make test` | `pytest -n auto` | M0 (ticket 07) |
-| `make lint` | `ruff check`, `ruff format --check`, `mypy`, `lint-imports`, `scripts/gen_importlinter.py --check` | M0 (ticket 07) |
+| `make lint` | `ruff check`, `ruff format --check`, `mypy`, `lint-imports`, `scripts/gen_importlinter.py --check` | M0 (ticket 07; `gen_importlinter.py --check` từ ticket 04) |
 | `make fmt` | `ruff format` + `ruff check --fix` | M0 (ticket 07) |
-| `make load-geo` | Nạp 34 tỉnh/thành và phường/xã | M0 (ticket 09) |
+| `make load-geo` | Nạp 34 tỉnh/thành và phường/xã | M0 (ticket 17) |
 | `make create-admin` | Tạo Tài khoản Admin (`manage.py create_staff --admin`) | M0 (ticket 12) |
 | `make seed` | Tạo Kho, danh mục, Sản phẩm mẫu, Voucher mẫu | M1 (Voucher mẫu từ M2) |
 | `make tunnel` | Mở Cloudflare Tunnel để nghiệm thu với sandbox ([06](./06-integrations.md) mục 8) | M7 |
@@ -309,4 +311,4 @@ services:
     ports: ["1025:1025", "8025:8025"]
 ```
 
-Phiên bản image (`valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Compose không có service `postgres` ([ADR 0015](../adr/0015-local-postgres-on-host.md)); `PG_PORT` đọc từ `.env` để Compose thay vào `DATABASE_URL`. Service `migrate` chạy một lần rồi thoát; `api`, `worker`, `beat`, `relay` chỉ khởi động khi nó thoát thành công, nên DB trống không làm `beat` hay `relay` lỗi liên tục. Migration lỗi thì `make up` dừng ở bước này, xem bằng `make logs s=migrate`.
+Phiên bản image (`valkey`, `mailpit`) sẽ được pin tới bản vá cụ thể khi khởi tạo dự án. Compose không có service `postgres` ([ADR 0015](../adr/0015-local-postgres-on-host.md)); `PG_PORT` đọc từ `.env` để Compose thay vào `DATABASE_URL`. Service `migrate` chạy một lần rồi thoát; `api`, `worker`, `beat`, `relay` chỉ khởi động khi nó thoát thành công, nên DB trống không làm `beat` hay `relay` lỗi liên tục. Migration lỗi thì `make up` dừng ở bước này, xem bằng `make logs s=migrate`. Service `relay` có từ ticket 10 của M0, cùng lúc với lệnh `run_outbox_relay`.

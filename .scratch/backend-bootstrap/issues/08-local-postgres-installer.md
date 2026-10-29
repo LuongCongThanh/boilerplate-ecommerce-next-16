@@ -6,7 +6,7 @@ Status: ready-for-human
 
 Theo [ADR 0015](../../../docs/adr/0015-local-postgres-on-host.md), PostgreSQL ở local cài trên máy, bản major mới nhất: Windows cài trong WSL2 Ubuntu bằng apt (PGDG), macOS cài bằng Homebrew. Script `scripts/setup/postgres.sh` đã được viết nhưng **chưa chạy thử trên máy thật**. Ticket này chạy thử trên Windows (WSL2), sửa lỗi và gỡ nhãn **[Cần xác minh]** phần Windows trong [08](../../../docs/architecture/08-local-development.md). Phần macOS tách sang ticket [13](./13-local-postgres-installer-macos.md), không chặn M0.
 
-Ticket này chặn acceptance criteria `/readyz` của ticket 07: cần PostgreSQL đã chạy trên máy.
+Ticket này chặn ticket [15](./15-docker-compose-local.md) (Docker Compose): container phải gọi được PostgreSQL trên máy.
 
 ## Script làm gì
 
