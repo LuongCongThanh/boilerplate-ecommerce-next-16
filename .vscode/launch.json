@@ -2,13 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Attach Django (Docker)",
+      "name": "Django (local)",
       "type": "debugpy",
-      "request": "attach",
-      "connect": { "host": "localhost", "port": 5678 },
-      "pathMappings": [
-        { "localRoot": "${workspaceFolder}/backend", "remoteRoot": "/app" }
-      ],
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/manage.py",
+      "args": ["runserver"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/bin/python",
+      "windows": { "python": "${workspaceFolder}/backend/.venv/Scripts/python.exe" },
       "justMyCode": true,
       "django": true
     },
