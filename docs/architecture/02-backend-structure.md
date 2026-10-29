@@ -153,7 +153,7 @@ backend/
 ├── Makefile                        # lệnh tắt: make up, make test, make lint, make migrate…
 ├── openapi.yaml                    # schema OpenAPI đã commit; CI so với bản sinh lại ([12](./12-testing-strategy.md) mục 5)
 ├── CHANGELOG.md                    # sinh bằng commitizen ([11](./11-git-workflow.md) mục 7)
-├── conftest.py                     # fixture cần Tài khoản: customer_client, staff_client, admin_client (dùng factory của identity)
+├── conftest.py                     # pytest_plugins = ["shared.testing.fixtures"]; fixture cần Tài khoản (customer_client, staff_client, admin_client, dùng factory của identity) thêm ở đây
 ├── scripts/
 │   └── gen_importlinter.py         # sinh các contract "forbidden" của import-linter cho từng module (mục 8)
 │
@@ -199,7 +199,7 @@ backend/
 │   │   ├── client_ip.py            # middleware: lấy IP người dùng từ X-Client-IP khi X-BFF-Secret đúng (ADR 0009)
 │   │   ├── throttling.py           # các mức throttle dùng chung, theo IP từ client_ip; fail-open khi Redis lỗi
 │   │   ├── idempotency.py          # xử lý header Idempotency-Key cho các POST quan trọng, lưu trong IdempotencyKey (PostgreSQL)
-│   │   └── i18n.py                 # chọn ngôn ngữ theo Accept-Language (vi mặc định)
+│   │   └── views.py                # handler400/403/404/500 của Django trả ErrorDTO cho lỗi ngoài DRF; chọn ngôn ngữ theo Accept-Language không cần file riêng: LocaleMiddleware bật trong settings (vi mặc định)
 │   ├── health/
 │   │   └── views.py                # /healthz (sống), /readyz (kết nối được PostgreSQL)
 │   ├── logging.py                  # configure_logging(json=...) cấu hình structlog, processor redact_pii che PII
@@ -213,7 +213,7 @@ backend/
 │   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension)
 │   └── testing/
 │       ├── factories.py            # factory gốc
-│       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (api_client…); fixture cần Tài khoản nằm ở backend/conftest.py
+│       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (xoá cache trước/sau mỗi test, json_logging, api_client…), nạp qua pytest_plugins của backend/conftest.py; fixture cần Tài khoản nằm ở backend/conftest.py
 │       └── events.py               # drain_events(): chạy callback on_commit, relay và handler tới khi không còn delivery tới hạn; không chờ retry tương lai
 │
 ├── modules/                        # Django app "modules": toàn bộ nghiệp vụ
