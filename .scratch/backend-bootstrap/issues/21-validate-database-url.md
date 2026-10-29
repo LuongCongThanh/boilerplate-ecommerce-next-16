@@ -1,6 +1,6 @@
 # `config/env.py` từ chối `DATABASE_URL` sai định dạng ngay khi đọc env
 
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec.md](../spec.md)
 
