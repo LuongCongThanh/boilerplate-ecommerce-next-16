@@ -41,23 +41,26 @@ def error_body(
     }
 
 
+def _join(prefix: str, key: object) -> str:
+    return f"{prefix}.{key}" if prefix else str(key)
+
+
 def _flatten_fields(detail: Any, prefix: str = "") -> dict[str, list[str]]:
     """Làm phẳng `ValidationError.detail` thành `{field_path: [str]}`, path nối bằng dấu chấm."""
     # Ví dụ {"lines": [{}, {"sku": ["..."]}]} thành {"lines.1.sku": ["..."]}
     if isinstance(detail, dict):
-        fields: dict[str, list[str]] = {}
-        for key, value in detail.items():
-            fields.update(_flatten_fields(value, f"{prefix}.{key}" if prefix else str(key)))
-        return fields
-    if isinstance(detail, list) and any(isinstance(item, dict | list) for item in detail):
+        children = [(_join(prefix, key), value) for key, value in detail.items()]
+    elif isinstance(detail, list) and any(isinstance(item, dict | list) for item in detail):
         # Lỗi của list serializer (`many=True`): mỗi phần tử một index, bỏ qua phần tử hợp lệ
-        fields = {}
-        for index, item in enumerate(detail):
-            if item:
-                fields.update(_flatten_fields(item, f"{prefix}.{index}" if prefix else str(index)))
-        return fields
-    messages = detail if isinstance(detail, list) else [detail]
-    return {prefix or api_settings.NON_FIELD_ERRORS_KEY: [str(m) for m in messages]}
+        children = [(_join(prefix, index), item) for index, item in enumerate(detail) if item]
+    else:
+        messages = detail if isinstance(detail, list) else [detail]
+        return {prefix or api_settings.NON_FIELD_ERRORS_KEY: [str(m) for m in messages]}
+
+    fields: dict[str, list[str]] = {}
+    for path, value in children:
+        fields.update(_flatten_fields(value, path))
+    return fields
 
 
 def exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
