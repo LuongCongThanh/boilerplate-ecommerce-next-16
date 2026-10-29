@@ -73,6 +73,7 @@ REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_PERMISSION_CLASSES": [],
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_PAGINATION_CLASS": "shared.api.pagination.StandardPagination",
 }
 
 SPECTACULAR_SETTINGS = {

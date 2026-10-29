@@ -35,7 +35,7 @@ GET /api/v1/store/products?page=2&page_size=24
 }
 ```
 
-`page_size` mặc định 24, tối đa 100.
+`page_size` mặc định 24, tối đa 100: lớn hơn 100 thì giới hạn ở 100; nhỏ hơn 1 hoặc không phải số nguyên trả `400 VALIDATION_ERROR`.
 
 ## 3. Định dạng lỗi
 
@@ -236,7 +236,7 @@ Webhook không dùng ErrorDTO/envelope chung khi provider có ACK riêng. Chỉ 
 - PATCH chỉ thay field được gửi; bỏ qua là giữ nguyên, `null` chỉ hợp lệ với field được ghi nullable. Object lồng được thay toàn bộ nếu được gửi, không deep-merge ngầm. PATCH rỗng hoặc field read-only/key lạ trả `400 VALIDATION_ERROR`; không mặc định bỏ qua field lạ.
 - GET không nhận body. Lệnh không có dữ liệu đầu vào chấp nhận body vắng mặt hoặc `{}`. DELETE thành công trả 204 không body. Object trả trực tiếp, danh sách phân trang dùng `Page<T> = {count: integer >= 0, next: URL hoặc null, previous: URL hoặc null, results: T[]}`; cây địa giới/Danh mục dùng array không phân trang như registry. Không bọc thêm `data`.
 - `ErrorDTO = {error: {code: string, message: string, details: object, request_id: string}}`; `details` chỉ dùng schema theo code: validation có `fields: {field_path: string[]}`, PRICE_CHANGED có `quote: QuoteDTO`, thiếu hàng có `items: [{variant_id: UUID, requested: integer, available: integer}]`; code không có chi tiết dùng `{}`. Lỗi object không thuộc chủ sở hữu trả 404, không tiết lộ đối tượng tồn tại.
-- Danh sách phân trang luôn có thứ tự ổn định: ordering đã chọn rồi thêm `id` làm tie-break; mặc định mới nhất (`created_at` giảm dần, `id` giảm dần). Query page/page_size sai kiểu/ngoài miền trả 400, trang vượt phạm vi trả 404. Query thời gian dùng ISO 8601 có múi giờ, khoảng báo cáo `[from, to)`, ngày hiển thị/báo cáo theo Asia/Ho_Chi_Minh.
+- Danh sách phân trang luôn có thứ tự ổn định: ordering đã chọn rồi thêm `id` làm tie-break; mặc định mới nhất (`created_at` giảm dần, `id` giảm dần). Query page sai kiểu/ngoài miền và `page_size` sai kiểu/nhỏ hơn 1 trả 400 (`page_size` lớn hơn 100 bị giới hạn ở 100), trang vượt phạm vi trả 404. Query thời gian dùng ISO 8601 có múi giờ, khoảng báo cáo `[from, to)`, ngày hiển thị/báo cáo theo Asia/Ho_Chi_Minh.
 
 ### 5.2. Schema dùng chung và checkout
 
@@ -333,7 +333,7 @@ Các DTO đọc chỉ có field trong bảng này. Ký hiệu `Base + ...` kế 
 | `BulkInput` / `BulkResultDTO` | Input `{ids: UUID[]}` 1..100, không trùng; response `{results: [{id: UUID, http_status: integer, order: OrderSummaryDTO hoặc null, error: ErrorDTO.error hoặc null}]}` giữ thứ tự input. Confirm hợp lệ status200, hand-over đã nhận status202; từng đơn một transaction, lỗi đơn này không rollback đơn khác. Envelope HTTP200, không dùng 207; toàn request sai shape trả400 trước khi xử lý |
 | `ShipmentAcceptedDTO` | `{order_id: UUID, shipment_id: UUID, status: enum Shipment.status}`; HTTP202, poll GET orders/{id}; nhận lệnh chưa có nghĩa tạo GHN thành công |
 | `ErasureAcceptedDTO` | `{request_id: UUID, status: received hoặc processing hoặc completed hoặc rejected, completed_at: timestamp hoặc null}`; request_id là ID ErasureRequest, khác error.request_id truy vết HTTP |
-| `PageQuery` / `ProductQuery` | Page `{page?: integer>=1 = 1, page_size?: integer1..100 = 24}`; Product thêm category?: UUID, size?: code, color?: code, price_min?/price_max?: integer>=0, in_stock?: boolean, q?: string<=255, ordering?: newest/price/-price/best_selling = newest. Back-office thêm status?: enum Product.status; storefront không cho lọc draft/archived |
+| `PageQuery` / `ProductQuery` | Page `{page?: integer>=1 = 1, page_size?: integer>=1 = 24, lớn hơn 100 thì giới hạn ở 100}`; Product thêm category?: UUID, size?: code, color?: code, price_min?/price_max?: integer>=0, in_stock?: boolean, q?: string<=255, ordering?: newest/price/-price/best_selling = newest. Back-office thêm status?: enum Product.status; storefront không cho lọc draft/archived |
 | `OrderQuery` / `StatusQuery` | Order = Page + status?, payment_method?, from?, to?, flag?: enum OrderFlag.kind, customer_id?: UUID, code?: string, phone?: string; storefront chỉ Page + status? theo US-402, không chấp nhận customer_id/phone để xem người khác. Status = Page + status?: enum của tài nguyên tương ứng; Stock = Page + variant_id?, warehouse_id?, available_lt?: integer>=0 = 5; Customer = Page + q?: string<=255 |
 | `ReportQuery` | `{from: timestamp, to: timestamp, granularity?: day hoặc month = day}`; from < to, query CSV bỏ granularity |
 
