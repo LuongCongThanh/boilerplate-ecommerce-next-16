@@ -13,6 +13,8 @@ x-container-env: &container-env
   EMAIL_HOST: mailpit
 
 x-base: &base
+  # Đặt tên image chung: migrate, worker, beat dùng một image thay vì Compose build ba lần
+  image: fashion-backend
   build: .
   env_file: .env
   environment: *container-env
@@ -41,7 +43,8 @@ services:
 
   beat:
     <<: *app
-    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    # Scheduler lấy từ CELERY_BEAT_SCHEDULER trong config/settings/base.py
+    command: celery -A config beat -l info
 
   redis:
     # Cùng bản với service của CI

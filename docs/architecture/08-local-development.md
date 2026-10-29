@@ -228,7 +228,7 @@ Mỗi lệnh được thêm vào `Makefile` cùng ticket tạo ra lệnh mà nó
 | `make logs s=worker` | Xem log của một service | M0 (ticket 15) |
 | `make shell` | `manage.py shell` chạy trên máy | M0 (ticket 15) |
 | `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) | M0 (ticket 15) |
-| `make db-reset` | Xoá và tạo lại database `fashion` (`manage.py reset_db`, chỉ chạy khi `DEBUG` bật và host là `localhost`) rồi `make migrate` (mục 2.2) | M0 (ticket 15) |
+| `make db-reset` | Xoá và tạo lại database `fashion` (`manage.py reset_db`, chỉ chạy khi `DEBUG` bật, host là `localhost` và server nghe ở loopback) rồi `make migrate` (mục 2.2) | M0 (ticket 15) |
 | `make test` | `pytest -n auto` | M0 (ticket 07) |
 | `make lint` | `ruff check`, `ruff format --check`, `mypy`, `lint-imports`, `scripts/gen_importlinter.py --check` | M0 (ticket 07; `gen_importlinter.py --check` từ ticket 04) |
 | `make fmt` | `ruff format` + `ruff check --fix` | M0 (ticket 07) |
@@ -304,6 +304,7 @@ x-container-env: &container-env
   EMAIL_HOST: mailpit
 
 x-base: &base
+  image: fashion-backend   # một image chung, Compose không build lại cho từng service
   build: .
   env_file: .env
   environment: *container-env
@@ -326,7 +327,7 @@ services:
     command: celery -A config worker -Q default,events,emails,integrations -l info  # local: 1 worker cho cả 4 queue (07 mục 3.1)
   beat:
     <<: *app
-    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A config beat -l info   # scheduler lấy từ CELERY_BEAT_SCHEDULER của settings
   relay:   # từ ticket 10
     <<: *app
     command: python manage.py run_outbox_relay
