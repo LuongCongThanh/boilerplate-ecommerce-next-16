@@ -43,7 +43,8 @@ def compare_with_dev() -> list[tuple[str, str]]:
         )
     )
 
-    subjects = git("log", "--format=%s", "origin/dev..HEAD").splitlines()
+    # commit merge (kéo dev về nhánh) mất khi squash nên không kiểm tên
+    subjects = git("log", "--no-merges", "--format=%s", "origin/dev..HEAD").splitlines()
     bad = check_subjects(subjects)
     results.append(
         ("FAIL" if bad else "OK", f"{len(subjects)} commit, {len(bad)} sai Conventional Commits")

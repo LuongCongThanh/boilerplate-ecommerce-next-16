@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from gitcmd import git, repo_root
 
 KNOWN_STATUSES = {
     "needs-triage",
@@ -36,6 +37,7 @@ class Ticket:
     ac_done: int
     ac_total: int
     pr: str | None
+    blocked_unparsed: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -45,16 +47,28 @@ class Feature:
     spec_order: list[int] = field(default_factory=list)
 
 
-def repo_root() -> Path:
-    out = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True
-    )
-    return Path(out.stdout.strip())
+def find_section(text: str, heading: str) -> re.Match | None:
+    """Thân mục `## <heading>` là group 1, tới heading `## ` kế tiếp hoặc hết file."""
+    return re.search(rf"^## {re.escape(heading)}\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
 
 
 def section(text: str, heading: str) -> str:
-    match = re.search(rf"^## {re.escape(heading)}\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
+    match = find_section(text, heading)
     return match.group(1) if match else ""
+
+
+def parse_blocked(raw: str) -> tuple[list[int], list[str]]:
+    """`NN, NN` (cho phép `[NN-slug](...)`) → (số ticket, phần không đọc được)."""
+    nums, unparsed = [], []
+    for token in (t.strip() for t in raw.split(",")):
+        if not token or token in {"—", "-"}:
+            continue
+        match = re.fullmatch(r"(\d+)|\[(\d+)[^\]]*\]\([^)]*\)", token)
+        if match:
+            nums.append(int(match.group(1) or match.group(2)))
+        else:
+            unparsed.append(token)
+    return nums, unparsed
 
 
 def parse_ticket(path: Path) -> Ticket:
@@ -64,15 +78,17 @@ def parse_ticket(path: Path) -> Ticket:
     blocked = re.search(r"^Blocked by:\s*(.+)$", text, re.M)
     pr = re.search(r"\*\*PR:\*\*\s*(#\d+)", text)
     ac = section(text, "Acceptance criteria")
+    blocked_by, blocked_unparsed = parse_blocked(blocked.group(1)) if blocked else ([], [])
     return Ticket(
         num=int(path.name.split("-", 1)[0]),
         path=path,
         title=title.group(1).strip() if title else path.stem,
         status=status.group(1) if status else "?",
-        blocked_by=[int(n) for n in re.findall(r"\d+", blocked.group(1))] if blocked else [],
+        blocked_by=blocked_by,
         ac_done=len(re.findall(r"^\s*- \[[xX]\]", ac, re.M)),
         ac_total=len(re.findall(r"^\s*- \[[ xX]\]", ac, re.M)),
         pr=pr.group(1) if pr else None,
+        blocked_unparsed=blocked_unparsed,
     )
 
 
@@ -125,6 +141,8 @@ def warnings(feature: Feature) -> list[str]:
         for n in t.blocked_by:
             if n not in feature.tickets:
                 out.append(f"{name}: Blocked by {n:02d} không có file ticket")
+        for token in t.blocked_unparsed:
+            out.append(f"{name}: Blocked by '{token}' không đọc được (dạng NN, NN)")
     return out
 
 
@@ -144,12 +162,8 @@ def milestones(root: Path) -> list[tuple[str, str]]:
 
 
 def git_state() -> str:
-    branch = subprocess.run(
-        ["git", "branch", "--show-current"], capture_output=True, text=True
-    ).stdout.strip()
-    dirty = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True
-    ).stdout.splitlines()
+    branch = git("branch", "--show-current")
+    dirty = git("status", "--porcelain").splitlines()
     return f"Nhánh: {branch or '(detached)'} · {len(dirty)} file chưa commit"
 
 

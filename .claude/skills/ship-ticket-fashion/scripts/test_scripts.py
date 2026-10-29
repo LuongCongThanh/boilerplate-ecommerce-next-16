@@ -14,8 +14,8 @@ from pathlib import Path
 from check_ac_trace import test_exists, trace
 from check_ship import check_subjects, diff_size
 from close_ticket import close
-from progress import Feature, frontier, parse_ticket
-from state import apply, check_transition, validate
+from progress import Feature, frontier, parse_blocked, parse_ticket
+from state import apply, check_transition, pick_active, validate
 
 TICKET = """# Lớp API
 
@@ -84,7 +84,7 @@ class TicketParsing(unittest.TestCase):
         self.assertEqual([t.num for t in frontier(feature)], [15, 12])
 
     def test_close_sets_status_pr_and_ticks_only_acceptance_criteria(self):
-        text, ticked = close(TICKET, 23)
+        text, ticked, _ = close(TICKET, 23)
         self.assertIn("Status: resolved\n\n**PR:** #23", text)
         self.assertIn("- [ ] không phải AC", text)
         self.assertIn("- [x] lỗi trả ErrorDTO", text)
@@ -94,15 +94,26 @@ class TicketParsing(unittest.TestCase):
         report = (
             "\n### Báo cáo 29/10/2026\n\n**Nhánh:** `feat/x` · **PR:** chưa mở · **Mode:** lite\n"
         )
-        text, _ = close(TICKET + report, 31)
+        text, _, _ = close(TICKET + report, 31)
         self.assertIn("Status: resolved\n\n**PR:** #31", text)
         self.assertIn("· **PR:** #31 · **Mode:** lite", text)
         self.path.write_text(text, encoding="utf-8")
         self.assertEqual(parse_ticket(self.path).pr, "#31")
 
     def test_close_keeps_existing_pr_line(self):
-        text, _ = close(TICKET.replace("Status: ready-for-agent", "Status: x\n\n**PR:** #7"), 31)
+        text, _, _ = close(TICKET.replace("Status: ready-for-agent", "Status: x\n\n**PR:** #7"), 31)
         self.assertNotIn("#31", text)
+
+    def test_close_leaves_untestable_acs_unticked(self):
+        ticket = TICKET.replace("tối đa 100\n", "tối đa 100\n- [ ] cần Redis thật\n")
+        text, ticked, skipped = close(ticket, 23, untestable={3})
+        self.assertIn("- [ ] cần Redis thật", text)
+        self.assertEqual((ticked, skipped), (["lỗi trả ErrorDTO"], ["cần Redis thật"]))
+
+    def test_blocked_by_reads_only_ticket_numbers(self):
+        self.assertEqual(parse_blocked("07, 08"), ([7, 8], []))
+        self.assertEqual(parse_blocked("[09-add-v2-api](./09-add-v2-api.md)"), ([9], []))
+        self.assertEqual(parse_blocked("backend-bootstrap/16"), ([], ["backend-bootstrap/16"]))
 
 
 class StateMachine(unittest.TestCase):
@@ -150,6 +161,13 @@ class StateMachine(unittest.TestCase):
         self.assertEqual((state["pr"], state["next"]), (23, "S2: viết test"))
         self.assertEqual([s["id"] for s in state["slices"]], ["S1", "S2"])
 
+    def test_pick_active_skips_closed_and_prefers_newest_on_branch(self):
+        closed = make_state(num=3, phase="closed")
+        older, newer = make_state(num=4, phase="code"), make_state(num=5, phase="grill")
+        self.assertIs(pick_active([closed, older, newer], "feat/x"), newer)
+        self.assertIsNone(pick_active([closed], "feat/x"))
+        self.assertIs(pick_active([closed, older], "feat/other"), older)
+
 
 class Checks(unittest.TestCase):
     def test_trace_reports_uncovered_ac_and_missing_test(self):
@@ -172,6 +190,7 @@ class Checks(unittest.TestCase):
         self.assertTrue(any(p.startswith("AC 2") for p in problems))
         self.assertTrue(any("test_gone" in p for p in problems))
         self.assertTrue(test_exists(backend, "tests/test_a.py::TestA::test_ok"))
+        self.assertTrue(test_exists(backend, "tests/test_a.py::TestA::test_ok[00-prefix]"))
 
     def test_conventional_subjects(self):
         good = [

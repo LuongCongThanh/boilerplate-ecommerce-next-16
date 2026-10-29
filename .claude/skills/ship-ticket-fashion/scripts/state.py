@@ -234,14 +234,19 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
-def find_active() -> dict | None:
-    branch = git("branch", "--show-current")
-    states = [json.loads(p.read_text(encoding="utf-8")) for p in state_dir().glob("*.json")]
-    on_branch = [s for s in states if s.get("branch") == branch]
-    if on_branch:
-        return on_branch[0]
+def pick_active(states: list[dict], branch: str) -> dict | None:
+    """states xếp cũ → mới. Ưu tiên ticket chưa closed trên nhánh hiện tại, mới nhất trước."""
     active = [s for s in states if s.get("phase") != "closed"]
+    on_branch = [s for s in active if s.get("branch") == branch]
+    if on_branch:
+        return on_branch[-1]
     return active[0] if len(active) == 1 else None
+
+
+def find_active() -> dict | None:
+    paths = sorted(state_dir().glob("*.json"), key=lambda p: p.stat().st_mtime)
+    states = [json.loads(p.read_text(encoding="utf-8")) for p in paths]
+    return pick_active(states, git("branch", "--show-current"))
 
 
 def cmd_start(args: argparse.Namespace) -> int:

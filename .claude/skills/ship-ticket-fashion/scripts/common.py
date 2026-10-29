@@ -3,19 +3,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
+from gitcmd import git, repo_root
 from progress import Feature, Ticket, load_features
-
-
-def git(*args: str) -> str:
-    out = subprocess.run(["git", *args], capture_output=True, text=True, encoding="utf-8")
-    return out.stdout.strip() if out.returncode == 0 else ""
-
-
-def repo_root() -> Path:
-    return Path(git("rev-parse", "--show-toplevel"))
 
 
 def state_dir() -> Path:

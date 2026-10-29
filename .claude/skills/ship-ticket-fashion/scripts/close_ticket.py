@@ -11,8 +11,14 @@ import re
 import sys
 from pathlib import Path
 
+from common import load_state, resolve
+from progress import find_section
 
-def close(text: str, pr: int) -> tuple[str, list[str]]:
+
+def close(
+    text: str, pr: int, untestable: set[int] = frozenset()
+) -> tuple[str, list[str], list[str]]:
+    """Trả (text mới, AC vừa tick, AC bỏ qua vì nằm trong untestable)."""
     if not re.search(r"^Status:", text, re.M):
         raise SystemExit("Ticket không có dòng Status:")
     # Báo cáo (phase 3) có "**PR:** chưa mở": thay bằng số PR, và chỉ dòng **PR:** #<số>
@@ -23,13 +29,22 @@ def close(text: str, pr: int) -> tuple[str, list[str]]:
         status_line += f"\n\n**PR:** #{pr}"
     text = re.sub(r"^Status:.*$", status_line, text, count=1, flags=re.M)
 
-    match = re.search(r"^## Acceptance criteria\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
+    match = find_section(text, "Acceptance criteria")
     if not match:
-        return text, []
-    body = match.group(1)
-    ticked = re.findall(r"^\s*- \[ \] (.+)$", body, re.M)
-    body = re.sub(r"^(\s*)- \[ \]", r"\1- [x]", body, flags=re.M)
-    return text[: match.start(1)] + body + text[match.end(1) :], ticked
+        return text, [], []
+    ticked, skipped, lines = [], [], []
+    num = 0  # AC đếm từ 1 theo thứ tự checkbox, như state.untestable
+    for line in match.group(1).split("\n"):
+        item = re.match(r"^(\s*)- \[([ xX])\] (.+)$", line)
+        if item:
+            num += 1
+            if item.group(2) == " " and num in untestable:
+                skipped.append(item.group(3))
+            elif item.group(2) == " ":
+                ticked.append(item.group(3))
+                line = f"{item.group(1)}- [x] {item.group(3)}"
+        lines.append(line)
+    return text[: match.start(1)] + "\n".join(lines) + text[match.end(1) :], ticked, skipped
 
 
 def main() -> int:
@@ -39,14 +54,24 @@ def main() -> int:
     parser.add_argument("--pr", type=int, required=True, help="số PR đóng ticket")
     args = parser.parse_args()
 
+    feature, ticket = resolve(str(args.ticket))
+    state = load_state(feature.slug, ticket.num)
+    if state is None:
+        print("WARN không có state: không biết AC nào untestable, tick tất cả")
+    untestable = {int(k) for k in (state or {}).get("untestable", {})}
+
     text = args.ticket.read_text(encoding="utf-8")
-    new_text, ticked = close(text, args.pr)
+    new_text, ticked, skipped = close(text, args.pr, untestable)
     args.ticket.write_text(new_text, encoding="utf-8", newline="\n")
 
     print(f"{args.ticket}: Status resolved, PR #{args.pr}")
     if ticked:
         print("Đã tick (đối chiếu từng mục với báo cáo):")
         for item in ticked:
+            print(f"  - {item}")
+    if skipped:
+        print("Chưa tick vì nằm trong untestable (đã kiểm tay thì tự tick):")
+        for item in skipped:
             print(f"  - {item}")
     return 0
 

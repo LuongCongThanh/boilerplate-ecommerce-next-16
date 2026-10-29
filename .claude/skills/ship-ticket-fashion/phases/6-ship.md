@@ -38,7 +38,7 @@ python S/scripts/close_ticket.py <đường dẫn ticket> --pr <số>
 python S/scripts/progress.py --feature <feature>
 ```
 
-`close_ticket.py` in các AC vừa tick: đối chiếu với bảng AC → bằng chứng; AC nằm trong `untestable` chưa kiểm tay thì bỏ tick lại và ghi vào Notes của PR.
+`close_ticket.py` in các AC vừa tick: đối chiếu với bảng AC → bằng chứng. AC nằm trong `untestable` (đọc từ state) không được tick và in riêng: đã kiểm tay thì tự tick, chưa thì ghi vào Notes của PR.
 
 Cùng commit, sửa `.scratch/mvp-roadmap/map.md`: dòng của mốc trong bảng **Tiến độ** khớp `progress.py`; **Decisions-so-far** thêm `DD/MM/YYYY: …` cho mỗi quyết định ảnh hưởng ngoài ticket.
 

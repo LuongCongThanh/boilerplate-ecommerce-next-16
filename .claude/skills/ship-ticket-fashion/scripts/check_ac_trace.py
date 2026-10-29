@@ -21,6 +21,7 @@ def test_exists(backend: Path, test_id: str) -> bool:
         return False
     text = path.read_text(encoding="utf-8")
     *classes, name = rest.split("::")
+    name = re.sub(r"\[.*\]$", "", name)  # id có tham số: test_x[case]
     return all(re.search(rf"^\s*class {re.escape(c)}\b", text, re.M) for c in classes) and bool(
         re.search(rf"^\s*(async )?def {re.escape(name)}\(", text, re.M)
     )
