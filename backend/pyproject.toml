@@ -101,9 +101,9 @@ no_implicit_reexport = true
 strict_equality = true
 check_untyped_defs = true
 
-# Celery và kombu không có type hints
+# Celery, kombu và django-celery-beat không có type hints
 [[tool.mypy.overrides]]
-module = ["celery.*", "kombu.*"]
+module = ["celery.*", "kombu.*", "django_celery_beat.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]
