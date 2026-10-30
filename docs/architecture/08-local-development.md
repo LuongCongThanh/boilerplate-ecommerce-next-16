@@ -290,7 +290,14 @@ Interpreter của cả hai IDE là `backend/.venv`, tạo bằng `uv sync`. Trê
 ### 6.2. PyCharm
 
 - Interpreter: `backend/.venv` (Add Interpreter → Existing). Chạy và debug Django bằng run configuration "Django server". Không cần PyCharm Professional.
-- Đánh dấu `backend/` là Sources Root để import `config`, `shared`, `modules` không bị báo lỗi.
+- Đánh dấu `backend/` là Sources Root để import `config`, `shared`, `modules` không bị báo lỗi. Đánh dấu `backend/tests` là Test Sources Root.
+
+Các cấu hình dưới đây nằm trong `.idea/` nên không được commit; mỗi máy làm một lần sau khi clone:
+
+- Django support (Settings → Languages & Frameworks → Django): bật Enable Django Support, Django project root là `backend`, Settings là `config/settings/local.py`, Manage script là `backend/manage.py`. Tick "Do not use Django test runner" vì test chạy bằng pytest-django. Sau đó dùng được Run manage.py Task (`Ctrl+Alt+R`), tool window Endpoints và gợi ý cho `settings.*`, model, tên URL.
+- Database (tool window Database → + → Data Source → PostgreSQL): host `localhost`, cổng `PG_PORT`, database, user, mật khẩu lấy từ `DATABASE_URL` trong `.env` (mục 2.3). Mật khẩu chỉ lưu trong `.idea/` của máy.
+- Ruff (Settings → Python → Tools → Ruff): bật Enable, tick Formatting và Sort imports. PyCharm dùng `ruff` trong `backend/.venv` và đọc cấu hình `[tool.ruff]` trong `pyproject.toml`.
+- Plugin Makefile Language (Settings → Plugins → Marketplace) để chạy target trong `backend/Makefile` từ editor. Các plugin khác cần cho repo (Docker, .env, Markdown, Mermaid, TOML, YAML) có sẵn trong PyCharm.
 
 ## 7. `docker-compose.yml` (rút gọn)
 
