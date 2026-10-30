@@ -27,6 +27,19 @@ INSTALLED_APPS = [
 
 # Tài khoản là custom user không kế thừa PermissionsMixin (03 mục 2.1)
 AUTH_USER_MODEL = "modules.Account"
+# Độ mạnh mật khẩu (05 mục 3); Account không có username, first_name nên so với email, full_name
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "OPTIONS": {"user_attributes": ("email", "full_name")},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
