@@ -142,7 +142,10 @@ class IdempotentEffect(models.Model):
 
 
 class IdempotentCreateView(APIView):
-    """Endpoint mẫu dùng `Idempotency-Key` như checkout: claim, ghi tác động, lưu kết quả."""
+    """Endpoint mẫu dùng `Idempotency-Key` như checkout: claim, ghi tác động, lưu kết quả.
+
+    Body có `fail_after_effect` thì ném lỗi nghiệp vụ sau khi đã ghi tác động.
+    """
 
     permission_classes = (AllowAny,)
 
@@ -150,8 +153,10 @@ class IdempotentCreateView(APIView):
         outcome = idempotency.begin(request)
         if not isinstance(outcome, idempotency.Claim):
             return outcome.response()
-        with transaction.atomic():
+        with outcome, transaction.atomic():
             effect = IdempotentEffect.objects.create(note=str(request.data.get("note", "")))
+            if request.data.get("fail_after_effect"):
+                raise OutOfStock
             body = {"effect_id": str(effect.pk), "operation_id": str(outcome.operation_id)}
             outcome.complete(201, body)
         return Response(body, status=201)

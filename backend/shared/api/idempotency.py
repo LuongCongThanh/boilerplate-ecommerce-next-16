@@ -11,7 +11,8 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, cast
+from types import TracebackType
+from typing import Any, Self, cast
 
 from django.db import transaction
 from django.utils import timezone
@@ -34,6 +35,10 @@ class IdempotencyConflict(DomainError):
     code = "IDEMPOTENCY_CONFLICT"
     http_status = 409
     message = _("Idempotency-Key đã được dùng cho một yêu cầu có nội dung khác.")
+
+
+class LeaseLost(Exception):
+    """Lease của `Claim` đã bị worker khác giành lại; tác động nghiệp vụ phải rollback."""
 
 
 @dataclass(frozen=True)
@@ -64,15 +69,42 @@ class Pending:
 
 @dataclass(frozen=True)
 class Claim:
-    """Request này giữ key; tác động nghiệp vụ chạy đúng một lần dưới `operation_id`."""
+    """Request này giữ key; tác động nghiệp vụ chạy đúng một lần dưới `operation_id`.
+
+    Dùng làm context manager bọc ngoài `transaction.atomic` của tác động: exception thoát ra
+    thì nhả key để gửi lại cùng key chạy lại từ đầu.
+    """
 
     key_id: uuid.UUID
     operation_id: uuid.UUID
     lease_token: uuid.UUID
 
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        if exc_type is None:
+            return
+        # Chỉ xoá khi lease còn của mình; có `resource_id` thì giữ dòng cho luồng khôi phục
+        with transaction.atomic():
+            IdempotencyKey.objects.filter(
+                pk=self.key_id, lease_token=self.lease_token, resource_id__isnull=True
+            ).delete()
+
     def complete(self, status: int, body: Any, resource_id: uuid.UUID | None = None) -> None:
-        """Lưu kết quả để replay; gọi bên trong `transaction.atomic` của tác động nghiệp vụ."""
+        """Lưu kết quả để replay; gọi bên trong `transaction.atomic` của tác động nghiệp vụ.
+
+        Raises:
+            LeaseLost: Lease đã hết và worker khác đã giành lại key.
+        """
         row = IdempotencyKey.objects.select_for_update().get(pk=self.key_id)
+        if row.lease_token != self.lease_token:
+            raise LeaseLost
         row.status = IdempotencyStatus.COMPLETED
         row.completed_at = timezone.now()
         row.response_status = status
@@ -95,7 +127,9 @@ def begin(request: Request) -> Claim | Replay | Pending:
     scope = _scope(request)
     request_hash = _request_hash(request.data)
     lease_token = uuid7()
+    now = timezone.now()
 
+    # Transaction ngắn: trả về hoặc raise ở đây đều nhả khoá dòng ngay
     with transaction.atomic():
         row, created = IdempotencyKey.objects.select_for_update().get_or_create(
             scope=scope,
@@ -103,18 +137,23 @@ def begin(request: Request) -> Claim | Replay | Pending:
             defaults={
                 "request_hash": request_hash,
                 "lease_token": lease_token,
-                "lease_expires_at": timezone.now() + LEASE,
+                "lease_expires_at": now + LEASE,
             },
         )
-    # Quyết định sau khi transaction ngắn đã commit: không giữ khoá dòng khi trả 409/replay
-    if created:
+        if created:
+            return Claim(key_id=row.pk, operation_id=row.operation_id, lease_token=lease_token)
+        if row.request_hash != request_hash:
+            raise IdempotencyConflict
+        if row.status == IdempotencyStatus.COMPLETED:
+            # CHECK `completed_has_response` bảo đảm `response_status` có giá trị
+            return Replay(status=cast(int, row.response_status), body=row.response_body)
+        if row.lease_expires_at and row.lease_expires_at > now:
+            return Pending()
+        # Lease đã hết: giành lại key, giữ `operation_id`; worker cũ sẽ hỏng ở `complete`
+        row.lease_token = lease_token
+        row.lease_expires_at = now + LEASE
+        row.save(update_fields=["lease_token", "lease_expires_at", "updated_at"])
         return Claim(key_id=row.pk, operation_id=row.operation_id, lease_token=lease_token)
-    if row.request_hash != request_hash:
-        raise IdempotencyConflict
-    if row.status == IdempotencyStatus.COMPLETED:
-        # CHECK `completed_has_response` bảo đảm `response_status` có giá trị
-        return Replay(status=cast(int, row.response_status), body=row.response_body)
-    return Pending()
 
 
 def _parse_key(request: Request) -> uuid.UUID:
