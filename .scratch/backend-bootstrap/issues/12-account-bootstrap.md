@@ -1,6 +1,8 @@
 # Model `Account` trong migration đầu tiên và lệnh `create_staff`
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #42
 
 Blocked by: 09
 
@@ -46,16 +48,16 @@ Commit dự kiến: `plan` → `S1` → `S2` → `S3` → `R1 (khi review cần 
 
 ## Acceptance criteria
 
-- [ ] `make migrate` trên DB trống tạo `identity_account` trong migration `0001` của `modules`.
-- [ ] Hai email chỉ khác hoa thường không tạo được hai Tài khoản (ràng buộc DB `UNIQUE(lower(email))`).
-- [ ] `create_staff --admin` tạo Tài khoản `kind = admin`; chạy lại cùng email báo lỗi rõ ràng.
-- [ ] Không có bảng group/permission của Django sau migrate. `django.contrib.admin` không có trong `INSTALLED_APPS` ở mọi môi trường (không dùng Django Admin, [08 mục 2.4](../../../docs/architecture/08-local-development.md#24-chạy)).
+- [x] `make migrate` trên DB trống tạo `identity_account` trong migration `0001` của `modules`.
+- [x] Hai email chỉ khác hoa thường không tạo được hai Tài khoản (ràng buộc DB `UNIQUE(lower(email))`).
+- [x] `create_staff --admin` tạo Tài khoản `kind = admin`; chạy lại cùng email báo lỗi rõ ràng.
+- [x] Không có bảng group/permission của Django sau migrate. `django.contrib.admin` không có trong `INSTALLED_APPS` ở mọi môi trường (không dùng Django Admin, [08 mục 2.4](../../../docs/architecture/08-local-development.md#24-chạy)).
 
 ## Comments
 
 ### Báo cáo 30/10/2026
 
-**Nhánh:** `feat/identity-account` · **PR:** chưa mở · **Mode:** full
+**Nhánh:** `feat/identity-account` · **PR:** #42 · **Mode:** full
 
 #### Đã làm
 
