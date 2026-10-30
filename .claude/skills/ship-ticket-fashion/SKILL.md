@@ -82,6 +82,7 @@ Phiên chính điều phối. Việc đọc nhiều file hoặc chạy nhiều l
 
 Gate, tài liệu, ship, done, retro chạy ở phiên chính: retro cần thấy những gì phiên này đã vấp.
 
+- **Báo là gọi**: tin nhắn báo giao việc cho sub-agent chứa luôn lệnh gọi `Agent`.
 - **Prompt = địa chỉ**: `<T>`, slice id, mode và các đường dẫn cần đọc: `S/reference/sub-agent.md` trước, rồi `S/reference/rules.md`, file phase, file `gotchas/` phase đó nêu, ticket.
 - **Làm tiếp, không tạo lại**: câu trả lời cho *Cần người dùng*, vòng sửa tiếp theo, chạy lại đều gửi cho cùng agent bằng `SendMessage` (nạp bằng `ToolSearch "select:SendMessage"`).
 - Phiên chính đọc kết quả trả về và state, tin phần sub-agent đã đọc.

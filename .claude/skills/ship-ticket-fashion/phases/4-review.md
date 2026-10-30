@@ -15,6 +15,7 @@ Mục tiêu: code **và test** đúng ticket và đúng chuẩn của repo. Bắ
    - trục **Spec**: "Với mỗi AC, nêu test khẳng định kết quả của nó. Báo AC hoặc nhánh của AC không có test, và test chỉ kiểm mock được gọi thay vì kết quả." Đính kèm output `check_ac_trace.py`.
    - trục **Standards**: "File test thuộc phạm vi review. Đối chiếu diff với từng mục *Tài liệu chi phối* trong `## Quyết định`; báo chỗ code trái tài liệu mà ticket không ghi lý do."
    - cả hai báo cáo tiếng Việt, dưới 600 từ, mỗi finding có `file:line` và dòng chuẩn / AC được trích.
+   - mọi reviewer ghi file tạm (schema sinh ra, output lệnh) vào `.git/ship-ticket-fashion/`; ba trục xong thì `git status --short` chỉ còn file của ticket.
    - trục **Bug**: skill `code-review` dựng sẵn của Claude Code (khác `mattpocock-skills:code-review`), `args: "high <nhánh>"`. Trục này săn lỗi chạy sai mà Spec và Standards không soi: dữ liệu bị bỏ khi ghi, guard an toàn bị lọt, logic viết lại thứ thư viện đã có. Finding mã `B1`, `B2`…
 3. **Xác minh** finding sẽ đổi code: tự mở dòng được trích trước khi làm; reviewer có thể sai.
 4. **Phân loại** mỗi finding:
