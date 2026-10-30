@@ -5,12 +5,13 @@
 3. Merge ngay:
 
    ```bash
-   GH_TOKEN="$(gh auth token --user LuongCongThanh)" gh pr merge <số> --squash --delete-branch
+   python S/scripts/commit_map.py <T> --md > .git/SQUASH_BODY.md
+   GH_TOKEN="$(gh auth token --user LuongCongThanh)" gh pr merge <số> --squash --delete-branch -F .git/SQUASH_BODY.md
    git switch dev && git pull
    python S/scripts/progress.py
    ```
 
-   Chờ: ghi `next=chờ merge PR #<số>`. Lần chạy sau, `reference/resume.md` kiểm trạng thái PR.
+   Thân commit squash trên `dev` giữ bảng commit → task, nên sau khi nhánh bị xoá vẫn tra được commit nào thuộc task nào. Chờ: ghi `next=chờ merge PR #<số>`. Lần chạy sau, `reference/resume.md` kiểm trạng thái PR.
 4. `state.py transition <T> --to retro --next "retro skill" --reason "<merged / chờ merge>"`, rồi vào phase 8 ngay: retro cần phiên này còn trong context.
 
 ## Xong khi

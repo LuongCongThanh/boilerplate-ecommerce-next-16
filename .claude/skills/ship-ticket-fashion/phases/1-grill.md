@@ -8,11 +8,12 @@ Mục tiêu: hiểu ticket tới mức mỗi acceptance criterion có seam và t
 4. **Bản đồ code** (sub-agent `Explore`, full): code hiện có mà ticket sửa hoặc gọi, và ticket nào bị ticket này chặn (`Blocked by` trỏ về nó) để chốt API cho đúng chỗ dùng sau này. Ticket bọc việc một thư viện bên thứ ba đã làm (đồng bộ lịch, migrate, xác thực…) → tìm thêm hàm của chính thư viện cho việc đó, để grilling chốt dùng lại hay tự viết và vì sao. Kết quả: danh sách file sẽ đổi, chữ ký sẽ thêm, hàm thư viện dùng lại được.
 5. **Grilling.** `mattpocock-skills:grill-with-docs` trong phạm vi ticket: chốt lựa chọn còn mở và các _seam_ sẽ test (`mattpocock-skills:codebase-design` khi có module hoặc interface mới). Lite: chỉ hỏi phần mà ticket và tài liệu chưa trả lời.
 6. **Ghi quyết định** vào ticket, mục `## Quyết định` đặt trước `## Acceptance criteria`: dòng đầu `Chốt khi grilling ngày DD/MM/YYYY.`, rồi bảng Chủ đề | Quyết định, như `.scratch/backend-bootstrap/issues/09-shared-core.md`. Dòng đầu bảng là `Tài liệu chi phối`: mỗi file hoặc nhóm file sẽ đổi → mục tài liệu (`02 §9.1`, `04 §3`, `ADR 0007`); model và test luôn kèm `02 §9.2` (tên bảng, tên file test), test kèm `02 §9.5` (factory). Quyết định khác mục *Việc cần làm* thì ghi rõ khác ở đâu và vì sao.
-7. **Slice.** Chia AC thành slice dọc (lite: một slice), mỗi slice có `acs`, `seam`, `tests` dự kiến, `dependsOn`. Code phá huỷ hoặc gọi I/O (DROP database, HTTP, `subprocess`) test ở seam bằng kết nối giả, như `shared/tests/test_reset_db.py` (PR #27); `untestable` chỉ cho AC cần hạ tầng thật không giả được, kèm cách kiểm tay. Ghi bằng `state.py push <T> 'slices=[…]'`, rồi `state.py check <T>` và `python S/scripts/check_ac_trace.py <T> --planned` (chỉ kiểm mọi AC đều có chỗ, chưa kiểm test tồn tại).
-8. **⛔G1** (khuôn ở SKILL.md → *Gate*). Tin tóm tắt: bảng AC → slice → seam → test; tài liệu chi phối; quyết định mới; file sẽ đổi (đánh dấu file trong `backend/shared/`); mode đề xuất; AC `untestable`. Hỏi: duyệt slice và mode (một câu), các quyết định còn mở.
-9. Duyệt xong: commit ticket đã sửa (`docs: record decisions for <chủ đề> ticket`), rồi
+7. **Slice → *plan*.** Chia AC thành slice dọc (lite: một slice), mỗi slice có `acs`, `seam`, `tests` dự kiến, `files` sẽ đổi, `dependsOn`. Một slice là một commit, nên slice gom đủ các file của một hành vi (model + migration + test + tài liệu chi phối của nó). Code phá huỷ hoặc gọi I/O (DROP database, HTTP, `subprocess`) test ở seam bằng kết nối giả, như `shared/tests/test_reset_db.py` (PR #27); `untestable` chỉ cho AC cần hạ tầng thật không giả được, kèm cách kiểm tay. Ghi bằng `state.py push <T> 'slices=[…]'`, rồi `state.py check <T>` và `python S/scripts/check_ac_trace.py <T> --planned` (chỉ kiểm mọi AC đều có chỗ, chưa kiểm test tồn tại). Rồi `python S/scripts/plan.py <T>` in slice thành mục `## Kế hoạch` của ticket; slice đổi sau G1 thì chạy lại.
+8. **⛔G1** (khuôn ở SKILL.md → *Gate*). Tin tóm tắt: mục `## Kế hoạch` vừa sinh (AC → slice → seam → test → commit); tài liệu chi phối; quyết định mới; file sẽ đổi (đánh dấu file trong `backend/shared/`); mode đề xuất; AC `untestable`. Hỏi: duyệt slice và mode (một câu), các quyết định còn mở.
+9. Duyệt xong: commit *spec* + *plan* (và dòng `Status:` đã triage ở bước đầu), rồi chuyển phase; script từ chối khi ticket thiếu `## Quyết định`, `## Kế hoạch` hoặc chưa commit:
 
    ```bash
+   python S/scripts/commit.py <T> --task plan -m "docs: plan <chủ đề> ticket" -- <ticket> [<ticket đã triage>…]
    python S/scripts/state.py transition <T> --to code --gate g1 --next "S1: viết test red đầu tiên" --reason "G1 approved"
    ```
 
@@ -20,4 +21,4 @@ Mục tiêu: hiểu ticket tới mức mỗi acceptance criterion có seam và t
 
 ## Xong khi
 
-Mọi AC nằm trong một slice hoặc trong `untestable`; mọi file sẽ đổi có tài liệu chi phối và mọi lựa chọn mở có dòng trong `## Quyết định`; `state.py check` và `check_ac_trace.py --planned` xanh; `gates.g1` có ngày và `phase` là `code`.
+Mọi AC nằm trong một slice hoặc trong `untestable`; mọi file sẽ đổi có tài liệu chi phối và mọi lựa chọn mở có dòng trong `## Quyết định`; `## Kế hoạch` khớp state và commit `Task: plan` đã có; `state.py check` và `check_ac_trace.py --planned` xanh; `gates.g1` có ngày và `phase` là `code`.

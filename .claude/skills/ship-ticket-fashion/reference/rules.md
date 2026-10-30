@@ -7,7 +7,8 @@
   - Quyết định ảnh hưởng ngoài ticket (API của `shared`, tách ticket, đổi phạm vi) → **Decisions-so-far** của `.scratch/mvp-roadmap/map.md`.
   - Quyết định kiến trúc lâu dài → ADR trong `docs/adr/` qua `domain-modeling`.
   - Thuật ngữ → `GLOSSARY.md`, tránh các từ ở mục _Avoid_.
-  - Slice, `next`, ánh xạ AC → test → state.
+  - Slice, `next`, ánh xạ AC → test → state; bản in cho người đọc là `## Kế hoạch` (`plan.py`).
+  - Commit thuộc task nào → trailer `Task:` của commit (`commit.py` ghi, `commit_map.py` đọc).
   - Kết quả (đã làm, chưa làm, gap) → báo cáo trong `## Comments` của ticket.
   - Điều máy kiểm tra được → test, script trong `S/scripts/`, rule lint hoặc hook.
 - **Cần người dùng** là quyết định ngoài gate: thay đổi ngoài phạm vi; sửa `backend/shared/` mà ticket không nhắc; test đỏ ngoài ticket chưa chứng minh được là đỏ sẵn trên `origin/dev`; hook chặn không sửa được trong phạm vi; tài liệu thiếu, mâu thuẫn nhau, hoặc code buộc phải trái ADR (`docs/agents/domain.md`). Phiên chính hỏi ngay bằng `AskUserQuestion`; sub-agent làm theo `reference/sub-agent.md`.

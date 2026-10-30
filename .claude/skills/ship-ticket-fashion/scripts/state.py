@@ -17,8 +17,8 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
-from common import git, load_state, repo_root, resolve, save_state, state_dir
-from progress import frontier, load_features
+from common import git, load_state, repo_root, resolve, save_state, state_dir, ticket_ref
+from progress import find_section, frontier, load_features
 
 SKILL = ".claude/skills/ship-ticket-fashion"
 PHASES = ["grill", "code", "report", "review", "sync", "ship", "done", "retro", "closed"]
@@ -113,6 +113,16 @@ def check_transition(state: dict, to: str, gate: str | None) -> str | None:
     return None
 
 
+def plan_ready(ticket_text: str, ticket_dirty: bool) -> str | None:
+    """grill → code: ticket đã có spec (`## Quyết định`) và plan (`## Kế hoạch`), đã commit."""
+    missing = [h for h in ("Quyết định", "Kế hoạch") if not find_section(ticket_text, h)]
+    if missing:
+        return "ticket thiếu " + ", ".join(f"## {h}" for h in missing) + " (phase 1 bước 6, 7)"
+    if ticket_dirty:
+        return "spec và plan trong ticket chưa commit (commit.py --task plan)"
+    return None
+
+
 # ---- ghi field ------------------------------------------------------------
 
 
@@ -172,7 +182,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     if load_state(feature.slug, ticket.num):
         raise SystemExit(f"Đã có state cho {feature.slug}/{ticket.num:02d}")
     state = {
-        "ticket": ticket.path.relative_to(ticket.path.parents[3]).as_posix(),
+        "ticket": ticket_ref(ticket),
         "feature": feature.slug,
         "num": ticket.num,
         "branch": args.branch,
@@ -207,6 +217,11 @@ def cmd_set(args: argparse.Namespace, push: bool = False) -> int:
 def cmd_transition(args: argparse.Namespace) -> int:
     state, _ = require(args.ticket)
     error = check_transition(state, args.to, args.gate)
+    if error is None and (state["phase"], args.to) == ("grill", "code"):
+        path = repo_root() / state["ticket"]
+        # -C: đường dẫn ticket tính từ gốc repo, dù lệnh chạy ở backend/
+        dirty = bool(git("-C", str(repo_root()), "status", "--porcelain", "--", state["ticket"]))
+        error = plan_ready(path.read_text(encoding="utf-8"), dirty)
     if error:
         print(f"TỪ CHỐI: {error}")
         return 1

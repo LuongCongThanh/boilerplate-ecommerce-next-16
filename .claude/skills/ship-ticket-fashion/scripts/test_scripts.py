@@ -12,11 +12,15 @@ from dataclasses import replace
 from pathlib import Path
 
 from check_ac_trace import test_exists, trace
-from check_ship import check_subjects, diff_size
+from check_ship import check_dirty, check_subjects, diff_size, dirty_paths
 from close_ticket import close
+from commit import check_task, message
+from commit_map import parse_log, problems, render
+from plan import render as render_plan
+from plan import upsert
 from progress import Feature, frontier, parse_blocked, parse_ticket
 from run_logged import make_recipe
-from state import apply, check_transition, pick_active, validate
+from state import apply, check_transition, pick_active, plan_ready, validate
 
 TICKET = """# Lớp API
 
@@ -226,6 +230,141 @@ class Checks(unittest.TestCase):
             make_recipe("test:\n\tuv run pytest\n", "up")
         with self.assertRaises(ValueError):
             make_recipe("up:\n\tdocker compose -f $(FILE) up\n", "up")
+
+
+REF = ".scratch/f/issues/01-x.md"
+
+
+def commit(task: str, sha: str = "a1", refs: str = REF) -> dict:
+    return {"sha": sha, "subject": f"feat: {task}", "task": task, "refs": refs, "files": 2}
+
+
+class PlanAndCommits(unittest.TestCase):
+    def test_code_needs_committed_spec_and_plan_in_ticket(self):
+        self.assertIn("## Quyết định, ## Kế hoạch", plan_ready(TICKET, ticket_dirty=False))
+        ready = TICKET.replace(
+            "## Acceptance", "## Quyết định\n\nx\n\n## Kế hoạch\n\ny\n\n## Acceptance"
+        )
+        self.assertIn("chưa commit", plan_ready(ready, ticket_dirty=True))
+        self.assertIsNone(plan_ready(ready, ticket_dirty=False))
+
+    def test_plan_inserts_before_acceptance_criteria_then_replaces_itself(self):
+        state = make_state(
+            slices=[{"id": "S1", "acs": [1, 2], "seam": "APIClient", "tests": ["t.py::a"]}],
+            untestable={"3": "cần Redis thật"},
+        )
+        once = upsert(TICKET, render_plan(state))
+        self.assertLess(once.index("## Kế hoạch"), once.index("## Acceptance criteria"))
+        self.assertIn("| S1 | 1, 2 | APIClient | `t.py::a` | — | — |", once)
+        self.assertIn("`plan` → `S1` → `R1 (khi review cần sửa)` → `sync` → `close`", once)
+        state["slices"][0]["seam"] = "service"
+        twice = upsert(once, render_plan(state))
+        self.assertEqual(twice.count("## Kế hoạch"), 1)
+        self.assertEqual(upsert(twice, render_plan(state)), twice)
+        self.assertIn("`close`.\n\n## Acceptance criteria", twice)
+        self.assertIn("## Kế hoạch\n\nSinh", twice)
+        self.assertIn("| S1 | 1, 2 | service |", twice)
+        self.assertNotIn("APIClient", twice)
+
+    def test_commit_message_carries_refs_and_task_trailers(self):
+        msg = message("feat(shared): add x", "Vì sao.", REF, "S1")
+        self.assertEqual(msg, f"feat(shared): add x\n\nVì sao.\n\nRefs: {REF}\nTask: S1\n")
+        self.assertNotIn("\n\n\n", message("docs: plan x ticket", "", REF, "plan"))
+
+    def test_commit_task_must_exist(self):
+        state = make_state(slices=[{"id": "S1"}])
+        self.assertIsNone(check_task("S1", state))
+        self.assertIsNone(check_task("sync", state))
+        self.assertIn("S2", check_task("S2", state))
+        self.assertIn("task lạ", check_task("fix", state))
+
+    def test_commit_problems_flag_missing_task_other_ticket_and_duplicates(self):
+        found = problems(
+            [
+                commit("S1"),
+                commit("", "b2"),
+                commit("S1", "c3"),
+                commit("R1", "d4", "y.md"),
+                commit("ci", "e5"),
+                commit("ci", "f6"),
+            ],
+            REF,
+        )
+        self.assertEqual([level for level, _ in found], ["FAIL", "WARN", "FAIL"])
+        self.assertIn("b2 thiếu trailer Task", found[0][1])
+        self.assertIn("task S1 có 2 commit", found[1][1])
+        self.assertIn("d4 Refs `y.md`", found[2][1])
+
+    def test_commit_map_orders_by_task_and_shows_acs(self):
+        state = make_state(slices=[{"id": "S1", "acs": [1, 3]}])
+        table = render(
+            [commit("sync", "s9"), commit("S1", "a1"), commit("plan", "p0")], state, True
+        )
+        rows = table.splitlines()[2:]
+        self.assertEqual([r.split(" | ")[0] for r in rows], ["| plan", "| S1", "| sync"])
+        self.assertIn("| S1 | 2 code | 1, 3 | `a1` feat: S1 | 2 |", table)
+
+    def test_dirty_ticket_alone_is_only_a_warning(self):
+        self.assertEqual(check_dirty([REF], REF)[0][0], "WARN")
+        self.assertEqual(check_dirty([REF, "backend/x.py"], REF)[0][0], "FAIL")
+        self.assertEqual(check_dirty([], REF)[0][0], "OK")
+
+    def test_dirty_paths_reads_porcelain_z_unquoted_and_skips_rename_source(self):
+        raw = f" M {REF}\0R  new.md\0old.md\0?? .scratch/f/issues/02-á.md\0"
+        self.assertEqual(dirty_paths(raw), [REF, "new.md", ".scratch/f/issues/02-á.md"])
+        self.assertEqual(dirty_paths(""), [])
+
+    def test_missing_task_is_one_fail_not_also_a_duplicate(self):
+        found = problems([commit("", "a1"), commit("", "b2")], REF)
+        self.assertEqual([level for level, _ in found], ["FAIL", "FAIL"])
+
+    def test_parse_log_counts_files_from_one_git_log(self):
+        raw = (
+            f"\x1ea1\x1ffeat: x\x1fS1\x1f{REF}\n\nbackend/a.py\nbackend/b.py\n"
+            f"\x1eb2\x1fdocs: y\x1fsync\x1f{REF}\n\n{REF}\n"
+        )
+        commits = parse_log(raw)
+        self.assertEqual([(c["sha"], c["task"], c["files"]) for c in commits],
+                         [("a1", "S1", 2), ("b2", "sync", 1)])
+
+
+class CommitOnlyListedPaths(unittest.TestCase):
+    """commit.py chạy trong một repo tạm: file đã stage sẵn không lọt vào commit của task."""
+
+    def test_pre_staged_file_stays_out_of_the_task_commit(self):
+        import os
+        import subprocess
+
+        repo = Path(tempfile.mkdtemp())
+        run = lambda *a: subprocess.run(  # noqa: E731
+            ["git", *a], cwd=repo, capture_output=True, text=True, check=True
+        ).stdout
+        run("init", "-q")
+        run("config", "user.email", "t@t")
+        run("config", "user.name", "t")
+        issues = repo / ".scratch" / "f" / "issues"
+        issues.mkdir(parents=True)
+        (issues / "01-x.md").write_text(TICKET, encoding="utf-8")
+        run("add", "-A")
+        run("commit", "-qm", "chore: init")
+        state_dir = repo / ".git" / "ship-ticket-fashion"
+        state_dir.mkdir()
+        (state_dir / "f-01.json").write_text(
+            '{"slices": [{"id": "S1"}]}', encoding="utf-8"
+        )
+        (repo / "staged.txt").write_text("other task", encoding="utf-8")
+        run("add", "staged.txt")
+        (repo / "mine.txt").write_text("this task", encoding="utf-8")
+
+        script = Path(__file__).with_name("commit.py")
+        out = subprocess.run(
+            [os.sys.executable, str(script), "f/01", "--task", "S1", "-m", "feat: add mine",
+             "--", "mine.txt"],
+            cwd=repo, capture_output=True, text=True, encoding="utf-8",
+        )
+        self.assertIn("COMMIT", out.stdout, out.stdout + out.stderr)
+        self.assertEqual(run("show", "--format=", "--name-only", "HEAD").split(), ["mine.txt"])
+        self.assertIn("A  staged.txt", run("status", "--porcelain"))
 
 
 if __name__ == "__main__":

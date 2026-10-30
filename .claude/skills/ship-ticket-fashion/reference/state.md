@@ -13,6 +13,7 @@
     { "id": "S1", "acs": [4], "dependsOn": [], "status": "done",
       "seam": "GET list endpoint qua APIClient",
       "tests": ["tests/shared/api/test_pagination.py::test_page_size_capped_at_100"],
+      "files": ["backend/shared/api/pagination.py"],
       "handoff": ["StandardPagination trong shared/api/pagination.py"] },
     { "id": "S2", "acs": [1], "dependsOn": ["S1"], "status": "code", "seam": "…", "tests": ["…"] }
   ],
@@ -27,6 +28,7 @@
 
 - `acs`: số thứ tự của AC trong mục `## Acceptance criteria` của ticket, đếm từ 1.
 - `tests`: id pytest tính từ `backend/` (`<file>::<test>` hoặc `<file>::<Class>::<test>`). `check_ac_trace.py` kiểm tra file và hàm tồn tại.
+- `files`: file slice sẽ đổi, ghi ở phase 1 cho `## Kế hoạch`; một slice là một commit gồm đúng các file này.
 - `untestable`: AC không test tự động được ở đây, kèm lý do và cách kiểm tay; báo cáo liệt kê chúng ở mục *Chưa làm*.
 - `status` của slice: `todo` → `code` → `done`. Slice phụ thuộc nhau tạo thành DAG; `state.py check` từ chối id trùng, `dependsOn` không tồn tại và vòng lặp.
 - `handoff`: tối đa 5 dòng mỗi slice, chỉ những gì slice sau dùng lại (tên export, quyết định). Không ghi nhật ký làm việc.

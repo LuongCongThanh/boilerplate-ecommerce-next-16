@@ -1,7 +1,7 @@
 ---
 name: ship-ticket-fashion
-description: Làm một ticket `.scratch/<feature>/issues/NN-*.md` của Fashion Store từ grilling tới merge, kèm retro skill; tạo spec và ticket cho module chưa có ticket. Dùng khi người dùng nói "làm ticket NN", "làm tiếp", "làm module X", hoặc hỏi tiến độ / ticket tiếp theo.
-argument-hint: "[<feature>/<NN> | <NN> | <module>] [grill|code|report|review|sync|ship|done|retro]"
+description: Làm một ticket `.scratch/<feature>/issues/NN-*.md` của Fashion Store từ grilling tới merge, kèm retro skill; tạo spec và ticket cho module chưa có ticket; retro một PR. Dùng khi người dùng nói "làm ticket NN", "làm tiếp", "làm module X", "retro PR #N", hoặc hỏi tiến độ / ticket tiếp theo.
+argument-hint: "[<feature>/<NN> | <NN> | <module>] [grill|code|report|review|sync|ship|done|retro] | retro #<PR>"
 ---
 
 # ship-ticket-fashion
@@ -14,6 +14,7 @@ Mọi tin nhắn cho người dùng viết tiếng Việt. Mỗi lần chạy đ
 
 1. `python S/scripts/state.py start [<T>]`, chạy riêng. Tham số là tên module hoặc mốc (`catalog`, `M1`) chưa có ticket trong `.scratch/` → `phases/0-plan.md`. Script in ticket, phase, `next`, slice, gate, các cờ (`BRANCH RED`, `DIRTY`, `BEHIND`, `SLICE OPEN`) và các dòng `READ <file>`. Output này thay cho việc đọc file state.
    - `NO STATE` kèm frontier → chưa có ticket đang làm: báo tiến độ (`python S/scripts/progress.py`), hỏi người dùng chọn ticket (lựa chọn khuyên dùng là ticket đầu frontier), rồi vào phase 1. Có ticket `needs-triage` → cùng lần hỏi, hỏi từng ticket: `ready-for-agent`, `ready-for-human`, `wontfix` hay để sau (`docs/agents/triage-labels.md`); ghi dòng `Status:` theo câu trả lời và commit cùng ticket ở phase 1 bước 9. Frontier rỗng, hoặc mốc chỉ còn ticket bị chặn hay cần người → `phases/0-plan.md`.
+   - `retro #<PR>` → bỏ qua state, làm `phases/8-retro.md` mục *Retro một PR*.
 2. Đọc mọi file sau `READ` bằng Read tool, mỗi file một lần gọi.
 3. Bắt đầu từ `next`. Tham số `[phase]` ghi đè phase, trừ khi gate chưa được duyệt.
 
@@ -29,9 +30,9 @@ Mọi tin nhắn cho người dùng viết tiếng Việt. Mỗi lần chạy đ
 | # | Phase | File | Skill (`mattpocock-skills:`) | Kết quả |
 | --- | --- | --- | --- | --- |
 | 0 | plan | `phases/0-plan.md` | `grill-with-docs`, `to-spec`, `to-tickets` | spec + ticket của mốc mới |
-| 1 | grill | `phases/1-grill.md` | `grill-with-docs`; `codebase-design` khi có module / interface mới | nhánh, `## Quyết định`, slice, ⛔G1 |
-| 2 | code | `phases/2-code.md` | `tdd` | mọi slice xanh |
-| 3 | report | `phases/3-report.md` | — | báo cáo trong `## Comments` của ticket |
+| 1 | grill | `phases/1-grill.md` | `grill-with-docs`; `codebase-design` khi có module / interface mới | nhánh, *spec* + *plan* đã commit, ⛔G1 |
+| 2 | code | `phases/2-code.md` | `tdd` | mọi slice xanh, mỗi slice một commit |
+| 3 | report | `phases/3-report.md` | — | *report* trong ticket (commit ở sync) |
 | 4 | review | `phases/4-review.md` | `code-review`; `code-review` dựng sẵn (trục Bug) | mọi finding có kết luận |
 | 5 | sync | `phases/5-sync.md` | `domain-modeling` khi có thuật ngữ / ADR mới | tài liệu khớp code, ⛔G2 |
 | 6 | ship | `phases/6-ship.md` | — | PR mở, ticket đóng trong PR, CI xanh |
@@ -39,6 +40,25 @@ Mọi tin nhắn cho người dùng viết tiếng Việt. Mỗi lần chạy đ
 | 8 | retro | `phases/8-retro.md` | `writing-for-agents` | skill tốt hơn, PR của skill |
 
 Quy tắc chung cho mọi phase: `reference/rules.md`.
+
+## Spec, plan, report
+
+Mỗi ticket mang ba phần, đều nằm trong file ticket để người đọc PR thấy cùng một chỗ:
+
+| Phần | Mục trong ticket | Viết ở | Trả lời |
+| --- | --- | --- | --- |
+| *spec* | `## Quyết định` + `## Acceptance criteria` | phase 1 | làm gì, theo tài liệu nào |
+| *plan* | `## Kế hoạch`, sinh bằng `plan.py` từ slice trong state | phase 1 | làm theo thứ tự nào, test nào chứng minh, commit nào |
+| *report* | `### Báo cáo` trong `## Comments` | phase 3, ghi đè ở 4 và 5 | đã làm, chưa làm, gap, commit → task |
+
+Code chỉ bắt đầu khi *spec* và *plan* đã commit: `state.py transition --to code` kiểm cả hai.
+
+## Commit
+
+Một *task* là đúng một commit: `plan`, mỗi slice `S<n>`, mỗi vòng sửa review `R1` / `R2`, `sync` (tài liệu + report), `close`; thêm `ci` cho mỗi lần CI đỏ. PR squash vào `dev`, nên commit trên nhánh là dấu vết để đọc, không phải lịch sử lâu dài; mỗi commit thêm còn chạy lại hook `mypy` + `lint-imports`.
+
+- Commit qua `python S/scripts/commit.py <T> --task <task> -m "<subject>" [--body "…"] -- <file>…`: gắn trailer `Refs:` (ticket) và `Task:`, hook chạy trong log, hook sửa file thì tự add lại.
+- `python S/scripts/commit_map.py <T> [--md]` in commit → task → phase → AC; báo commit thiếu trailer và task có hai commit. Bảng `--md` đi vào report, thân PR và thân commit squash.
 
 ## Mode
 

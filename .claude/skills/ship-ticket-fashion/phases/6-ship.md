@@ -23,7 +23,7 @@ git push -u origin <nhánh>        # nhánh của mình: --force-with-lease sau 
 ## 2. Mở PR
 
 1. Tiêu đề Conventional Commits, scope là module (`shared`, `catalog`…); tiêu đề này thành commit squash trên `dev`.
-2. Thân PR theo `.github/pull_request_template.md`, ghi vào `.git/PR_BODY.md` (lý do ở `gotchas/windows-shell.md`). **Closes** là đường dẫn ticket; **Notes** là báo cáo trong ticket (Đã làm / Chưa làm / Gap, kết luận review); checklist tick theo sự thật, mục không áp dụng ghi N/A.
+2. Thân PR theo `.github/pull_request_template.md`, ghi vào `.git/PR_BODY.md` (lý do ở `gotchas/windows-shell.md`). **Closes** là đường dẫn ticket. Lấy từ báo cáo trong ticket: *Cách kiểm* ← bảng AC → bằng chứng; *Gap và lưu ý* ← Chưa làm, Gap, ticket mới, AC `untestable`, mỗi dòng có nội dung hoặc "Không"; **Notes** ← kết luận review và bảng *Commit*. Checklist tick theo sự thật, mục không áp dụng ghi N/A.
 3. Tạo, rồi ghi số PR vào state:
 
 ```bash
@@ -42,7 +42,7 @@ python S/scripts/progress.py --feature <feature>
 
 Cùng commit, sửa `.scratch/mvp-roadmap/map.md`: dòng của mốc trong bảng **Tiến độ** khớp `progress.py`; **Decisions-so-far** thêm `DD/MM/YYYY: …` cho mỗi quyết định ảnh hưởng ngoài ticket.
 
-Commit `docs: close <chủ đề> ticket`, push.
+`commit.py <T> --task close -m "docs: close <chủ đề> ticket" -- <ticket> .scratch/mvp-roadmap/map.md`, push.
 
 ## 4. CI
 
@@ -50,7 +50,7 @@ Commit `docs: close <chủ đề> ticket`, push.
 GH_TOKEN="$(gh auth token --user LuongCongThanh)" gh pr checks <số> --watch
 ```
 
-Đỏ → `gh run view <id> --log-failed > .git/ship-ticket-fashion/logs/ci.log`, đọc đoạn lỗi, sửa trong phạm vi ticket, push. Đỏ ngoài phạm vi → *Cần người dùng*.
+Đỏ → `gh run view <id> --log-failed > .git/ship-ticket-fashion/logs/ci.log`, đọc đoạn lỗi, sửa trong phạm vi ticket, commit `--task ci`, push. Đỏ ngoài phạm vi → *Cần người dùng*.
 
 Check SonarCloud xanh cả khi còn issue (Quality Gate vẫn passed), nên đọc thêm comment của bot:
 
@@ -58,7 +58,13 @@ Check SonarCloud xanh cả khi còn issue (Quality Gate vẫn passed), nên đ�
 GH_TOKEN="$(gh auth token --user LuongCongThanh)" gh pr view <số> --json comments --jq '.comments[] | select(.author.login=="sonarqubecloud") | .body' | grep -oE '[0-9]+ (New issues?|Security Hotspots?)'
 ```
 
-Số khác 0 → nhờ người dùng dán danh sách issue từ link dashboard trong comment, xử lý từng issue như finding *sửa* của phase 4 và ghi vào *Thay đổi theo yêu cầu* của báo cáo.
+Comment gắn vào dòng code (bot, reviewer) không nằm trong `comments` ở trên; đọc riêng và xử lý như finding của phase 4:
+
+```bash
+GH_TOKEN="$(gh auth token --user LuongCongThanh)" gh api repos/LuongCongThanh/fashion-store-backend/pulls/<số>/comments --jq '.[] | "\(.path):\(.line) \(.user.login): \(.body)"'
+```
+
+SonarCloud số khác 0 → nhờ người dùng dán danh sách issue từ link dashboard trong comment, xử lý từng issue như finding *sửa* của phase 4 và ghi vào *Thay đổi theo yêu cầu* của báo cáo.
 
 Mỗi lần push thêm vào PR đã mở: cập nhật thân PR (`gh pr edit <số> -F .git/PR_BODY.md`) và thêm comment tóm tắt đã sửa gì (`gh pr comment <số> -F <file>`).
 
