@@ -156,8 +156,10 @@ def test_lone_surrogate_in_body_is_hashed() -> None:
 
 def test_claim_inside_outer_transaction_raises() -> None:
     # Transaction ngoài giữ khoá dòng key tới khi nó commit và nuốt việc nhả key
-    with pytest.raises(RuntimeError), transaction.atomic():
-        idempotency.claim(SCOPE, uuid.UUID(KEY), request_hash({"note": "a"}))
+    key = uuid.UUID(KEY)
+    body_hash = request_hash({"note": "a"})
+    with transaction.atomic(), pytest.raises(RuntimeError):
+        idempotency.claim(SCOPE, key, body_hash)
 
     assert not IdempotencyKey.objects.exists()
 
