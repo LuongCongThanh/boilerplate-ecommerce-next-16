@@ -23,7 +23,7 @@ Mục tiêu: code **và test** đúng ticket và đúng chuẩn của repo. Bắ
    - *hoàn tác*: thứ agent tự thêm ngoài phạm vi (không có AC, không có yêu cầu), kể cả vô hại.
    - *chỉ báo*: smell, lỗi có từ trước, điểm cần người dùng quyết.
 
-   Trình bảng finding (mã, `file:line`, phân loại, cách sửa) và hỏi bằng `AskUserQuestion` (multi-select) những mục người dùng muốn sửa ngay; mục *sửa* để sẵn là khuyên dùng. Mục trong `userRequested` hỏi trước khi hoàn tác.
+   Trình bảng finding (mã, `file:line`, phân loại, cách sửa) và hỏi bằng `AskUserQuestion` (multi-select) những mục người dùng muốn sửa ngay; mục *sửa* để sẵn là khuyên dùng. Chỉ liệt kê nhóm sửa, không thêm lựa chọn "Không sửa gì": người dùng bỏ hết thì ghi ở Other. Mục trong `userRequested` hỏi trước khi hoàn tác.
 5. **Vòng sửa, tối đa 2 vòng**, một sub-agent cho mọi vòng (vòng 2 gửi bằng `SendMessage`). Vòng 1 làm hết mục đã chọn thành một lô; vòng 2 chỉ xử lý thứ vòng 1 để lại đỏ hoặc làm hỏng. Mỗi mục đổi hành vi: test red trước khi có seam. Mỗi vòng một commit: `commit.py <T> --task R1` (vòng 2: `R2`), subject `fix(<scope>): address review findings on <chủ đề>`, thân liệt kê mã finding đã sửa (`B1`, `S2`…). Cuối mỗi vòng: `make lint`, `make test` qua `run_logged.py`, `check_ac_trace.py`. Còn mở sau vòng 2 → đưa lên G2.
 6. **Ghi** bảng kết luận vào báo cáo trong ticket (mục *Review*): mỗi finding một dòng (mã, `file:line`, đã sửa / chỉ báo / hoàn tác / bác, lý do vài chữ); gom smell vào một dòng. Cập nhật bảng AC → bằng chứng nếu test đổi.
 7. `state.py transition <T> --to sync --next "đồng bộ tài liệu" --reason "review xong"`, in điểm clear.
