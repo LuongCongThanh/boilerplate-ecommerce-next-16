@@ -10,7 +10,8 @@ import argparse
 import re
 import sys
 
-from common import git, load_state, resolve
+from commit_map import problems, read_commits
+from common import git, load_state, resolve, ticket_ref
 
 BRANCH = re.compile(r"^(feat|fix|refactor|docs|chore|test|hotfix)/[a-z0-9]+(-[a-z0-9]+)*$")
 TYPES = "feat|fix|perf|refactor|test|docs|build|ci|chore|revert"
@@ -33,7 +34,17 @@ def diff_size(numstat: str) -> int:
     return total
 
 
-def compare_with_dev() -> list[tuple[str, str]]:
+def check_dirty(porcelain: list[str], ticket: str) -> list[tuple[str, str]]:
+    """Báo cáo trong ticket được commit ở task sync, nên trước đó ticket dirty chỉ là WARN."""
+    others = [line for line in porcelain if line[3:].strip('"') != ticket]
+    if others:
+        return [("FAIL", f"{len(others)} file chưa commit ngoài ticket")]
+    if porcelain:
+        return [("WARN", "ticket chưa commit (báo cáo commit ở task sync)")]
+    return [("OK", "0 file chưa commit")]
+
+
+def compare_with_dev(ticket: str) -> list[tuple[str, str]]:
     results = []
     behind = int(git("rev-list", "--count", "HEAD..origin/dev") or 0)
     results.append(
@@ -50,6 +61,12 @@ def compare_with_dev() -> list[tuple[str, str]]:
         ("FAIL" if bad else "OK", f"{len(subjects)} commit, {len(bad)} sai Conventional Commits")
     )
     results.extend(("FAIL", f"  commit: {s}") for s in bad)
+
+    commits = read_commits()
+    found = problems(commits, ticket)
+    worst = "FAIL" if any(level == "FAIL" for level, _ in found) else "WARN" if found else "OK"
+    results.append((worst, f"commit → task: {len(commits)} commit, {len(found)} điểm lệch"))
+    results.extend((level, f"  {message}") for level, message in found)
 
     size = diff_size(git("diff", "--numstat", "origin/dev...HEAD"))
     results.append(
@@ -73,14 +90,13 @@ def main() -> int:
         results.append(("FAIL", f"nhánh {branch} khác nhánh của state {state.get('branch')}"))
     results.append(("OK" if BRANCH.match(branch) else "WARN", f"tên nhánh {branch}"))
 
-    dirty = git("status", "--porcelain").splitlines()
-    results.append(("FAIL" if dirty else "OK", f"{len(dirty)} file chưa commit"))
+    results.extend(check_dirty(git("status", "--porcelain").splitlines(), ticket_ref(ticket)))
 
     # git() trả "" khi lỗi: thiếu origin/dev thì mọi phép so sánh bên dưới thành 0 và báo OK sai.
     if not git("rev-parse", "--verify", "--quiet", "origin/dev"):
         results.append(("FAIL", "không thấy origin/dev (chạy git fetch origin dev)"))
     else:
-        results.extend(compare_with_dev())
+        results.extend(compare_with_dev(ticket_ref(ticket)))
 
     for level, message in results:
         print(f"{level} {message}")

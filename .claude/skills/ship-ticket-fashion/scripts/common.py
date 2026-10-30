@@ -44,6 +44,11 @@ def resolve(arg: str, features: dict[str, Feature] | None = None) -> tuple[Featu
     return features[feature], features[feature].tickets[num]
 
 
+def ticket_ref(ticket: Ticket) -> str:
+    """Đường dẫn ticket tính từ gốc repo, dạng dùng trong state và trailer `Refs:`."""
+    return ticket.path.relative_to(ticket.path.parents[3]).as_posix()
+
+
 def load_state(feature: str, num: int) -> dict | None:
     path = state_path(feature, num)
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None

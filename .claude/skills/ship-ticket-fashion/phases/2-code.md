@@ -9,7 +9,7 @@ Full: một sub-agent cho mỗi slice, theo thứ tự DAG (`dependsOn` xong h�
 3. Test đỏ không thuộc slice → chứng minh nó đỏ trên `origin/dev` (`reference/rules.md` → *Test*), ghi `notes`, làm tiếp.
 4. Cần migration → `uv run python manage.py makemigrations <app>` và đọc lại file sinh ra; migration phải đảo ngược được (`docs/architecture/12-testing-strategy.md` mục 6).
 5. Cuối slice: `uv run ruff format` và `uv run ruff check --fix` cho file đã đổi, chạy lại các test của slice.
-6. Commit: `git add -- <đường dẫn cụ thể>`, message theo `templates/commit-msg.md`.
+6. Commit một lần cho cả slice: `python S/scripts/commit.py <T> --task <id> -m "<subject>" --body "<vì sao>" -- <file>…` (`templates/commit-msg.md`). Còn sửa trong slice trước khi trả về thì `git commit --amend --no-edit` commit đó, chưa push nên an toàn.
 7. `state.py set <T> slices.<id>.status=done 'slices.<id>.tests=[…]' 'slices.<id>.handoff=[…]' 'next=…'`. Tên test đổi so với kế hoạch thì ghi tên thật.
 8. Sub-agent trả về theo `reference/sub-agent.md`. Phiên chính in điểm clear rồi giao slice tiếp theo.
 
@@ -26,4 +26,4 @@ python S/scripts/state.py transition <T> --to report --next "viết báo cáo" -
 
 ## Xong khi
 
-Mọi slice `done`; `make lint`, `make test`, `check_ac_trace.py` xanh; mọi slice đã commit; `phase` là `report`.
+Mọi slice `done`; `make lint`, `make test`, `check_ac_trace.py` xanh; `commit_map.py <T>` in đúng một commit cho mỗi slice, không `FAIL`; `phase` là `report`.

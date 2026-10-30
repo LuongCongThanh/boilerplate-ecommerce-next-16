@@ -12,7 +12,7 @@ Mục tiêu: sau PR này, `docs/` và `.scratch/` mô tả đúng code trên nh�
 3. **Domain.** Thuật ngữ mới → `GLOSSARY.md`; quyết định kiến trúc lâu dài → ADR; cả hai qua `mattpocock-skills:domain-modeling`.
 4. **Ticket.** `## Quyết định` khớp code cuối cùng (chữ ký hàm, hành vi đổi khi review). Việc ngoài phạm vi phát hiện được → ticket mới `needs-triage`.
 5. **Code nhỏ cùng loại**: thứ phase này lộ ra trong phạm vi ticket (tên lệch tài liệu đã chốt, comment sai) thì sửa code, chạy lại test liên quan.
-6. Commit `docs: sync <tài liệu> with <thay đổi>`. Ghi mục *Tài liệu đã cập nhật* vào báo cáo.
+6. Ghi mục *Tài liệu đã cập nhật* và làm mới mục *Commit* của báo cáo (`commit_map.py <T> --md`), rồi commit tài liệu, code nhỏ của bước 5 và ticket trong một lần: `commit.py <T> --task sync -m "docs: sync docs and report for <chủ đề> ticket" -- <file>…`.
 7. **Check cuối**: `make lint`, `make test` qua `run_logged.py`, `check_ac_trace.py`, `check_ship.py <T>`. Mỗi dòng `WARN` / `FAIL` là một điểm của G2.
 8. **⛔G2** (khuôn ở SKILL.md → *Gate*). Tin tóm tắt: bảng AC → bằng chứng; kết luận review (mục còn mở); tài liệu đã cập nhật; ticket mới đã tạo; số test; dòng `WARN` / `FAIL` của `check_ship.py`; tiêu đề PR đề xuất. Nói rõ: duyệt G2 cho phép phase 6 push, mở PR và đóng ticket mà không hỏi thêm; merge vẫn hỏi riêng. Hỏi: duyệt ship (khuyên dùng khi không có `FAIL`), sửa thêm, hay dừng.
 9. Người dùng yêu cầu sửa thêm → ghi `userRequested`, sửa (đổi hành vi thì `--to code` rồi đi lại các phase), trình G2 lại. Duyệt xong:

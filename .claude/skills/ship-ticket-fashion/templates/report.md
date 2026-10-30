@@ -29,6 +29,10 @@
 | --- | --- | --- | --- |
 | S1 | `shared/api/x.py:12` | đã sửa | <vài chữ> |
 
+#### Commit
+
+<bảng của `commit_map.py <T> --md`>
+
 #### Tài liệu đã cập nhật
 
 - `docs/architecture/02-backend-structure.md`: <gì> / Không
