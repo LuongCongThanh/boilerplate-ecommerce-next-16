@@ -21,7 +21,7 @@ from plan import render as render_plan
 from plan import upsert
 from progress import Feature, frontier, parse_blocked, parse_ticket
 from run_logged import make_recipe
-from state import apply, check_transition, pick_active, plan_ready, validate
+from state import apply, check_transition, hooks_installed, pick_active, plan_ready, validate
 
 TICKET = """# Lớp API
 
@@ -176,6 +176,14 @@ class StateMachine(unittest.TestCase):
 
 
 class Checks(unittest.TestCase):
+    def test_hooks_installed_needs_existing_hook_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            hook = Path(tmp) / "pre-commit"
+            self.assertFalse(hooks_installed(str(hook)))
+            self.assertFalse(hooks_installed(""))
+            hook.write_text("#!/bin/sh\n", encoding="utf-8")
+            self.assertTrue(hooks_installed(str(hook)))
+
     def test_trace_reports_uncovered_ac_and_missing_test(self):
         backend = Path(tempfile.mkdtemp())
         (backend / "tests").mkdir()

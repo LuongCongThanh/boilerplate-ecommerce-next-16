@@ -15,6 +15,7 @@ import argparse
 import json
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from common import git, load_state, repo_root, resolve, save_state, state_dir, ticket_ref
@@ -249,6 +250,11 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
+def hooks_installed(hook_path: str) -> bool:
+    """File hook do `pre-commit install` ghi; thiếu thì commit không chạy hook nào."""
+    return bool(hook_path) and Path(hook_path).is_file()
+
+
 def pick_active(states: list[dict], branch: str) -> dict | None:
     """states xếp cũ → mới. Ưu tiên ticket chưa closed trên nhánh hiện tại, mới nhất trước."""
     active = [s for s in states if s.get("phase") != "closed"]
@@ -303,6 +309,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         flags.append(f"SLICE OPEN {', '.join(open_slices)}")
     if state["phase"] == "done" and not state.get("pr"):
         flags.append("NO PR")
+    hook = git("rev-parse", "--path-format=absolute", "--git-path", "hooks/pre-commit")
+    if not hooks_installed(hook):
+        flags.append("NO HOOKS (chưa cài pre-commit: gitleaks, ruff, mypy chỉ chạy ở CI)")
 
     gates = state["gates"]
     print(f"TICKET {state['feature']}/{state['num']:02d} · {state['ticket']}")
