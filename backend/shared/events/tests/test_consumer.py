@@ -1,0 +1,320 @@
+import threading
+import time
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import pytest
+import time_machine
+from django.db import connection
+from django.utils import timezone
+from structlog.testing import capture_logs
+
+from shared.events import handles, publish
+from shared.events.consumer import RETRY_DELAYS, process_delivery
+from shared.events.models import EventDelivery, OutboxEvent
+from shared.events.tasks import dispatch_event
+from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
+from shared.exceptions import DomainError, RetryLater
+
+pytestmark = pytest.mark.django_db
+
+NOW = datetime(2026, 10, 30, 8, 0, tzinfo=UTC)
+ORDER_CODE = "FS2610-7K3QZD"
+
+
+class TransitionNotYetValid(RetryLater):
+    code = "TRANSITION_NOT_YET_VALID"
+
+
+class InvalidTransition(DomainError):
+    code = "INVALID_TRANSITION"
+
+
+class Boom(Exception):
+    pass
+
+
+def _publish() -> OutboxEvent:
+    return publish(SampleHappenedV1(order_code=ORDER_CODE, amount=250000))
+
+
+def _delivery(event: OutboxEvent, handler: str, **fields: Any) -> EventDelivery:
+    now = timezone.now()
+    defaults: dict[str, Any] = {"next_attempt_at": now, "next_dispatch_at": now}
+    return EventDelivery.objects.create(event=event, handler=handler, **(defaults | fields))
+
+
+def _record(effects: type[HandlerEffect], handler: str, event: SampleHappenedV1) -> None:
+    effects.objects.create(handler=handler, order_code=event.order_code)
+
+
+@time_machine.travel(NOW, tick=False)
+def test_success_commits_effect_and_completed(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    received: list[SampleHappenedV1] = []
+
+    @handles("shared.sample-happened", name="shared.record_effect")
+    def record_effect(event: SampleHappenedV1) -> None:
+        received.append(event)
+        _record(handler_effect_table, "shared.record_effect", event)
+
+    event_row = _publish()
+    delivery = _delivery(event_row, "shared.record_effect")
+
+    # Đi qua task Celery thật (eager trong test) như relay giao
+    dispatch_event.apply_async(args=(str(event_row.id), "shared.record_effect"), queue="events")
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.COMPLETED
+    assert delivery.completed_at == NOW
+    assert delivery.attempts == 0
+    assert handler_effect_table.objects.filter(handler="shared.record_effect").count() == 1
+    assert received == [
+        SampleHappenedV1(
+            event_id=event_row.id,
+            occurred_at=NOW,
+            correlation_id=None,
+            order_code=ORDER_CODE,
+            amount=250000,
+        )
+    ]
+
+
+@time_machine.travel(NOW, tick=False)
+def test_retry_later_keeps_pending_with_schedule(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    @handles("shared.sample-happened", name="shared.wait_for_source")
+    def wait_for_source(event: SampleHappenedV1) -> None:
+        _record(handler_effect_table, "shared.wait_for_source", event)
+        raise TransitionNotYetValid
+
+    delivery = _delivery(_publish(), "shared.wait_for_source", attempts=2)
+
+    process_delivery(delivery.event_id, "shared.wait_for_source")
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.attempts == 3
+    assert delivery.next_attempt_at == NOW + timedelta(minutes=5)
+    assert delivery.next_dispatch_at == NOW + timedelta(minutes=5)
+    assert delivery.last_error == "TransitionNotYetValid(TRANSITION_NOT_YET_VALID)"
+    assert delivery.completed_at is None
+    assert not handler_effect_table.objects.exists()
+
+
+@time_machine.travel(NOW, tick=False)
+def test_exception_rolls_back_handler_and_schedules_retry(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    @handles("shared.sample-happened", name="shared.crash")
+    def crash(event: SampleHappenedV1) -> None:
+        _record(handler_effect_table, "shared.crash", event)
+        raise Boom("khach@example.com")
+
+    delivery = _delivery(_publish(), "shared.crash")
+
+    with capture_logs() as logs:
+        process_delivery(delivery.event_id, "shared.crash")
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.attempts == 1
+    assert delivery.next_attempt_at == NOW + RETRY_DELAYS[0]
+    assert delivery.next_dispatch_at == NOW + timedelta(seconds=10)
+    # Chỉ tên class, message có thể chứa PII
+    assert delivery.last_error == "Boom"
+    assert not handler_effect_table.objects.exists()
+    assert {"event": "event_handler_error", "log_level": "error"}.items() <= logs[0].items()
+
+
+@time_machine.travel(NOW, tick=False)
+def test_exhausted_retries_mark_failed() -> None:
+    @handles("shared.sample-happened", name="shared.never_ready")
+    def never_ready(event: SampleHappenedV1) -> None:
+        raise TransitionNotYetValid
+
+    delivery = _delivery(_publish(), "shared.never_ready", attempts=len(RETRY_DELAYS))
+
+    with capture_logs() as logs:
+        process_delivery(delivery.event_id, "shared.never_ready")
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.FAILED
+    assert delivery.attempts == 6
+    assert delivery.failed_at == NOW
+    assert delivery.last_error == "TransitionNotYetValid(TRANSITION_NOT_YET_VALID)"
+    assert delivery.completed_at is None
+    failed = [log for log in logs if log["event"] == "event_delivery_failed"]
+    assert failed[0]["log_level"] == "error"
+    assert failed[0]["handler"] == "shared.never_ready"
+
+
+@time_machine.travel(NOW, tick=False)
+def test_domain_error_rejects_without_retry(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    @handles("shared.sample-happened", name="shared.reject")
+    def reject(event: SampleHappenedV1) -> None:
+        _record(handler_effect_table, "shared.reject", event)
+        raise InvalidTransition
+
+    delivery = _delivery(_publish(), "shared.reject")
+
+    with capture_logs() as logs:
+        process_delivery(delivery.event_id, "shared.reject")
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.REJECTED
+    assert delivery.completed_at == NOW
+    assert delivery.attempts == 0
+    assert delivery.last_error == "InvalidTransition(INVALID_TRANSITION)"
+    assert not handler_effect_table.objects.exists()
+    assert logs == [
+        {
+            "event": "event_rejected",
+            "log_level": "warning",
+            "event_id": str(delivery.event_id),
+            "event_type": "shared.sample-happened",
+            "handler": "shared.reject",
+            "code": "INVALID_TRANSITION",
+        }
+    ]
+
+
+def test_failing_handler_does_not_affect_other_handler(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    @handles("shared.sample-happened", name="shared.record_effect")
+    def record_effect(event: SampleHappenedV1) -> None:
+        _record(handler_effect_table, "shared.record_effect", event)
+
+    @handles("shared.sample-happened", name="shared.crash")
+    def crash(event: SampleHappenedV1) -> None:
+        _record(handler_effect_table, "shared.crash", event)
+        raise Boom
+
+    event_row = _publish()
+    ok = _delivery(event_row, "shared.record_effect")
+    failing = _delivery(event_row, "shared.crash")
+
+    # Mỗi cặp sự kiện-handler là một task riêng; thứ tự lỗi trước không ảnh hưởng
+    dispatch_event.delay(str(event_row.id), "shared.crash")
+    dispatch_event.delay(str(event_row.id), "shared.record_effect")
+
+    ok.refresh_from_db()
+    failing.refresh_from_db()
+    assert ok.status == EventDelivery.Status.COMPLETED
+    assert failing.status == EventDelivery.Status.PENDING
+    assert failing.attempts == 1
+    assert list(handler_effect_table.objects.values_list("handler", flat=True)) == [
+        "shared.record_effect"
+    ]
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"status": EventDelivery.Status.COMPLETED, "completed_at": NOW},
+        {"status": EventDelivery.Status.REJECTED, "completed_at": NOW},
+        {"status": EventDelivery.Status.FAILED, "failed_at": NOW, "attempts": 6},
+    ],
+    ids=["completed", "rejected", "failed"],
+)
+def test_skips_finished_delivery(fields: dict[str, Any]) -> None:
+    calls: list[SampleHappenedV1] = []
+
+    @handles("shared.sample-happened", name="shared.record_call")
+    def record_call(event: SampleHappenedV1) -> None:
+        calls.append(event)
+
+    delivery = _delivery(_publish(), "shared.record_call", **fields)
+
+    process_delivery(delivery.event_id, "shared.record_call")
+
+    assert calls == []
+    before = {name: fields[name] for name in fields}
+    delivery.refresh_from_db()
+    assert {name: getattr(delivery, name) for name in fields} == before
+
+
+@time_machine.travel(NOW, tick=False)
+def test_skips_before_next_attempt_at() -> None:
+    calls: list[SampleHappenedV1] = []
+
+    @handles("shared.sample-happened", name="shared.record_call")
+    def record_call(event: SampleHappenedV1) -> None:
+        calls.append(event)
+
+    retry_at = NOW + timedelta(seconds=10)
+    # Task tới sớm (giao trùng hoặc relay cũ) trước hạn retry đã lưu
+    delivery = _delivery(
+        _publish(),
+        "shared.record_call",
+        attempts=1,
+        next_attempt_at=retry_at,
+        next_dispatch_at=NOW,
+    )
+
+    process_delivery(delivery.event_id, "shared.record_call")
+
+    assert calls == []
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.attempts == 1
+    assert delivery.next_attempt_at == retry_at
+
+
+@time_machine.travel(NOW, tick=False)
+def test_missing_handler_keeps_pending_without_attempt() -> None:
+    delivery = _delivery(_publish(), "shared.removed_handler")
+
+    with capture_logs() as logs:
+        process_delivery(delivery.event_id, "shared.removed_handler")
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.attempts == 0
+    assert delivery.next_attempt_at == NOW
+    assert logs[0]["event"] == "event_handler_missing"
+    assert logs[0]["log_level"] == "error"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_duplicate_dispatch_commits_once(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    calls: list[SampleHappenedV1] = []
+
+    @handles("shared.sample-happened", name="shared.record_effect")
+    def record_effect(event: SampleHappenedV1) -> None:
+        calls.append(event)
+        _record(handler_effect_table, "shared.record_effect", event)
+        # Giữ khoá delivery đủ lâu để task trùng phải chờ tới khi commit
+        time.sleep(0.2)
+
+    delivery = _delivery(_publish(), "shared.record_effect")
+    barrier = threading.Barrier(2)
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            barrier.wait()
+            process_delivery(delivery.event_id, "shared.record_effect")
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            connection.close()
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(calls) == 1
+    assert handler_effect_table.objects.count() == 1
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.COMPLETED
