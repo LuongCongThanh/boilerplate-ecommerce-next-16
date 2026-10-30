@@ -1,0 +1,105 @@
+from datetime import UTC, datetime, timedelta
+
+import pytest
+import time_machine
+from django.db import transaction
+
+from shared.events import handles, publish
+from shared.events.consumer import RETRY_DELAYS
+from shared.events.models import EventDelivery
+from shared.events.tasks import dispatch_event
+from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
+from shared.exceptions import RetryLater
+from shared.testing.events import drain_events
+
+pytestmark = pytest.mark.django_db
+
+NOW = datetime(2026, 10, 30, 8, 0, tzinfo=UTC)
+ORDER_CODE = "FS2610-7K3QZD"
+
+
+class NotYet(RetryLater):
+    code = "NOT_YET"
+
+
+def test_two_handlers_each_run_once_on_duplicate_dispatch(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    names = ("shared.first_effect", "shared.second_effect")
+    for name in names:
+
+        @handles("shared.sample-happened", name=name)
+        def record(event: SampleHappenedV1, _name: str = name) -> None:
+            handler_effect_table.objects.create(handler=_name, order_code=event.order_code)
+
+    with transaction.atomic():
+        event = SampleHappenedV1(order_code=ORDER_CODE, amount=250000)
+        publish(event)
+
+    drain_events()
+
+    # Task bị giao lặp (broker giao lại, relay giao lại sau hạn) không chạy handler lần nữa
+    for name in names:
+        dispatch_event.apply_async(args=(str(event.event_id), name), queue="events")
+
+    assert sorted(handler_effect_table.objects.values_list("handler", flat=True)) == sorted(names)
+    assert set(EventDelivery.objects.values_list("status", flat=True)) == {
+        EventDelivery.Status.COMPLETED
+    }
+
+
+def test_drain_does_not_wait_for_future_retry(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    calls: list[datetime] = []
+
+    @handles("shared.sample-happened", name="shared.not_yet_then_ok")
+    def not_yet_then_ok(event: SampleHappenedV1) -> None:
+        calls.append(NOW)
+        if len(calls) == 1:
+            raise NotYet
+        handler_effect_table.objects.create(handler="ok", order_code=event.order_code)
+
+    with time_machine.travel(NOW, tick=False) as traveller:
+        publish(SampleHappenedV1(order_code=ORDER_CODE, amount=250000))
+
+        # Retry chưa tới hạn: drain trả về ngay, delivery vẫn chờ
+        drain_events()
+        delivery = EventDelivery.objects.get()
+        assert delivery.status == EventDelivery.Status.PENDING
+        assert delivery.next_attempt_at == NOW + RETRY_DELAYS[0]
+        assert len(calls) == 1
+
+        # Tiến tới hạn retry rồi drain tiếp
+        traveller.shift(RETRY_DELAYS[0] + timedelta(seconds=1))
+        drain_events()
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.COMPLETED
+    assert handler_effect_table.objects.count() == 1
+
+
+def test_drain_runs_pending_on_commit_callbacks() -> None:
+    ran: list[str] = []
+
+    with transaction.atomic():
+        transaction.on_commit(lambda: ran.append("first"))
+
+    drain_events()
+    assert ran == ["first"]
+
+    # Callback đã chạy không chạy lại ở lần drain sau
+    drain_events()
+    assert ran == ["first"]
+
+
+def test_drain_raises_after_max_rounds() -> None:
+    # Handler tạo sự kiện mới mãi: drain phải dừng thay vì lặp vô hạn
+    @handles("shared.sample-happened", name="shared.republish")
+    def republish(event: SampleHappenedV1) -> None:
+        publish(SampleHappenedV1(order_code=event.order_code, amount=event.amount))
+
+    publish(SampleHappenedV1(order_code=ORDER_CODE, amount=250000))
+
+    with pytest.raises(RuntimeError, match="drain_events"):
+        drain_events()
