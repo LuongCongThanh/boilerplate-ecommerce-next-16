@@ -11,7 +11,7 @@ Tài liệu `docs/` đã chốt cho MVP nhưng repo chưa có `backend/`. M0 d�
 - Khung project: `backend/pyproject.toml`, `uv.lock`, `config/`, app `shared` và app `modules` (8 package con rỗng), Dockerfile, Docker Compose, Makefile, `/healthz`, `/readyz`.
 - `shared`: BaseModel và `uuid7()`, Money, chuẩn hoá số điện thoại, `pii_hmac`, lỗi chung, các lớp API cơ sở, logging, địa giới hành chính.
 - `shared.events`: outbox, delivery, relay, consumer, retry và các lệnh vận hành ([07](../../docs/architecture/07-async-events-jobs.md)).
-- `shared.api.idempotency` và bảng `shared_idempotency_key`.
+- `shared.idempotency` (lõi), `shared.api.idempotency` (lớp HTTP) và bảng `shared_idempotency_key`.
 - Model `Account` tối thiểu trong migration đầu tiên của `modules` (bắt buộc vì `AUTH_USER_MODEL`), lệnh `create_staff`.
 - Các cổng chặn trong CI: coverage, marker, OpenAPI drift, import-linter (ticket 01–04).
 
