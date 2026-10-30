@@ -10,6 +10,7 @@ from datetime import timedelta
 import structlog
 from django.db import transaction
 from django.utils import timezone
+from kombu.exceptions import OperationalError
 
 from shared.events.models import EventDelivery, OutboxEvent
 from shared.events.registry import registry
@@ -64,9 +65,9 @@ def dispatch_due(batch: int = 100) -> int:
     """Giao tối đa `batch` delivery `pending` đã tới hạn retry và hạn giao lại.
 
     Hạn giao lại được commit trước khi gọi broker: relay chết trước enqueue, broker mất task hay
-    worker chết trước commit đều khiến delivery được giao lại sau `REDISPATCH_AFTER`. Lỗi broker
-    chỉ được log; delivery giữ hạn đã lưu, không tính là handler thất bại. Trả số delivery đã
-    chọn.
+    worker chết trước commit đều khiến delivery được giao lại sau `REDISPATCH_AFTER`. Lỗi kết
+    nối broker dừng lô và log một lần mức WARNING; các delivery còn lại giữ hạn đã lưu, không
+    tính là handler thất bại. Lỗi khác (lập trình) ném ra (07 mục 1.3). Trả số delivery đã chọn.
     """
     with transaction.atomic():
         now = timezone.now()
@@ -86,10 +87,18 @@ def dispatch_due(batch: int = 100) -> int:
             next_dispatch_at=now + REDISPATCH_AFTER, last_dispatched_at=now
         )
 
-    # Không giữ transaction DB khi gọi broker
-    for _, event_id, handler in due:
+    # Không giữ transaction DB khi gọi broker; queue `events` do decorator của task định tuyến
+    for index, (_, event_id, handler) in enumerate(due):
         try:
-            dispatch_event.apply_async(args=(str(event_id), handler), queue="events")
-        except Exception:
-            logger.exception("outbox_dispatch_failed", event_id=str(event_id), handler=handler)
+            dispatch_event.apply_async(args=(str(event_id), handler))
+        except OperationalError:
+            # Broker không nhận thì các lần gọi sau cũng lỗi: dừng lô, chờ hạn giao lại
+            logger.warning(
+                "outbox_dispatch_failed",
+                event_id=str(event_id),
+                handler=handler,
+                deferred=len(due) - index,
+                exc_info=True,
+            )
+            break
     return len(due)

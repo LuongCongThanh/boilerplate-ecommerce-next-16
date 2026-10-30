@@ -7,6 +7,7 @@ vẫn là UUID v7 (ADR 0008).
 from django.db import models
 from django.db.models import Q
 
+from shared.events.registry import HANDLER_NAME_MAX_LENGTH
 from shared.models import uuid7
 
 
@@ -65,7 +66,7 @@ class EventDelivery(models.Model):
         db_column="event_id",
         db_index=False,
     )
-    handler = models.CharField(max_length=100)
+    handler = models.CharField(max_length=HANDLER_NAME_MAX_LENGTH)
     status = models.CharField(
         max_length=32, choices=DeliveryStatus.choices, default=DeliveryStatus.PENDING
     )

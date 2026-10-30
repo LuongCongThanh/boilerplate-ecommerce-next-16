@@ -1,8 +1,9 @@
 """Chạy outbox relay: mỗi giây lập danh sách delivery rồi giao delivery tới hạn (07 mục 1.1.1).
 
-Lỗi DB hoặc broker trong một vòng chỉ được log, vòng sau thử tiếp: tiến trình không thoát, để
-container `relay` không khởi động lại liên tục khi PostgreSQL hay Redis tạm ngừng. Dừng sạch
-sau vòng đang chạy khi nhận SIGTERM (`docker compose stop`) hoặc SIGINT (Ctrl+C).
+Lỗi DB hoặc broker trong một bước chỉ được log, bước còn lại và vòng sau vẫn chạy: tiến trình
+không thoát, để container `relay` không khởi động lại liên tục khi PostgreSQL hay Redis tạm
+ngừng. Dừng sạch sau vòng đang chạy khi nhận SIGTERM (`docker compose stop`) hoặc SIGINT
+(Ctrl+C).
 """
 
 import signal
@@ -52,10 +53,11 @@ class Command(BaseCommand):
 
 
 def _run_iteration() -> None:
-    try:
-        relay.create_deliveries()
-        relay.dispatch_due()
-    except Exception:
-        logger.exception("outbox_relay_iteration_failed")
-        # Bỏ kết nối DB đã hỏng để vòng sau kết nối lại
-        close_old_connections()
+    # Mỗi bước bắt lỗi riêng: lập danh sách lỗi không chặn việc giao delivery đã có
+    for step in ("create_deliveries", "dispatch_due"):
+        try:
+            getattr(relay, step)()
+        except Exception:
+            logger.exception("outbox_relay_iteration_failed", step=step)
+            # Bỏ kết nối DB đã hỏng để bước sau kết nối lại
+            close_old_connections()

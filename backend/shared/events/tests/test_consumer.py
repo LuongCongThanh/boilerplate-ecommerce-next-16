@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 import time_machine
-from django.db import connection
+from django.db import DatabaseError, connection
 from structlog.testing import capture_logs
 
 from shared.events import handles
@@ -224,9 +224,8 @@ def test_skips_finished_delivery(fields: dict[str, Any]) -> None:
     process_delivery(delivery.event_id, "shared.record_call")
 
     assert calls == []
-    before = {name: fields[name] for name in fields}
     delivery.refresh_from_db()
-    assert {name: getattr(delivery, name) for name in fields} == before
+    assert {name: getattr(delivery, name) for name in fields} == fields
 
 
 @time_machine.travel(NOW, tick=False)
@@ -307,3 +306,89 @@ def test_concurrent_duplicate_dispatch_commits_once(
     assert handler_effect_table.objects.count() == 1
     delivery.refresh_from_db()
     assert delivery.status == EventDelivery.Status.COMPLETED
+
+
+HANDLER_DURATION = timedelta(seconds=30)
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected"),
+    [
+        (None, {"status": EventDelivery.Status.COMPLETED, "completed_at": "done"}),
+        (
+            InvalidTransition,
+            {"status": EventDelivery.Status.REJECTED, "completed_at": "done"},
+        ),
+        (
+            Boom,
+            {
+                "status": EventDelivery.Status.PENDING,
+                "next_attempt_at": "retry",
+                "next_dispatch_at": "retry",
+            },
+        ),
+    ],
+    ids=["completed", "rejected", "retry"],
+)
+def test_outcome_times_taken_after_handler_runs(
+    raised: type[Exception] | None, expected: dict[str, Any]
+) -> None:
+    done = NOW + HANDLER_DURATION
+    times = {"done": done, "retry": done + RETRY_DELAYS[0]}
+
+    with time_machine.travel(NOW, tick=False) as traveller:
+
+        @handles("shared.sample-happened", name="shared.slow")
+        def slow(event: SampleHappenedV1) -> None:
+            # Handler chạy lâu: mốc kết thúc và lịch retry tính từ lúc handler xong
+            traveller.shift(HANDLER_DURATION)
+            if raised is not None:
+                raise raised
+
+        delivery = EventDeliveryFactory.create(handler="shared.slow")
+        process_delivery(delivery.event_id, "shared.slow")
+
+    delivery.refresh_from_db()
+    assert {name: getattr(delivery, name) for name in expected} == {
+        name: times.get(value, value) if isinstance(value, str) else value
+        for name, value in expected.items()
+    }
+
+
+def test_failed_at_taken_after_handler_runs() -> None:
+    with time_machine.travel(NOW, tick=False) as traveller:
+
+        @handles("shared.sample-happened", name="shared.slow")
+        def slow(event: SampleHappenedV1) -> None:
+            traveller.shift(HANDLER_DURATION)
+            raise Boom
+
+        delivery = EventDeliveryFactory.create(handler="shared.slow", attempts=len(RETRY_DELAYS))
+        process_delivery(delivery.event_id, "shared.slow")
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.FAILED
+    assert delivery.failed_at == NOW + HANDLER_DURATION
+
+
+@pytest.mark.django_db(transaction=True)
+def test_handler_breaking_connection_rolls_back_whole_transaction() -> None:
+    @handles("shared.sample-happened", name="shared.kill_connection")
+    def kill_connection(event: SampleHappenedV1) -> None:
+        # PostgreSQL cắt kết nối giữa lúc handler chạy: lỗi nằm ngoài savepoint của handler
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_terminate_backend(pg_backend_pid())")
+
+    delivery = EventDeliveryFactory.create(handler="shared.kill_connection")
+
+    try:
+        with pytest.raises(DatabaseError):
+            process_delivery(delivery.event_id, "shared.kill_connection")
+    finally:
+        # Bỏ kết nối đã chết; truy vấn sau mở kết nối mới
+        connection.close()
+
+    delivery.refresh_from_db()
+    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.attempts == 0
+    assert delivery.last_error == ""

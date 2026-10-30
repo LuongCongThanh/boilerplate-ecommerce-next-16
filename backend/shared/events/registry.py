@@ -4,6 +4,9 @@ Class sự kiện đăng ký theo `(event_type, schema_version)` khi được im
 `@handles`. Trùng khoá ném lỗi ngay khi import để lỗi cấu hình không chờ tới lúc chạy.
 """
 
+import importlib
+import importlib.util
+import pkgutil
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -13,6 +16,9 @@ from django.core.exceptions import ImproperlyConfigured
 
 if TYPE_CHECKING:
     from shared.events.base import DomainEvent
+
+# Độ dài cột `EventDelivery.handler`; model dùng chung hằng này
+HANDLER_NAME_MAX_LENGTH = 100
 
 
 @dataclass(frozen=True)
@@ -40,6 +46,10 @@ class Registry:
         self._events[key] = event_class
 
     def register_handler(self, handler: Handler) -> None:
+        if len(handler.name) > HANDLER_NAME_MAX_LENGTH:
+            raise ImproperlyConfigured(
+                f"Tên handler {handler.name} dài hơn {HANDLER_NAME_MAX_LENGTH} ký tự"
+            )
         existing = self._handlers.get(handler.name)
         if existing is not None:
             raise ImproperlyConfigured(
@@ -75,6 +85,22 @@ class Registry:
 
 
 registry = Registry()
+
+
+def autodiscover(package: str) -> None:
+    """Import `events.py` và `handlers.py` của mọi package con trong `package` nếu có.
+
+    Class sự kiện và handler đăng ký khi được import; `ModulesConfig.ready()` gọi hàm này với
+    `modules` (02 mục 5). Module con chưa có file thì bỏ qua.
+    """
+    root = importlib.import_module(package)
+    for module in pkgutil.iter_modules(root.__path__, prefix=f"{package}."):
+        if not module.ispkg:
+            continue
+        for part in ("events", "handlers"):
+            name = f"{module.name}.{part}"
+            if importlib.util.find_spec(name) is not None:
+                importlib.import_module(name)
 
 
 def handles[F: Callable[[Any], None]](

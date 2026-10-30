@@ -51,12 +51,13 @@ def test_two_handlers_each_run_once_on_duplicate_dispatch(
 def test_drain_does_not_wait_for_future_retry(
     handler_effect_table: type[HandlerEffect],
 ) -> None:
-    calls: list[datetime] = []
+    handler_runs = 0
 
     @handles("shared.sample-happened", name="shared.not_yet_then_ok")
     def not_yet_then_ok(event: SampleHappenedV1) -> None:
-        calls.append(NOW)
-        if len(calls) == 1:
+        nonlocal handler_runs
+        handler_runs += 1
+        if handler_runs == 1:
             raise NotYet
         handler_effect_table.objects.create(handler="ok", order_code=event.order_code)
 
@@ -68,7 +69,7 @@ def test_drain_does_not_wait_for_future_retry(
         delivery = EventDelivery.objects.get()
         assert delivery.status == EventDelivery.Status.PENDING
         assert delivery.next_attempt_at == NOW + RETRY_DELAYS[0]
-        assert len(calls) == 1
+        assert handler_runs == 1
 
         # Tiến tới hạn retry rồi drain tiếp
         traveller.shift(RETRY_DELAYS[0] + timedelta(seconds=1))

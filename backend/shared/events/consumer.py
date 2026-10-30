@@ -74,18 +74,19 @@ def process_delivery(event_id: UUID | str, handler_name: str) -> None:
                     }
                 )
                 handler.func(event)
+        # Mốc kết thúc và lịch retry tính từ lúc handler xong, không phải lúc khoá delivery
         except DomainError as exc:
-            _reject(delivery, exc, now)
+            _reject(delivery, exc, timezone.now())
             log.warning("event_rejected", code=exc.code)
         except RetryLater as exc:
-            _schedule_retry(delivery, exc, now, log)
+            _schedule_retry(delivery, exc, timezone.now(), log)
         except Exception as exc:
             # Traceback chỉ đi vào log; `last_error` không mang message (03 mục 1.4)
             log.exception("event_handler_error")
-            _schedule_retry(delivery, exc, now, log)
+            _schedule_retry(delivery, exc, timezone.now(), log)
         else:
             delivery.status = EventDelivery.Status.COMPLETED
-            delivery.completed_at = now
+            delivery.completed_at = timezone.now()
             delivery.save(update_fields=["status", "completed_at"])
 
 
