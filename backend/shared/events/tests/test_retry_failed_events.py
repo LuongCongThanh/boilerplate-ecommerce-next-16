@@ -18,6 +18,14 @@ NOW = datetime(2026, 10, 30, 8, 0, tzinfo=UTC)
 FAILED_AT = NOW - timedelta(hours=2)
 
 
+def _register(*names: str) -> None:
+    for name in names:
+
+        @handles("shared.sample-happened", name=name)
+        def handler(event: SampleHappenedV1) -> None:
+            pass
+
+
 @time_machine.travel(NOW, tick=False)
 def test_reopens_failed_and_next_run_succeeds() -> None:
     received: list[SampleHappenedV1] = []
@@ -59,6 +67,7 @@ def _failed(**kwargs: object) -> EventDelivery:
 
 @time_machine.travel(NOW, tick=False)
 def test_resets_schedule_and_counter_and_sets_retried_at() -> None:
+    _register("shared.broken")
     delivery = _failed(handler="shared.broken")
 
     with capture_logs() as logs:
@@ -96,7 +105,65 @@ def test_does_not_reopen_completed_or_rejected() -> None:
 
 
 @time_machine.travel(NOW, tick=False)
+def test_all_reopens_every_failed_delivery() -> None:
+    _register("shared.broken", "shared.other_handler")
+    failed = [_failed(handler="shared.broken"), _failed(handler="shared.other_handler")]
+
+    call_command("retry_failed_events", "--all")
+
+    for delivery in failed:
+        delivery.refresh_from_db()
+        assert (delivery.status, delivery.retried_at) == (DeliveryStatus.PENDING, NOW)
+
+
+@time_machine.travel(NOW, tick=False)
+def test_skips_failed_delivery_of_unregistered_handler() -> None:
+    _register("shared.broken")
+    reopened = _failed(handler="shared.broken")
+    # Handler đã bị gỡ khỏi code: mở lại sẽ kẹt `pending` mãi
+    removed = _failed(handler="shared.removed_handler")
+
+    with capture_logs() as logs:
+        call_command("retry_failed_events", "--all")
+
+    reopened.refresh_from_db()
+    removed.refresh_from_db()
+    assert reopened.status == DeliveryStatus.PENDING
+    assert (removed.status, removed.attempts, removed.retried_at) == (
+        DeliveryStatus.FAILED,
+        6,
+        None,
+    )
+    assert [
+        (log["event"], log["log_level"], log.get("event_id"), log.get("handler"), log.get("count"))
+        for log in logs
+        if log["event"] != "event_delivery_retried"
+    ] == [
+        (
+            "event_delivery_retry_skipped",
+            "warning",
+            str(removed.event_id),
+            "shared.removed_handler",
+            None,
+        ),
+        ("failed_deliveries_retried", "info", None, None, 1),
+    ]
+
+
+def test_unknown_handler_errors() -> None:
+    _register("shared.broken")
+    delivery = _failed(handler="shared.typo_handler")
+
+    with pytest.raises(CommandError):
+        call_command("retry_failed_events", "--handler", "shared.typo_handler")
+
+    delivery.refresh_from_db()
+    assert delivery.status == DeliveryStatus.FAILED
+
+
+@time_machine.travel(NOW, tick=False)
 def test_filters_select_only_matching_pairs() -> None:
+    _register("shared.broken", "shared.other_handler")
     event_row = OutboxEventFactory.create()
     other_type = OutboxEventFactory.create(event_type="shared.other-happened")
     target = _failed(event=event_row, handler="shared.broken")

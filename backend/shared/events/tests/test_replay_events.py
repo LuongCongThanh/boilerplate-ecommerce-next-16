@@ -1,9 +1,14 @@
+import threading
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 import time_machine
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
+from django.utils import timezone
+from structlog.testing import capture_logs
 
 from shared.events import handles, operations
 from shared.events.models import DeliveryStatus, EventDelivery, OutboxEvent
@@ -25,8 +30,11 @@ def _register(*names: str) -> None:
 
 
 def _listed_event(**kwargs: object) -> OutboxEvent:
-    # Relay đã lập danh sách delivery cho sự kiện này
-    fields = {"occurred_at": SINCE + timedelta(minutes=5), "deliveries_created_at": SINCE}
+    # Relay đã lập danh sách delivery cho sự kiện này, sau mốc `since`
+    fields = {
+        "occurred_at": SINCE + timedelta(minutes=4),
+        "deliveries_created_at": SINCE + timedelta(minutes=5),
+    }
     return OutboxEventFactory.create(**(fields | kwargs))
 
 
@@ -44,7 +52,9 @@ def test_replay_adds_delivery_for_new_handler() -> None:
         status=DeliveryStatus.COMPLETED,
         completed_at=SINCE,
     )
-    before_since = _listed_event(occurred_at=SINCE - timedelta(seconds=1))
+    before_since = _listed_event(
+        occurred_at=SINCE - timedelta(seconds=2), deliveries_created_at=SINCE - timedelta(seconds=1)
+    )
     other_type = _listed_event(event_type="shared.other-happened")
 
     call_command(
@@ -93,7 +103,10 @@ def test_replay_keeps_existing_deliveries(monkeypatch: pytest.MonkeyPatch) -> No
     )
     second_event = _listed_event()
 
-    call_command("replay_events", "--type", "shared.sample-happened", "--since", SINCE.isoformat())
+    with capture_logs() as logs:
+        call_command(
+            "replay_events", "--type", "shared.sample-happened", "--since", SINCE.isoformat()
+        )
 
     failed.refresh_from_db()
     done.refresh_from_db()
@@ -107,6 +120,31 @@ def test_replay_keeps_existing_deliveries(monkeypatch: pytest.MonkeyPatch) -> No
     all_handlers = ["shared.done_handler", "shared.failed_handler", "shared.new_handler"]
     assert _handlers_of(event_row) == all_handlers
     assert _handlers_of(second_event) == all_handlers
+    # Hai sự kiện đã xét; 1 delivery thêm cho `event_row`, 3 cho `second_event`
+    replayed = [log for log in logs if log["event"] == "outbox_events_replayed"]
+    assert [(log["examined"], log["created"]) for log in replayed] == [(2, 4)]
+
+
+@time_machine.travel(NOW, tick=False)
+def test_replay_selects_events_listed_since() -> None:
+    _register("shared.new_handler")
+    # Phát ngay trước mốc deploy nhưng relay cũ lập danh sách sau mốc: vẫn thiếu handler mới
+    occurred_before_listed_after = _listed_event(
+        occurred_at=SINCE - timedelta(minutes=1), deliveries_created_at=SINCE + timedelta(seconds=1)
+    )
+    listed_at_since = _listed_event(
+        occurred_at=SINCE - timedelta(minutes=1), deliveries_created_at=SINCE
+    )
+    listed_before = _listed_event(
+        occurred_at=SINCE - timedelta(minutes=1), deliveries_created_at=SINCE - timedelta(seconds=1)
+    )
+
+    call_command("replay_events", "--type", "shared.sample-happened", "--since", SINCE.isoformat())
+
+    assert _handlers_of(occurred_before_listed_after) == ["shared.new_handler"]
+    # Mốc `since` tính cả mốc
+    assert _handlers_of(listed_at_since) == ["shared.new_handler"]
+    assert _handlers_of(listed_before) == []
 
 
 @time_machine.travel(NOW, tick=False)
@@ -131,3 +169,59 @@ def test_replay_unknown_handler_errors() -> None:
         call_command("replay_events", *options, "--handler", "shared.typo_handler")
 
     assert _handlers_of(event_row) == []
+
+
+def test_replay_handler_of_other_type_errors() -> None:
+    _register("shared.new_handler")
+
+    @handles("shared.other-happened", name="shared.other_type_handler")
+    def other_type_handler(event: SampleHappenedV1) -> None:
+        pass
+
+    event_row = _listed_event()
+    options = ("--type", "shared.sample-happened", "--since", SINCE.isoformat())
+
+    with pytest.raises(CommandError):
+        call_command("replay_events", *options, "--handler", "shared.other_type_handler")
+
+    assert _handlers_of(event_row) == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_replay_and_purge_concurrently_keep_new_delivery(monkeypatch: pytest.MonkeyPatch) -> None:
+    _register("shared.old_handler", "shared.new_handler")
+    listed_at = timezone.now() - operations.OUTBOX_RETENTION - timedelta(days=1)
+    # Quá hạn giữ và mọi delivery đã xong: purge xoá được nếu replay không giữ khoá
+    old_event = _listed_event(occurred_at=listed_at, deliveries_created_at=listed_at)
+    EventDeliveryFactory.create(
+        event=old_event,
+        handler="shared.old_handler",
+        status=DeliveryStatus.COMPLETED,
+        completed_at=listed_at,
+    )
+    errors: list[BaseException] = []
+
+    def purge() -> None:
+        try:
+            operations.purge_old_outbox_events()
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            connection.close()
+
+    purge_thread = threading.Thread(target=purge)
+    real_build = operations.build_deliveries
+
+    def build_while_purging(*args: Any) -> list[EventDelivery]:
+        # Purge chạy giữa lúc replay đã đọc lô và lúc tạo delivery; có khoá thì purge phải chờ
+        purge_thread.start()
+        purge_thread.join(timeout=1)
+        return real_build(*args)
+
+    monkeypatch.setattr(operations, "build_deliveries", build_while_purging)
+
+    operations.replay_events(event_type="shared.sample-happened", since=listed_at)
+    purge_thread.join()
+
+    assert errors == []
+    assert _handlers_of(old_event) == ["shared.new_handler", "shared.old_handler"]

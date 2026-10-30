@@ -10,7 +10,8 @@ from uuid import UUID
 
 from django.core.management.base import BaseCommand, CommandError
 
-from shared.events.operations import retry_failed_deliveries
+from shared.events.operations import retry_failed_events
+from shared.events.registry import registry
 
 
 class Command(BaseCommand):
@@ -30,4 +31,6 @@ class Command(BaseCommand):
         )
         if not options["all"] and event_id is None and handler is None and event_type is None:
             raise CommandError("Cần ít nhất một bộ lọc --event-id, --handler, --type hoặc --all.")
-        retry_failed_deliveries(event_id=event_id, handler=handler, event_type=event_type)
+        if handler is not None and registry.get_handler(handler) is None:
+            raise CommandError(f"Handler {handler} chưa đăng ký.")
+        retry_failed_events(event_id=event_id, handler=handler, event_type=event_type)

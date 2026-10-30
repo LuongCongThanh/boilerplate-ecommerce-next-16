@@ -31,12 +31,17 @@ class Command(BaseCommand):
             "--since",
             type=_aware_datetime,
             required=True,
-            help="Mốc occurred_at (ISO 8601), tính cả mốc.",
+            help="Mốc deliveries_created_at, lúc relay lập danh sách delivery (ISO 8601), "
+            "tính cả mốc.",
         )
         parser.add_argument("--handler", help="Chỉ handler này; mặc định mọi handler đăng ký.")
 
     def handle(self, *args: object, **options: Any) -> None:
-        handler = options["handler"]
-        if handler is not None and registry.get_handler(handler) is None:
-            raise CommandError(f"Handler {handler} chưa đăng ký.")
-        replay_events(event_type=options["event_type"], since=options["since"], handler=handler)
+        handler, event_type = options["handler"], options["event_type"]
+        if handler is not None:
+            found = registry.get_handler(handler)
+            if found is None:
+                raise CommandError(f"Handler {handler} chưa đăng ký.")
+            if found.event_type != event_type:
+                raise CommandError(f"Handler {handler} không đăng ký cho {event_type}.")
+        replay_events(event_type=event_type, since=options["since"], handler=handler)

@@ -77,9 +77,12 @@ def test_purge_keeps_old_event_not_yet_listed() -> None:
     # Relay chưa lập danh sách delivery: chưa handler nào nhận sự kiện này
     unlisted = _listed_event(deliveries_created_at=None)
 
-    purge_old_outbox_events()
+    with capture_logs() as logs:
+        purge_old_outbox_events()
 
     assert list(OutboxEvent.objects.values_list("id", flat=True)) == [unlisted.id]
+    kept = [log for log in logs if log["event"] == "outbox_purge_kept_unfinished"]
+    assert [(log["log_level"], log["count"]) for log in kept] == [("warning", 1)]
 
 
 @time_machine.travel(NOW, tick=False)
@@ -94,7 +97,7 @@ def test_purge_respects_retention_boundary() -> None:
     purge_old_outbox_events()
 
     # Chỉ xoá sự kiện quá 90 ngày, đúng 90 ngày thì còn giữ
-    assert timedelta(days=90) == operations.OUTBOX_RETENTION
+    assert operations.OUTBOX_RETENTION == timedelta(days=90)  # noqa: SIM300 (CONTRIBUTING: actual == expected)
     assert list(OutboxEvent.objects.values_list("id", flat=True)) == [at_boundary.id]
 
 
