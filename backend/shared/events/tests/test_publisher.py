@@ -90,8 +90,10 @@ def test_duplicate_event_class_rejected() -> None:
 @pytest.mark.django_db(transaction=True)
 def test_publish_outside_transaction_rejected() -> None:
     # Ghi outbox ngoài transaction thì sự kiện không commit/rollback cùng dữ liệu nghiệp vụ
+    event = SampleHappenedV1(order_code="FS2610-7K3QZD", amount=1)
+
     with pytest.raises(RuntimeError, match="transaction"):
-        publish(SampleHappenedV1(order_code="FS2610-7K3QZD", amount=1))
+        publish(event)
 
     assert not OutboxEvent.objects.exists()
 
@@ -103,8 +105,9 @@ def test_handles_rejects_name_longer_than_column() -> None:
     handles("shared.sample-happened", name=longest)(lambda event: None)
 
     too_long = longest + "x"
+    register = handles("shared.sample-happened", name=too_long)
     with pytest.raises(ImproperlyConfigured, match=str(max_length)):
-        handles("shared.sample-happened", name=too_long)(lambda event: None)
+        register(lambda event: None)
 
     assert registry.get_handler(too_long) is None
 

@@ -104,6 +104,8 @@ Commit dự kiến: `plan` → `S1` → `S2` → `S3` → `S4` → `R1 (khi revi
 #### Thay đổi theo yêu cầu
 
 - 30/10/2026: thêm cấu hình Celery 07 §3.3 vào `config/settings/base.py` (`CELERY_TASK_ACKS_LATE`, `CELERY_TASK_REJECT_ON_WORKER_LOST`, `CELERY_WORKER_PREFETCH_MULTIPLIER = 1`, `CELERY_TASK_TIME_LIMIT = 120`, `CELERY_TASK_IGNORE_RESULT`), commit S2.
+- 30/10/2026, SonarCloud `models.py:70` (field `status` trùng tên khác hoa/thường với alias `EventDelivery.Status`): bỏ alias, code và test dùng thẳng `DeliveryStatus`; không đổi schema, `makemigrations --check` không có thay đổi.
+- 30/10/2026, SonarCloud `test_publisher.py:93`, `:106` (khối `pytest.raises` có hai lời gọi có thể ném): dựng `SampleHappenedV1` và `handles(...)` trước khối, trong khối chỉ còn `publish(event)` và `register(...)`; hành vi test không đổi, 212 test xanh.
 
 #### Review
 

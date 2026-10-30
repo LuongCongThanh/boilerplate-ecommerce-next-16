@@ -6,7 +6,7 @@ from django.db import transaction
 
 from shared.events import handles, publish
 from shared.events.consumer import RETRY_DELAYS
-from shared.events.models import EventDelivery
+from shared.events.models import DeliveryStatus, EventDelivery
 from shared.events.tasks import dispatch_event
 from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
 from shared.exceptions import RetryLater
@@ -43,9 +43,7 @@ def test_two_handlers_each_run_once_on_duplicate_dispatch(
         dispatch_event.apply_async(args=(str(event.event_id), name), queue="events")
 
     assert sorted(handler_effect_table.objects.values_list("handler", flat=True)) == sorted(names)
-    assert set(EventDelivery.objects.values_list("status", flat=True)) == {
-        EventDelivery.Status.COMPLETED
-    }
+    assert set(EventDelivery.objects.values_list("status", flat=True)) == {DeliveryStatus.COMPLETED}
 
 
 def test_drain_does_not_wait_for_future_retry(
@@ -67,7 +65,7 @@ def test_drain_does_not_wait_for_future_retry(
         # Retry chưa tới hạn: drain trả về ngay, delivery vẫn chờ
         drain_events()
         delivery = EventDelivery.objects.get()
-        assert delivery.status == EventDelivery.Status.PENDING
+        assert delivery.status == DeliveryStatus.PENDING
         assert delivery.next_attempt_at == NOW + RETRY_DELAYS[0]
         assert handler_runs == 1
 
@@ -76,7 +74,7 @@ def test_drain_does_not_wait_for_future_retry(
         drain_events()
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.COMPLETED
+    assert delivery.status == DeliveryStatus.COMPLETED
     assert handler_effect_table.objects.count() == 1
 
 

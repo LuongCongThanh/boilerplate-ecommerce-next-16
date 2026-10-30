@@ -10,7 +10,7 @@ from structlog.testing import capture_logs
 
 from shared.events import handles
 from shared.events.consumer import RETRY_DELAYS, process_delivery
-from shared.events.models import EventDelivery
+from shared.events.models import DeliveryStatus
 from shared.events.tasks import dispatch_event
 from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
 from shared.exceptions import DomainError, RetryLater
@@ -56,7 +56,7 @@ def test_success_commits_effect_and_completed(
     dispatch_event.apply_async(args=(str(event_row.id), "shared.record_effect"), queue="events")
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.COMPLETED
+    assert delivery.status == DeliveryStatus.COMPLETED
     assert delivery.completed_at == NOW
     assert delivery.attempts == 0
     assert handler_effect_table.objects.filter(handler="shared.record_effect").count() == 1
@@ -85,7 +85,7 @@ def test_retry_later_keeps_pending_with_schedule(
     process_delivery(delivery.event_id, "shared.wait_for_source")
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.status == DeliveryStatus.PENDING
     assert delivery.attempts == 3
     assert delivery.next_attempt_at == NOW + timedelta(minutes=5)
     assert delivery.next_dispatch_at == NOW + timedelta(minutes=5)
@@ -109,7 +109,7 @@ def test_exception_rolls_back_handler_and_schedules_retry(
         process_delivery(delivery.event_id, "shared.crash")
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.status == DeliveryStatus.PENDING
     assert delivery.attempts == 1
     assert delivery.next_attempt_at == NOW + RETRY_DELAYS[0]
     assert delivery.next_dispatch_at == NOW + timedelta(seconds=10)
@@ -131,7 +131,7 @@ def test_exhausted_retries_mark_failed() -> None:
         process_delivery(delivery.event_id, "shared.never_ready")
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.FAILED
+    assert delivery.status == DeliveryStatus.FAILED
     assert delivery.attempts == 6
     assert delivery.failed_at == NOW
     assert delivery.last_error == "TransitionNotYetValid(TRANSITION_NOT_YET_VALID)"
@@ -156,7 +156,7 @@ def test_domain_error_rejects_without_retry(
         process_delivery(delivery.event_id, "shared.reject")
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.REJECTED
+    assert delivery.status == DeliveryStatus.REJECTED
     assert delivery.completed_at == NOW
     assert delivery.attempts == 0
     assert delivery.last_error == "InvalidTransition(INVALID_TRANSITION)"
@@ -195,8 +195,8 @@ def test_failing_handler_does_not_affect_other_handler(
 
     ok.refresh_from_db()
     failing.refresh_from_db()
-    assert ok.status == EventDelivery.Status.COMPLETED
-    assert failing.status == EventDelivery.Status.PENDING
+    assert ok.status == DeliveryStatus.COMPLETED
+    assert failing.status == DeliveryStatus.PENDING
     assert failing.attempts == 1
     assert list(handler_effect_table.objects.values_list("handler", flat=True)) == [
         "shared.record_effect"
@@ -206,9 +206,9 @@ def test_failing_handler_does_not_affect_other_handler(
 @pytest.mark.parametrize(
     "fields",
     [
-        {"status": EventDelivery.Status.COMPLETED, "completed_at": NOW},
-        {"status": EventDelivery.Status.REJECTED, "completed_at": NOW},
-        {"status": EventDelivery.Status.FAILED, "failed_at": NOW, "attempts": 6},
+        {"status": DeliveryStatus.COMPLETED, "completed_at": NOW},
+        {"status": DeliveryStatus.REJECTED, "completed_at": NOW},
+        {"status": DeliveryStatus.FAILED, "failed_at": NOW, "attempts": 6},
     ],
     ids=["completed", "rejected", "failed"],
 )
@@ -249,7 +249,7 @@ def test_skips_before_next_attempt_at() -> None:
 
     assert calls == []
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.status == DeliveryStatus.PENDING
     assert delivery.attempts == 1
     assert delivery.next_attempt_at == retry_at
 
@@ -262,7 +262,7 @@ def test_missing_handler_keeps_pending_without_attempt() -> None:
         process_delivery(delivery.event_id, "shared.removed_handler")
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.status == DeliveryStatus.PENDING
     assert delivery.attempts == 0
     assert delivery.next_attempt_at == NOW
     assert logs[0]["event"] == "event_handler_missing"
@@ -305,7 +305,7 @@ def test_concurrent_duplicate_dispatch_commits_once(
     assert len(calls) == 1
     assert handler_effect_table.objects.count() == 1
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.COMPLETED
+    assert delivery.status == DeliveryStatus.COMPLETED
 
 
 HANDLER_DURATION = timedelta(seconds=30)
@@ -314,15 +314,15 @@ HANDLER_DURATION = timedelta(seconds=30)
 @pytest.mark.parametrize(
     ("raised", "expected"),
     [
-        (None, {"status": EventDelivery.Status.COMPLETED, "completed_at": "done"}),
+        (None, {"status": DeliveryStatus.COMPLETED, "completed_at": "done"}),
         (
             InvalidTransition,
-            {"status": EventDelivery.Status.REJECTED, "completed_at": "done"},
+            {"status": DeliveryStatus.REJECTED, "completed_at": "done"},
         ),
         (
             Boom,
             {
-                "status": EventDelivery.Status.PENDING,
+                "status": DeliveryStatus.PENDING,
                 "next_attempt_at": "retry",
                 "next_dispatch_at": "retry",
             },
@@ -367,7 +367,7 @@ def test_failed_at_taken_after_handler_runs() -> None:
         process_delivery(delivery.event_id, "shared.slow")
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.FAILED
+    assert delivery.status == DeliveryStatus.FAILED
     assert delivery.failed_at == NOW + HANDLER_DURATION
 
 
@@ -389,6 +389,6 @@ def test_handler_breaking_connection_rolls_back_whole_transaction() -> None:
         connection.close()
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.PENDING
+    assert delivery.status == DeliveryStatus.PENDING
     assert delivery.attempts == 0
     assert delivery.last_error == ""

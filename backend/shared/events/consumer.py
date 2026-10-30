@@ -12,7 +12,7 @@ import structlog
 from django.db import transaction
 from django.utils import timezone
 
-from shared.events.models import EventDelivery
+from shared.events.models import DeliveryStatus, EventDelivery
 from shared.events.registry import registry
 from shared.exceptions import DomainError, RetryLater
 
@@ -50,7 +50,7 @@ def process_delivery(event_id: UUID | str, handler_name: str) -> None:
             # Sự kiện đã bị purge hoặc task mang tham số sai: không còn việc để làm
             logger.warning("event_delivery_missing", event_id=str(event_id), handler=handler_name)
             return
-        if delivery.status != EventDelivery.Status.PENDING or delivery.next_attempt_at > now:
+        if delivery.status != DeliveryStatus.PENDING or delivery.next_attempt_at > now:
             return
 
         event_row = delivery.event
@@ -85,13 +85,13 @@ def process_delivery(event_id: UUID | str, handler_name: str) -> None:
             log.exception("event_handler_error")
             _schedule_retry(delivery, exc, timezone.now(), log)
         else:
-            delivery.status = EventDelivery.Status.COMPLETED
+            delivery.status = DeliveryStatus.COMPLETED
             delivery.completed_at = timezone.now()
             delivery.save(update_fields=["status", "completed_at"])
 
 
 def _reject(delivery: EventDelivery, exc: DomainError, now: datetime) -> None:
-    delivery.status = EventDelivery.Status.REJECTED
+    delivery.status = DeliveryStatus.REJECTED
     delivery.completed_at = now
     delivery.last_error = describe_error(exc)
     delivery.save(update_fields=["status", "completed_at", "last_error"])
@@ -107,7 +107,7 @@ def _schedule_retry(
     delivery.last_error = describe_error(exc)
     fields = ["attempts", "last_error"]
     if delivery.attempts > len(RETRY_DELAYS):
-        delivery.status = EventDelivery.Status.FAILED
+        delivery.status = DeliveryStatus.FAILED
         delivery.failed_at = now
         fields += ["status", "failed_at"]
         # Sentry bắt log ERROR để cảnh báo delivery cần người vận hành (07 mục 1.3)

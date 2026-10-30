@@ -55,8 +55,6 @@ _FINISHED = [DeliveryStatus.COMPLETED, DeliveryStatus.REJECTED]
 class EventDelivery(models.Model):
     """Công việc của một handler với một sự kiện, đồng thời là dấu đã xử lý."""
 
-    Status = DeliveryStatus
-
     id = models.UUIDField(primary_key=True, default=uuid7, editable=False)
     # UNIQUE(event_id, handler) đã có index bắt đầu bằng event_id, không cần index riêng của FK
     event = models.ForeignKey(

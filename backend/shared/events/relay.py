@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 from kombu.exceptions import OperationalError
 
-from shared.events.models import EventDelivery, OutboxEvent
+from shared.events.models import DeliveryStatus, EventDelivery, OutboxEvent
 from shared.events.registry import registry
 from shared.events.tasks import dispatch_event
 
@@ -74,7 +74,7 @@ def dispatch_due(batch: int = 100) -> int:
         due = list(
             EventDelivery.objects.select_for_update(skip_locked=True)
             .filter(
-                status=EventDelivery.Status.PENDING,
+                status=DeliveryStatus.PENDING,
                 next_attempt_at__lte=now,
                 next_dispatch_at__lte=now,
             )

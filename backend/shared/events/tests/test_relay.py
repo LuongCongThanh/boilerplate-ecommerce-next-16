@@ -14,7 +14,7 @@ from kombu.exceptions import OperationalError
 from structlog.testing import capture_logs
 
 from shared.events import handles, publish, relay
-from shared.events.models import EventDelivery, OutboxEvent
+from shared.events.models import DeliveryStatus, EventDelivery, OutboxEvent
 from shared.events.tasks import dispatch_event
 from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
 from shared.management.commands import run_outbox_relay
@@ -79,8 +79,8 @@ def test_create_deliveries_one_per_handler_with_marker() -> None:
     assert [
         (d.handler, d.status, d.attempts, d.next_attempt_at, d.next_dispatch_at) for d in deliveries
     ] == [
-        ("shared.first", EventDelivery.Status.PENDING, 0, NOW, NOW),
-        ("shared.second", EventDelivery.Status.PENDING, 0, NOW, NOW),
+        ("shared.first", DeliveryStatus.PENDING, 0, NOW, NOW),
+        ("shared.second", DeliveryStatus.PENDING, 0, NOW, NOW),
     ]
     # Sự kiện đã có marker không bị lập danh sách lại
     assert relay.create_deliveries() == 0
@@ -156,7 +156,7 @@ def test_lost_task_redispatched_after_deadline(
             delivery = EventDelivery.objects.get()
             assert delivery.next_dispatch_at == NOW + relay.REDISPATCH_AFTER
             assert delivery.last_dispatched_at == NOW
-            assert delivery.status == EventDelivery.Status.PENDING
+            assert delivery.status == DeliveryStatus.PENDING
 
             # Chưa tới hạn giao lại thì relay không giao trùng
             traveller.shift(timedelta(minutes=2))
@@ -167,7 +167,7 @@ def test_lost_task_redispatched_after_deadline(
         assert relay.dispatch_due() == 1
 
     delivery.refresh_from_db()
-    assert delivery.status == EventDelivery.Status.COMPLETED
+    assert delivery.status == DeliveryStatus.COMPLETED
     # Task mất không tiêu lượt retry và không reset lượt đã tiêu
     assert delivery.attempts == 2
     assert handler_effect_table.objects.count() == 1
@@ -191,7 +191,7 @@ def test_broker_error_keeps_delivery_for_later() -> None:
     first = next(d for d in deliveries if (str(d.event_id), d.handler) == args)
     for delivery in deliveries:
         delivery.refresh_from_db()
-        assert delivery.status == EventDelivery.Status.PENDING
+        assert delivery.status == DeliveryStatus.PENDING
         assert delivery.attempts == 0
         assert delivery.last_error == ""
         # Hạn giao lại đã commit trước khi gọi broker: relay thử lại sau hạn
@@ -227,8 +227,8 @@ def test_dispatch_skips_retry_not_due() -> None:
     skipped = [
         EventDeliveryFactory.create(attempts=1, next_attempt_at=later, next_dispatch_at=NOW),
         EventDeliveryFactory.create(next_attempt_at=NOW, next_dispatch_at=later),
-        EventDeliveryFactory.create(status=EventDelivery.Status.COMPLETED, completed_at=NOW),
-        EventDeliveryFactory.create(status=EventDelivery.Status.FAILED, failed_at=NOW, attempts=6),
+        EventDeliveryFactory.create(status=DeliveryStatus.COMPLETED, completed_at=NOW),
+        EventDeliveryFactory.create(status=DeliveryStatus.FAILED, failed_at=NOW, attempts=6),
     ]
 
     with mock.patch.object(dispatch_event, "apply_async") as apply_async:
@@ -252,8 +252,8 @@ def test_run_outbox_relay_once(handler_effect_table: type[HandlerEffect]) -> Non
     call_command("run_outbox_relay", "--once")
 
     assert set(EventDelivery.objects.values_list("handler", "status")) == {
-        ("shared.first", EventDelivery.Status.COMPLETED),
-        ("shared.second", EventDelivery.Status.COMPLETED),
+        ("shared.first", DeliveryStatus.COMPLETED),
+        ("shared.second", DeliveryStatus.COMPLETED),
     }
     assert sorted(handler_effect_table.objects.values_list("handler", flat=True)) == [
         "shared.first",
@@ -311,7 +311,7 @@ def test_run_outbox_relay_survives_iteration_error() -> None:
     # Vòng 1: lập danh sách lỗi nhưng bước giao vẫn chạy; vòng 2: lập danh sách rồi giao được
     assert (create_calls, dispatch_calls) == (2, 2)
     assert handled == [ORDER_CODE]
-    assert EventDelivery.objects.get().status == EventDelivery.Status.COMPLETED
+    assert EventDelivery.objects.get().status == DeliveryStatus.COMPLETED
     failed = [log for log in logs if log["event"] == "outbox_relay_iteration_failed"]
     assert len(failed) == 1
     assert failed[0]["log_level"] == "error"
@@ -368,7 +368,7 @@ def test_deadline_committed_before_enqueue_and_redispatched_after_relay_crash() 
         assert relay.dispatch_due() == 1
 
     assert handled == [ORDER_CODE]
-    assert EventDelivery.objects.get(id=delivery.id).status == EventDelivery.Status.COMPLETED
+    assert EventDelivery.objects.get(id=delivery.id).status == DeliveryStatus.COMPLETED
 
 
 @pytest.mark.django_db(transaction=True)
