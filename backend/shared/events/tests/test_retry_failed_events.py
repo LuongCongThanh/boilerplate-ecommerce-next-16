@@ -101,7 +101,8 @@ def test_does_not_reopen_completed_or_rejected() -> None:
     for delivery in finished:
         before = (delivery.status, delivery.completed_at, delivery.retried_at)
         delivery.refresh_from_db()
-        assert (delivery.status, delivery.completed_at, delivery.retried_at) == before
+        after = (delivery.status, delivery.completed_at, delivery.retried_at)
+        assert after == before
 
 
 @time_machine.travel(NOW, tick=False)

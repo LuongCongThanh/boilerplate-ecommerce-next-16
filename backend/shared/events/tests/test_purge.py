@@ -117,11 +117,12 @@ def test_purge_twice_same_result() -> None:
     )
     purge_old_outbox_events()
 
-    assert after_first[0] == sorted([kept.id, recent.id])
-    assert (
+    after_second = (
         sorted(OutboxEvent.objects.values_list("id", flat=True)),
         sorted(EventDelivery.objects.values_list("id", "status")),
-    ) == after_first
+    )
+    assert after_first[0] == sorted([kept.id, recent.id])
+    assert after_second == after_first
 
 
 def test_purge_scheduled_daily_0330() -> None:

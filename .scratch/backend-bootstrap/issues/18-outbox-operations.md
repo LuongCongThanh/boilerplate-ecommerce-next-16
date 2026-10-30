@@ -83,7 +83,7 @@ Commit dự kiến: `plan` → `S1` → `S2` → `S3` → `S4` → `R1 (khi revi
 
 #### Thay đổi theo yêu cầu
 
-- 30/10/2026, SonarCloud `test_purge.py:47`, `test_retry_failed_events.py:53` (trộn hai thứ tự đối số assert trong một file): vế trái bắt đầu bằng tên viết hoa (`operations.OUTBOX_RETENTION`, `EventDelivery.objects…`) bị coi là giá trị kỳ vọng; gán vào biến thường rồi assert `actual == expected`, bỏ `# noqa: SIM300`. Hành vi test không đổi.
+- 30/10/2026, SonarCloud `test_purge.py:47`, `test_retry_failed_events.py:53` (trộn hai thứ tự đối số assert trong một file): Sonar coi tuple/list ở vế trái so với một tên biến (`(…) == before`, `(…) == after_first`) là giá trị kỳ vọng đặt trước. Gán tuple vào biến (`after`, `after_second`) rồi assert `actual == expected`; lần đầu (`7aeaf9c`) đoán nhầm nguyên nhân là tên viết hoa, vẫn sửa thêm `OUTBOX_RETENTION`/`count()` và bỏ `# noqa: SIM300`. Hành vi test không đổi.
 
 #### Review
 
