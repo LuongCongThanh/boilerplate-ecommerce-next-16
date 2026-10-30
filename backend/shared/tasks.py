@@ -1,12 +1,15 @@
-"""Đẩy Celery task sau khi transaction commit (02 mục 9.1, 07 mục 1.3)."""
+"""Đẩy Celery task sau khi transaction commit (02 mục 9.1, 07 mục 1.3) và job theo lịch của
+`shared` (07 mục 3.2)."""
 
 from typing import Any
 
 import structlog
+from celery import shared_task
 from django.db import transaction
 from kombu.exceptions import OperationalError
 
 from config.celery import app
+from shared.events import operations
 
 logger = structlog.get_logger(__name__)
 
@@ -30,3 +33,8 @@ def enqueue_on_commit(task_name: str, **kwargs: Any) -> None:
             logger.exception("enqueue_failed", task_name=task_name)
 
     transaction.on_commit(send, robust=True)
+
+
+@shared_task(name="shared.purge_old_outbox_events", queue="default")
+def purge_old_outbox_events() -> None:
+    operations.purge_old_outbox_events()

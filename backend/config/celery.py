@@ -1,6 +1,7 @@
 """Celery app, queue và lịch job (nguồn chuẩn cho `sync_beat_schedule`, 07 mục 3.2)."""
 
 from celery import Celery
+from celery.schedules import crontab
 from kombu import Queue
 
 # Không mặc định DJANGO_SETTINGS_MODULE: worker deploy thiếu biến thì Django báo lỗi khi đọc
@@ -15,8 +16,13 @@ app.conf.task_queues = [Queue(name) for name in ("default", "events", "emails", 
 # celery.backend_cleanup
 app.conf.result_expires = None
 
-# Lịch job thêm ở ticket tạo ra job đó
-app.conf.beat_schedule = {}
+# Lịch job thêm ở ticket tạo ra job đó; giờ theo CELERY_TIMEZONE
+app.conf.beat_schedule = {
+    "shared.purge_old_outbox_events": {
+        "task": "shared.purge_old_outbox_events",
+        "schedule": crontab(hour=3, minute=30),
+    },
+}
 
 # Mặc định Celery chỉ tìm <app>.tasks, nên liệt kê từng package có tasks.py (02 mục 5)
 app.autodiscover_tasks(["shared", "shared.events"])
