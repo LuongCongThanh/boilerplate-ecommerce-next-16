@@ -12,5 +12,21 @@
       "Read(.secrets/**)",
       "Read(*.pem)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_merge_target.py\"",
+            "timeout": 30,
+            "onFailure": "block",
+            "statusMessage": "Kiểm nhánh đích merge/push"
+          }
+        ]
+      }
+    ]
   }
 }
