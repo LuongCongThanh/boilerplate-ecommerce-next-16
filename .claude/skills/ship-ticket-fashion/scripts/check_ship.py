@@ -11,7 +11,7 @@ import re
 import sys
 
 from commit_map import problems, read_commits
-from common import git, load_state, resolve, ticket_ref
+from common import git, load_state, repo_root, resolve, ticket_ref
 
 BRANCH = re.compile(r"^(feat|fix|refactor|docs|chore|test|hotfix)/[a-z0-9]+(-[a-z0-9]+)*$")
 TYPES = "feat|fix|perf|refactor|test|docs|build|ci|chore|revert"
@@ -34,9 +34,24 @@ def diff_size(numstat: str) -> int:
     return total
 
 
+def dirty_paths(porcelain_z: str) -> list[str]:
+    """Đường dẫn từ `git status --porcelain -z`: không bị trích dẫn kiểu C, rename có thêm
+    một mục là đường dẫn cũ (bỏ qua)."""
+    entries, paths = porcelain_z.split("\0"), []
+    i = 0
+    while i < len(entries):
+        entry = entries[i]
+        if len(entry) > 3:
+            paths.append(entry[3:])
+            if entry[0] in "RC":
+                i += 1
+        i += 1
+    return paths
+
+
 def check_dirty(porcelain: list[str], ticket: str) -> list[tuple[str, str]]:
     """Báo cáo trong ticket được commit ở task sync, nên trước đó ticket dirty chỉ là WARN."""
-    others = [line for line in porcelain if line[3:].strip('"') != ticket]
+    others = [path for path in porcelain if path != ticket]
     if others:
         return [("FAIL", f"{len(others)} file chưa commit ngoài ticket")]
     if porcelain:
@@ -90,7 +105,8 @@ def main() -> int:
         results.append(("FAIL", f"nhánh {branch} khác nhánh của state {state.get('branch')}"))
     results.append(("OK" if BRANCH.match(branch) else "WARN", f"tên nhánh {branch}"))
 
-    results.extend(check_dirty(git("status", "--porcelain").splitlines(), ticket_ref(ticket)))
+    porcelain = git("-C", str(repo_root()), "status", "--porcelain", "-z")
+    results.extend(check_dirty(dirty_paths(porcelain), ticket_ref(ticket)))
 
     # git() trả "" khi lỗi: thiếu origin/dev thì mọi phép so sánh bên dưới thành 0 và báo OK sai.
     if not git("rev-parse", "--verify", "--quiet", "origin/dev"):

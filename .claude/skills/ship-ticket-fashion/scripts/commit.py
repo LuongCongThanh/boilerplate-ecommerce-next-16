@@ -71,7 +71,8 @@ def main() -> int:
     for _ in range(2):  # lần hai: hook đã sửa file, add lại rồi commit
         if run(["add", *paths], log) != 0:
             break
-        code = run(["commit", "-F", str(msg_file)], log)
+        # `-- <paths>` chỉ commit đúng các file này, kể cả khi index còn file khác đã stage
+        code = run(["commit", "-F", str(msg_file), *paths], log)
         if code == 0:
             break
 

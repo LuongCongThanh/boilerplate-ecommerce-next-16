@@ -219,7 +219,8 @@ def cmd_transition(args: argparse.Namespace) -> int:
     error = check_transition(state, args.to, args.gate)
     if error is None and (state["phase"], args.to) == ("grill", "code"):
         path = repo_root() / state["ticket"]
-        dirty = bool(git("status", "--porcelain", "--", state["ticket"]))
+        # -C: đường dẫn ticket tính từ gốc repo, dù lệnh chạy ở backend/
+        dirty = bool(git("-C", str(repo_root()), "status", "--porcelain", "--", state["ticket"]))
         error = plan_ready(path.read_text(encoding="utf-8"), dirty)
     if error:
         print(f"TỪ CHỐI: {error}")

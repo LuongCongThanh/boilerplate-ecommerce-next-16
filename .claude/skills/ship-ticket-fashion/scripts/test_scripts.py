@@ -12,10 +12,10 @@ from dataclasses import replace
 from pathlib import Path
 
 from check_ac_trace import test_exists, trace
-from check_ship import check_dirty, check_subjects, diff_size
+from check_ship import check_dirty, check_subjects, diff_size, dirty_paths
 from close_ticket import close
 from commit import check_task, message
-from commit_map import problems, render
+from commit_map import parse_log, problems, render
 from plan import render as render_plan
 from plan import upsert
 from progress import Feature, frontier, parse_blocked, parse_ticket
@@ -305,9 +305,66 @@ class PlanAndCommits(unittest.TestCase):
         self.assertIn("| S1 | 2 code | 1, 3 | `a1` feat: S1 | 2 |", table)
 
     def test_dirty_ticket_alone_is_only_a_warning(self):
-        self.assertEqual(check_dirty([f" M {REF}"], REF)[0][0], "WARN")
-        self.assertEqual(check_dirty([f" M {REF}", " M backend/x.py"], REF)[0][0], "FAIL")
+        self.assertEqual(check_dirty([REF], REF)[0][0], "WARN")
+        self.assertEqual(check_dirty([REF, "backend/x.py"], REF)[0][0], "FAIL")
         self.assertEqual(check_dirty([], REF)[0][0], "OK")
+
+    def test_dirty_paths_reads_porcelain_z_unquoted_and_skips_rename_source(self):
+        raw = f" M {REF}\0R  new.md\0old.md\0?? .scratch/f/issues/02-á.md\0"
+        self.assertEqual(dirty_paths(raw), [REF, "new.md", ".scratch/f/issues/02-á.md"])
+        self.assertEqual(dirty_paths(""), [])
+
+    def test_missing_task_is_one_fail_not_also_a_duplicate(self):
+        found = problems([commit("", "a1"), commit("", "b2")], REF)
+        self.assertEqual([level for level, _ in found], ["FAIL", "FAIL"])
+
+    def test_parse_log_counts_files_from_one_git_log(self):
+        raw = (
+            f"\x1ea1\x1ffeat: x\x1fS1\x1f{REF}\n\nbackend/a.py\nbackend/b.py\n"
+            f"\x1eb2\x1fdocs: y\x1fsync\x1f{REF}\n\n{REF}\n"
+        )
+        commits = parse_log(raw)
+        self.assertEqual([(c["sha"], c["task"], c["files"]) for c in commits],
+                         [("a1", "S1", 2), ("b2", "sync", 1)])
+
+
+class CommitOnlyListedPaths(unittest.TestCase):
+    """commit.py chạy trong một repo tạm: file đã stage sẵn không lọt vào commit của task."""
+
+    def test_pre_staged_file_stays_out_of_the_task_commit(self):
+        import os
+        import subprocess
+
+        repo = Path(tempfile.mkdtemp())
+        run = lambda *a: subprocess.run(  # noqa: E731
+            ["git", *a], cwd=repo, capture_output=True, text=True, check=True
+        ).stdout
+        run("init", "-q")
+        run("config", "user.email", "t@t")
+        run("config", "user.name", "t")
+        issues = repo / ".scratch" / "f" / "issues"
+        issues.mkdir(parents=True)
+        (issues / "01-x.md").write_text(TICKET, encoding="utf-8")
+        run("add", "-A")
+        run("commit", "-qm", "chore: init")
+        state_dir = repo / ".git" / "ship-ticket-fashion"
+        state_dir.mkdir()
+        (state_dir / "f-01.json").write_text(
+            '{"slices": [{"id": "S1"}]}', encoding="utf-8"
+        )
+        (repo / "staged.txt").write_text("other task", encoding="utf-8")
+        run("add", "staged.txt")
+        (repo / "mine.txt").write_text("this task", encoding="utf-8")
+
+        script = Path(__file__).with_name("commit.py")
+        out = subprocess.run(
+            [os.sys.executable, str(script), "f/01", "--task", "S1", "-m", "feat: add mine",
+             "--", "mine.txt"],
+            cwd=repo, capture_output=True, text=True, encoding="utf-8",
+        )
+        self.assertIn("COMMIT", out.stdout, out.stdout + out.stderr)
+        self.assertEqual(run("show", "--format=", "--name-only", "HEAD").split(), ["mine.txt"])
+        self.assertIn("A  staged.txt", run("status", "--porcelain"))
 
 
 if __name__ == "__main__":

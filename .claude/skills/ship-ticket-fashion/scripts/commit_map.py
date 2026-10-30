@@ -34,12 +34,18 @@ def order_key(task: str) -> tuple[int, int]:
 def read_commits() -> list[dict]:
     """Commit của nhánh, cũ → mới, bỏ commit merge (mất khi squash)."""
     trailer = "%(trailers:key={},valueonly,separator=%x2C)"
-    fmt = "%h%x1f%s%x1f" + trailer.format("Task") + "%x1f" + trailer.format("Refs") + "%x1e"
-    raw = git("log", "--no-merges", "--reverse", f"--format={fmt}", "origin/dev..HEAD")
+    fmt = "%x1e%h%x1f%s%x1f" + trailer.format("Task") + "%x1f" + trailer.format("Refs")
+    log = ("log", "--no-merges", "--reverse", "--name-only", f"--format={fmt}")
+    return parse_log(git(*log, "origin/dev..HEAD"))
+
+
+def parse_log(raw: str) -> list[dict]:
+    """Một lần `git log --name-only`: mỗi bản ghi bắt đầu bằng \\x1e, dòng đầu là các field,
+    các dòng sau là file của commit."""
     commits = []
     for record in filter(None, (r.strip() for r in raw.split("\x1e"))):
-        sha, subject, task, refs = [*record.split("\x1f"), "", "", ""][:4]
-        files = git("show", "--format=", "--name-only", sha).splitlines()
+        head, *files = record.splitlines()
+        sha, subject, task, refs = [*head.split("\x1f"), "", "", ""][:4]
         commits.append(
             {
                 "sha": sha,
@@ -60,6 +66,8 @@ def problems(commits: list[dict], ticket: str) -> list[tuple[str, str]]:
             found.append(("FAIL", f"{c['sha']} thiếu trailer Task hợp lệ: {c['subject']}"))
         if c["refs"] != ticket:
             found.append(("FAIL", f"{c['sha']} Refs `{c['refs'] or '—'}` khác ticket `{ticket}`"))
+        if not TASK.match(c["task"]):
+            continue  # đã báo FAIL ở trên; task rỗng không phải task trùng
         if c["task"] in seen and c["task"] not in REPEATABLE:
             found.append(
                 ("WARN", f"task {c['task']} có 2 commit ({seen[c['task']]}, {c['sha']}): gộp lại")
