@@ -90,6 +90,7 @@ Thêm theo `## Quyết định` (04 §1, 12 §2.4): thiếu key hoặc key khôn
 
 - 30/10/2026: M0 xong khi có ticket 11 + 12 rồi vào M1; 01–04, 14, 19–23 thành backlog làm xen kẽ, 24–28 và 13 để trước go-live. Ghi vào `.scratch/mvp-roadmap/map.md` ở commit `sync`.
 - 30/10/2026: phát hiện ngoài phạm vi khi review ticket này không tạo ticket `needs-triage` mới; retro sửa quy tắc của skill sang một file backlog chung.
+- 30/10/2026 (CI PR #40): gitleaks `generic-api-key` bắt nhầm hằng `KEY` (UUID mẫu) trong `test_api_idempotency.py` → `# gitleaks:allow` và `.gitleaksignore` cho fingerprint của commit S1. SonarCloud: `test_claim_inside_outer_transaction_raises` chỉ giữ lời gọi `claim` trong `pytest.raises`.
 
 #### Review
 
@@ -117,6 +118,10 @@ Ba trục: Spec (S), Standards (T), Bug (B). Vòng sửa R1 (`d4dfcbb`).
 | S2 | 2 code | 3, 4 | `d822e8f` feat(shared): add lease takeover and release on error for Idempotency-Key | 3 |
 | S3 | 2 code | 6 | `5429eec` feat(shared): add daily purge job for completed Idempotency-Key | 4 |
 | R1 | 4 review | — | `d4dfcbb` fix(shared): address review findings on idempotency | 7 |
+| sync | 5 sync | — | `42e04b6` docs: sync docs and report for shared idempotency ticket | 5 |
+| close | 6 ship | — | `bb39932` docs: close shared idempotency ticket | 1 |
+| ci | 6 ship | — | `8dcadc0` test(shared): mark sample Idempotency-Key UUID as non-secret for gitleaks | 2 |
+| ci | 6 ship | — | `3ac9e40` test(shared): keep only the claim call inside pytest.raises | 1 |
 
 #### Tài liệu đã cập nhật
 
