@@ -190,8 +190,9 @@ backend/
 │   │   └── tasks.py                # Celery task dispatch_event(event_id, handler_name)
 │   ├── geo/
 │   │   ├── models.py               # Province, Ward (2 cấp, theo vietnam-provinces)
-│   │   ├── selectors.py            # tra cứu tỉnh/thành, phường/xã
-│   │   └── api.py                  # GET /api/v1/store/geo/provinces, /geo/provinces/{code}/wards
+│   │   ├── selectors.py            # list_provinces(), province_exists(code=), list_wards(province_code=); sắp theo mã
+│   │   ├── api.py                  # GET /api/v1/store/geo/provinces, /geo/provinces/{code}/wards: công khai, array GeoDTO không phân trang
+│   │   └── urls.py                 # route của api.py; config/urls.py include tại api/v1/store/geo/
 │   ├── api/
 │   │   ├── exception_handler.py    # chuyển mọi lỗi sang định dạng lỗi chuẩn (xem 04-api-contract)
 │   │   ├── pagination.py           # phân trang chuẩn
@@ -210,10 +211,10 @@ backend/
 │   │   ├── replay_events.py        # phát lại sự kiện trong outbox theo loại và mốc thời gian (07 mục 1.1)
 │   │   ├── sync_beat_schedule.py   # ghi lịch job từ config/celery.py vào django-celery-beat, tắt job thừa; chạy sau migrate (07 mục 3.2)
 │   │   ├── reset_db.py             # xoá và tạo lại database local cho make db-reset; từ chối khi DEBUG tắt hoặc host không phải localhost
-│   │   └── load_geo.py             # nạp dữ liệu tỉnh/thành, phường/xã
-│   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension)
+│   │   └── load_geo.py             # nạp tỉnh/thành, phường/xã từ vietnam-provinces: mã Cục Thống kê có số 0 đứng đầu, upsert theo mã, không xoá mã cũ (chỉ log geo_stale_codes)
+│   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension); 0002_geo: shared_province, shared_ward
 │   └── testing/
-│       ├── factories.py            # factory gốc
+│       ├── factories.py            # factory gốc: ProvinceFactory, WardFactory
 │       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (xoá cache trước/sau mỗi test, json_logging, api_client…), nạp qua pytest_plugins của backend/conftest.py; fixture cần Tài khoản nằm ở backend/conftest.py
 │       └── events.py               # drain_events(): chạy callback on_commit, relay và handler tới khi không còn delivery tới hạn; không chờ retry tương lai
 │

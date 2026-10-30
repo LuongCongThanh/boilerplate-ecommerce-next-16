@@ -1,6 +1,6 @@
 # Dùng `X-Request-ID` từ BFF làm `request_id`
 
-Status: needs-triage
+Status: ready-for-agent
 
 Blocked by: 16
 

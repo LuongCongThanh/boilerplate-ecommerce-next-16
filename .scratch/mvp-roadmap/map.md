@@ -24,7 +24,7 @@ Cập nhật trong cùng PR đóng ticket. Nguồn sự thật vẫn là dòng `
 | Mốc / feature | Trạng thái | Ticket |
 |---|---|---|
 | [`dev-security-baseline`](../dev-security-baseline/spec.md) | Gần xong | ✅ 01, 02 · 🟡 03 chờ chủ repo tự kiểm tra 3 AC |
-| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07, 08, 09, 15, 16 · ⬜ 10, 11, 12, 14, 17 làm được · 10 → 18 · ⬜ 01–04 làm được · ⏸ 13 macOS, không chặn M0 · ❔ 19 `X-Request-ID`, 20 Dependabot cho image Compose, `needs-triage` |
+| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07, 08, 09, 15, 16, 17 · ⬜ 10, 11, 12, 14, 19, 20, 21 làm được · 10 → 18 · ⬜ 01–04 làm được · ⏸ 13 macOS, không chặn M0 · ❔ 22 `ErrorDTO` trong OpenAPI, `needs-triage` |
 | **M1** – **M6** | Chưa có spec | Tạo spec khi mốc trước gần xong |
 | **M7** `sandbox-acceptance` | Chưa có spec | ⏸ [01](../sandbox-acceptance/issues/01-load-test-k6-staging.md) k6, `needs-triage` |
 
@@ -50,6 +50,7 @@ Ký hiệu: ✅ `resolved` · 🟡 đang dở · ⬜ chưa làm · ⏸ để sau
 - 29/10/2026: Ticket 09 chốt API của `shared` (keyring nhiều khoá, `Money`, `DomainError.http_status`, `redact_pii`, manager giữ `updated_at`); chi tiết ở [09](../backend-bootstrap/issues/09-shared-core.md#quyết-định).
 - 29/10/2026: Ticket 16 chốt API của `shared.api`: `page_size` > 100 giới hạn ở 100 (sửa 04 mục 5.1), 405 là `METHOD_NOT_ALLOWED`, quyền mặc định `IsAuthenticated` ngay từ M0, `BFF_SHARED_SECRET` nhận tối đa 2 secret, khoá throttle là `pii_hmac(client_ip)`; chi tiết ở [16](../backend-bootstrap/issues/16-shared-api-layer.md#quyết-định). Tin `X-Request-ID` từ BFF tách sang ticket [19](../backend-bootstrap/issues/19-trust-upstream-request-id.md) (`needs-triage`).
 - 29/10/2026: Ticket 15 thêm lệnh `shared` `reset_db` cho `make db-reset` (recipe chỉ gọi `uv run`/`docker compose`, không gọi `psql`); management command hạ tầng của `shared` được mở transaction (sửa 02 §9.1); Dependabot cho image trong Compose tách sang ticket [20](../backend-bootstrap/issues/20-dependabot-compose-images.md) (`needs-triage`).
+- 30/10/2026: Ticket 17 chốt mã địa giới là mã Cục Thống kê có số 0 đứng đầu (tỉnh `01`, phường/xã `00004`); mọi FK `ward_code` của module sau dùng dạng này. `load_geo` không xoá mã cũ. Route `api/v1/store/` đầu tiên gắn trong `config/urls.py`; chi tiết ở [17](../backend-bootstrap/issues/17-shared-geo.md#quyết-định). Khai báo `ErrorDTO` trong OpenAPI tách sang ticket [22](../backend-bootstrap/issues/22-openapi-error-responses.md) (`needs-triage`).
 
 ## Fog
 

@@ -1,6 +1,6 @@
 # Dependabot theo dõi image trong `backend/docker-compose.yml`
 
-Status: needs-triage
+Status: ready-for-agent
 
 Blocked by: 15
 

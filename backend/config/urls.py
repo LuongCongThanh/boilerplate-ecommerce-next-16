@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.urls import URLPattern, URLResolver, path
+from django.urls import URLPattern, URLResolver, include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.permissions import AllowAny
 
@@ -14,6 +14,7 @@ handler500 = "shared.api.views.server_error"
 urlpatterns: list[URLPattern | URLResolver] = [
     path("healthz", health.healthz, name="healthz"),
     path("readyz", health.readyz, name="readyz"),
+    path("api/v1/store/geo/", include("shared.geo.urls")),
 ]
 
 if settings.API_DOCS_ENABLED:
