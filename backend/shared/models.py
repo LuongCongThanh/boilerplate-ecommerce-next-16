@@ -6,9 +6,6 @@ from typing import Any
 from django.db import models
 from django.utils import timezone
 
-# Django chỉ nhận model qua `<app>/models.py` (02 mục 4)
-from shared.geo.models import Province, Ward  # noqa: F401
-
 
 def uuid7() -> uuid.UUID:
     # Migration ghi đường dẫn hàm này, không ghi `uuid.uuid7`: đổi cách sinh UUID chỉ cần sửa
@@ -44,3 +41,9 @@ class BaseModel(models.Model):
 
     class Meta:
         abstract = True
+
+
+# Django chỉ nhận model qua `<app>/models.py` (02 mục 4). Import ở cuối file vì
+# `shared.events.models` cần `uuid7` ở trên
+from shared.events.models import EventDelivery, OutboxEvent  # noqa: E402, F401
+from shared.geo.models import Province, Ward  # noqa: E402, F401
