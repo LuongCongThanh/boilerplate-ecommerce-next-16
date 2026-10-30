@@ -1,6 +1,8 @@
 # Sự kiện qua outbox: publisher, relay, consumer và retry
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #36
 
 Blocked by: 09, 15
 
@@ -59,19 +61,19 @@ Commit dự kiến: `plan` → `S1` → `S2` → `S3` → `S4` → `R1 (khi revi
 
 ## Acceptance criteria
 
-- [ ] Một sự kiện mẫu có hai handler: mỗi handler chạy đúng một lần dù task bị giao lặp.
-- [ ] Transaction ghi sự kiện bị rollback thì không có delivery nào được tạo.
-- [ ] Handler ném `RetryLater` thì delivery giữ `pending` với `next_attempt_at` theo lịch retry; hết retry thì `failed` có `failed_at`, `last_error`.
-- [ ] Handler lỗi không làm hỏng tác động DB của handler khác cùng sự kiện.
-- [ ] Redis mất task sau khi đã nhận thì relay giao lại khi tới `next_dispatch_at`.
-- [ ] `make up` bật cả `relay`, và service này không khởi động lại liên tục.
-- [ ] Các kịch bản ở [07 mục 5](../../../docs/architecture/07-async-events-jobs.md#5-kịch-bản-kiểm-thử) về publish, relay, consumer và retry đều có test.
+- [x] Một sự kiện mẫu có hai handler: mỗi handler chạy đúng một lần dù task bị giao lặp.
+- [x] Transaction ghi sự kiện bị rollback thì không có delivery nào được tạo.
+- [x] Handler ném `RetryLater` thì delivery giữ `pending` với `next_attempt_at` theo lịch retry; hết retry thì `failed` có `failed_at`, `last_error`.
+- [x] Handler lỗi không làm hỏng tác động DB của handler khác cùng sự kiện.
+- [x] Redis mất task sau khi đã nhận thì relay giao lại khi tới `next_dispatch_at`.
+- [x] `make up` bật cả `relay`, và service này không khởi động lại liên tục.
+- [x] Các kịch bản ở [07 mục 5](../../../docs/architecture/07-async-events-jobs.md#5-kịch-bản-kiểm-thử) về publish, relay, consumer và retry đều có test.
 
 ## Comments
 
 ### Báo cáo 30/10/2026
 
-**Nhánh:** `feat/shared-outbox` · **PR:** chưa mở · **Mode:** full
+**Nhánh:** `feat/shared-outbox` · **PR:** #36 · **Mode:** full
 
 #### Đã làm
 
@@ -82,14 +84,13 @@ Commit dự kiến: `plan` → `S1` → `S2` → `S3` → `S4` → `R1 (khi revi
 | 3. `RetryLater` giữ `pending` theo lịch; hết retry thì `failed` | `shared/events/tests/test_consumer.py::test_retry_later_keeps_pending_with_schedule`, `::test_exhausted_retries_mark_failed` |
 | 4. Handler lỗi không làm hỏng tác động DB của handler khác | `shared/events/tests/test_consumer.py::test_failing_handler_does_not_affect_other_handler` |
 | 5. Redis mất task thì relay giao lại khi tới `next_dispatch_at` | `shared/events/tests/test_relay.py::test_lost_task_redispatched_after_deadline`, `::test_broker_error_keeps_delivery_for_later` |
-| 6. `make up` bật `relay`, không khởi động lại liên tục | Phần code: `shared/events/tests/test_relay.py::test_run_outbox_relay_survives_iteration_error` (vòng 1 lỗi, vòng 2 vẫn giao được; lỗi ở `create_deliveries` không chặn `dispatch_due`). Kiểm tay **chưa làm**: `make up`, sau 1 phút `docker compose ps` thấy `relay` Up không restart, `make logs s=relay` có vòng lặp chạy (không test tự động: cần Docker thật). `docker compose config` đã liệt kê service `relay` |
+| 6. `make up` bật `relay`, không khởi động lại liên tục | Phần code: `shared/events/tests/test_relay.py::test_run_outbox_relay_survives_iteration_error` (vòng 1 lỗi, vòng 2 vẫn giao được; lỗi ở `create_deliveries` không chặn `dispatch_due`). Kiểm tay 30/10/2026: `make up` trên Windows + Docker Desktop, sau hơn 1 phút `docker compose ps` thấy `relay` Up, `RestartCount=0`, log có `outbox_relay_started`, không có lỗi (không test tự động: cần Docker thật) |
 | 7. Kịch bản 07 §5 về publish, relay, consumer, retry có test | Publish: `test_publisher.py` (4 test), `tests/test_event_payloads.py` (2 test). Consumer: `test_consumer.py` (10 test: completed, RetryLater, exception, failed, rejected, bỏ qua delivery đã kết thúc / chưa tới hạn, thiếu handler, giao trùng đồng thời). Relay: `test_relay.py` (9 test: lập danh sách nguyên tử, sự kiện không có handler, hai relay đồng thời, mất task, lỗi broker, retry chưa tới hạn, lệnh `--once`). `enqueue_on_commit`: `shared/tests/test_tasks.py` (4 test). `drain_events`: `test_drain.py` (4 test) |
 
 `make lint` xanh (ruff, mypy, import-linter 1 kept / 0 broken) · `make test`: 212 passed trong 12.77s
 
 #### Chưa làm
 
-- Kiểm tay AC6 với Docker (`make up`): chưa chạy, cần làm trước G2.
 - Relay dừng sạch khi nhận SIGTERM/SIGINT: có code, chưa có test tự động.
 - `delivery_lag`, `get_delivery_outcomes`, purge, `retry_failed_events`, `replay_events`: thuộc ticket [18](./18-outbox-operations.md).
 - Sentry Cron check-in của relay (07 §3.4): chờ cấu hình Sentry.
@@ -134,12 +135,13 @@ Ba trục: Spec, Standards, Bug (`/code-review high`). Vòng sửa R1 (`45420e6`
 
 | Task | Phase | AC | Commit | File |
 | --- | --- | --- | --- | --- |
-| plan | 1 grill | — | `f3c176e` docs: plan shared events outbox ticket | 3 |
-| S1 | 2 code | 7 | `93780f7` feat(shared): add outbox models, DomainEvent, publish and handler registry | 11 |
-| S2 | 2 code | 3, 4, 7 | `5aecdbb` feat(shared): add event consumer, dispatch_event task and celery ack settings | 5 |
-| S3 | 2 code | 2, 5, 6, 7 | `fbdbd2e` feat(shared): add outbox relay, run_outbox_relay command and relay service | 10 |
-| S4 | 2 code | 1 | `f95a7e1` feat(shared): add enqueue_on_commit and drain_events test helper | 4 |
-| R1 | 4 review | — | `45420e6` fix(shared): address review findings on outbox relay and consumer | 12 |
+| plan | 1 grill | — | `572f6df` docs: plan shared events outbox ticket | 3 |
+| S1 | 2 code | 7 | `8b437e4` feat(shared): add outbox models, DomainEvent, publish and handler registry | 11 |
+| S2 | 2 code | 3, 4, 7 | `fcd91a4` feat(shared): add event consumer, dispatch_event task and celery ack settings | 5 |
+| S3 | 2 code | 2, 5, 6, 7 | `d98563e` feat(shared): add outbox relay, run_outbox_relay command and relay service | 10 |
+| S4 | 2 code | 1 | `0888ebc` feat(shared): add enqueue_on_commit and drain_events test helper | 4 |
+| R1 | 4 review | — | `d6cf2ab` fix(shared): address review findings on outbox relay and consumer | 12 |
+| sync | 5 sync | — | `8b28aa7` docs: sync docs and report for shared events outbox ticket | 8 |
 
 #### Tài liệu đã cập nhật
 
