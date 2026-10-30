@@ -25,6 +25,9 @@ INSTALLED_APPS = [
     "modules",
 ]
 
+# Tài khoản là custom user không kế thừa PermissionsMixin (03 mục 2.1)
+AUTH_USER_MODEL = "modules.Account"
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # Chọn ngôn ngữ theo Accept-Language, mặc định LANGUAGE_CODE; phải đứng trước Common

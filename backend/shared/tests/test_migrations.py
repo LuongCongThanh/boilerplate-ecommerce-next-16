@@ -28,7 +28,8 @@ def test_reverse_drops_function_but_keeps_extensions() -> None:
             cursor.execute("SELECT extname FROM pg_extension")
             extensions = {row[0] for row in cursor.fetchall()}
     finally:
-        call_command("migrate", "shared", verbosity=0)
+        # `migrate shared zero` gỡ cả migration của `modules`, nên chạy lại mọi app
+        call_command("migrate", verbosity=0)
 
     assert function is None
     assert {"unaccent", "pg_trgm", "btree_gist"} <= extensions
