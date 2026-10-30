@@ -5,11 +5,15 @@ import pytest
 from django.db import connection, models
 from django.utils import timezone
 
-from shared.models import BaseModel
+from shared.models import BaseModel, BaseQuerySet
 
 
 class Widget(BaseModel):
     name = models.CharField(max_length=20)
+
+    # Khai báo lại manager: model test-only không có trong app registry lúc mypy chạy, nên khi
+    # shared có model cụ thể kế thừa BaseModel, plugin django-stubs gán kiểu manager của BaseModel
+    objects = BaseQuerySet.as_manager()
 
     class Meta:
         app_label = "shared"

@@ -1,11 +1,15 @@
 """Factory gốc dùng chung cho test (02 mục 5, mục 9.5)."""
 
+import hashlib
+
 import factory
 from django.utils import timezone
 from factory.django import DjangoModelFactory
 
+from shared.api.idempotency import LEASE
 from shared.events.models import EventDelivery, OutboxEvent
 from shared.geo.models import Province, Ward
+from shared.models import IdempotencyKey, IdempotencyStatus, uuid7
 
 
 class ProvinceFactory(DjangoModelFactory[Province]):
@@ -51,3 +55,26 @@ class EventDeliveryFactory(DjangoModelFactory[EventDelivery]):
     handler = factory.Sequence(lambda n: f"shared.handler_{n}")
     next_attempt_at = factory.LazyFunction(timezone.now)
     next_dispatch_at = factory.LazyAttribute(lambda delivery: delivery.next_attempt_at)
+
+
+class IdempotencyKeyFactory(DjangoModelFactory[IdempotencyKey]):
+    """Key `in_progress` còn lease, body rỗng `{}`; trait `completed` cho key đã lưu kết quả."""
+
+    class Meta:
+        model = IdempotencyKey
+
+    scope = factory.Sequence(lambda n: f"POST /api/v1/store/checkout|account:{n}")
+    key = factory.LazyFunction(uuid7)
+    request_hash = hashlib.sha256(b"{}").hexdigest()
+    lease_token = factory.LazyFunction(uuid7)
+    lease_expires_at = factory.LazyFunction(lambda: timezone.now() + LEASE)
+
+    class Params:
+        completed = factory.Trait(
+            status=IdempotencyStatus.COMPLETED,
+            completed_at=factory.LazyFunction(timezone.now),
+            response_status=201,
+            response_body=factory.LazyFunction(dict),
+            lease_token=None,
+            lease_expires_at=None,
+        )
