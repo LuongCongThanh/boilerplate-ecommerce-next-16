@@ -180,11 +180,11 @@ backend/
 │   ├── exceptions.py               # DomainError (thuộc tính lớp code, http_status mặc định 422; khởi tạo nhận message, details tuỳ chọn), RetryLater (handler báo consumer thử lại sau, không kế thừa DomainError) và các lỗi chung
 │   ├── tasks.py                    # enqueue_on_commit(task_name, **kwargs): đẩy Celery task theo tên sau khi transaction commit (on_commit robust=True: broker lỗi thì chỉ log); purge_old_outbox_events (chỉ xoá sự kiện đã kết thúc mọi delivery, cùng các delivery đó), purge_idempotency_keys
 │   ├── events/
-│   │   ├── __init__.py             # API công khai: publish(), handles(), get_delivery_outcomes(), delivery_lag() (tuổi của công việc giao sự kiện đã tới hạn mà chưa xử lý, không tính failed hay pending đang chờ retry; job T4 dùng, 07 mục 1.1.1)
+│   │   ├── __init__.py             # API công khai: DomainEvent, publish(), handles(), get_delivery_outcomes(), delivery_lag() (tuổi của công việc giao sự kiện đã tới hạn mà chưa xử lý, không tính failed hay pending đang chờ retry; job T4 dùng, 07 mục 1.1.1)
 │   │   ├── base.py                 # DomainEvent (pydantic): event_id, event_type, schema_version, occurred_at, correlation_id (request_id của request gốc). Payload không chứa secret hay PII
 │   │   ├── models.py               # OutboxEvent, EventDelivery (cũng là dấu đã xử lý và nơi lưu lỗi)
-│   │   ├── publisher.py            # EventPublisher: ghi sự kiện vào outbox trong transaction hiện tại
-│   │   ├── registry.py             # decorator @handles(...) đăng ký handler cho từng loại sự kiện
+│   │   ├── publisher.py            # EventPublisher: ghi sự kiện vào outbox trong transaction hiện tại; gọi ngoài transaction.atomic thì ném RuntimeError
+│   │   ├── registry.py             # decorator @handles(event_type, version=, name=) đăng ký handler; name là ID ổn định (cột handler, tối đa 100 ký tự), trùng thì lỗi lúc import; autodiscover(package) nạp events.py, handlers.py của package con
 │   │   ├── relay.py                # tạo delivery từng handler; quét pending tới hạn và giao lại qua Celery, lịch lưu ở DB
 │   │   ├── consumer.py             # khoá EventDelivery; handler trong savepoint; commit trạng thái delivery cùng tác động DB; retry lưu trong DB (07 mục 1.3)
 │   │   └── tasks.py                # Celery task dispatch_event(event_id, handler_name)
@@ -212,15 +212,15 @@ backend/
 │   │   ├── sync_beat_schedule.py   # ghi lịch job từ config/celery.py vào django-celery-beat, tắt job thừa; chạy sau migrate (07 mục 3.2)
 │   │   ├── reset_db.py             # xoá và tạo lại database local cho make db-reset; từ chối khi DEBUG tắt hoặc host không phải localhost
 │   │   └── load_geo.py             # nạp tỉnh/thành, phường/xã từ vietnam-provinces: mã Cục Thống kê có số 0 đứng đầu, upsert theo mã, không xoá mã cũ (chỉ log geo_stale_codes)
-│   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension); 0002_geo: shared_province, shared_ward
+│   ├── migrations/                 # 0001_postgres_extensions: unaccent, pg_trgm, btree_gist, hàm public.immutable_unaccent (reverse chỉ xoá hàm, giữ extension); 0002_geo: shared_province, shared_ward; 0003_outbox: shared_outbox_event, shared_event_delivery
 │   └── testing/
-│       ├── factories.py            # factory gốc: ProvinceFactory, WardFactory
+│       ├── factories.py            # factory gốc: ProvinceFactory, WardFactory, OutboxEventFactory, EventDeliveryFactory
 │       ├── fixtures.py             # fixture pytest không cần nghiệp vụ (xoá cache trước/sau mỗi test, json_logging, api_client…), nạp qua pytest_plugins của backend/conftest.py; fixture cần Tài khoản nằm ở backend/conftest.py
 │       └── events.py               # drain_events(): chạy callback on_commit, relay và handler tới khi không còn delivery tới hạn; không chờ retry tương lai
 │
 ├── modules/                        # Django app "modules": toàn bộ nghiệp vụ
 │   ├── __init__.py
-│   ├── apps.py                     # ModulesConfig.ready(): nạp handlers.py của mọi module con
+│   ├── apps.py                     # ModulesConfig.ready(): nạp events.py và handlers.py của mọi module con qua shared.events.registry.autodiscover("modules")
 │   ├── models.py                   # import model của mọi module con để Django nhận ra
 │   ├── migrations/                 # MỘT chuỗi migrations cho mọi module con
 │   ├── management/commands/
@@ -311,7 +311,7 @@ modules/ordering/
 | `models/` | Field, ràng buộc DB (`UniqueConstraint`, `CheckConstraint`), index, `Meta.db_table` có tiền tố module (ví dụ `ordering_order`), property đơn giản | `shared.models`, `models/` của module lớp dưới (chỉ để khai báo FK, mục 6.3) | Logic nghiệp vụ, gọi API ngoài, gửi email, override `save()` để làm việc phụ; tự khai báo `id` trên model nghiệp vụ thay vì kế thừa BaseModel. Hai bảng địa giới và model framework/history theo ngoại lệ 03 mục 0.1/0.9 |
 | `services/` | Mỗi nghiệp vụ ghi là một hàm có tham số keyword; phần ghi DB chạy trong `transaction.atomic`, phát sự kiện qua `shared.events.publish`. Hàm điều phối tích hợp chia thành các transaction ngắn, không bọc toàn hàm khi có HTTP | Model của chính module, `contracts` của module lớp dưới | Nhận `request`; import `api/`; gọi HTTP ra ngoài bên trong `transaction.atomic`; đẩy Celery task trực tiếp (phải qua `shared.tasks.enqueue_on_commit`); import `tasks.py` (đẩy task theo tên, để không có vòng import `services` ↔ `tasks`); truy vấn đi vào model của module khác (mục 6.3) |
 | `selectors/` | Hàm truy vấn đọc, tối ưu bằng `select_related`, `prefetch_related` | Model của chính module; hàm **chỉ đọc** trong `contracts` của module lớp dưới (mục 6.3) | Ghi dữ liệu; gọi hàm ghi trong `contracts`; truy vấn đi vào model của module khác (mục 6.3) |
-| `handlers.py` | Hàm `@handles("payments.payment-succeeded", version=1)`, nhận sự kiện rồi gọi **một** service của chính module. Không cần tự chống xử lý trùng: consumer khoá delivery và chuyển `completed` cùng transaction với handler. Sự kiện tới sớm hoặc không áp dụng được thì báo bằng exception ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 1.3) | `services` của chính module, `events` của module lớp dưới | Logic nghiệp vụ (phải đưa vào service); gọi `contracts` của module khác (service làm việc này); gọi HTTP hay đẩy Celery task trực tiếp, vì handler chạy trong transaction của consumer |
+| `handlers.py` | Hàm `@handles("payments.payment-succeeded", version=1, name="ordering.handle_payment_succeeded")` (`name` cố định như tên Celery task, đổi tên hàm không đổi `name`), nhận sự kiện rồi gọi **một** service của chính module. Không cần tự chống xử lý trùng: consumer khoá delivery và chuyển `completed` cùng transaction với handler. Sự kiện tới sớm hoặc không áp dụng được thì báo bằng exception ([07-async-events-jobs.md](./07-async-events-jobs.md) mục 1.3) | `services` của chính module, `events` của module lớp dưới | Logic nghiệp vụ (phải đưa vào service); gọi `contracts` của module khác (service làm việc này); gọi HTTP hay đẩy Celery task trực tiếp, vì handler chạy trong transaction của consumer |
 | `tasks.py` | Celery task mỏng, chỉ gọi service. Mỗi task khai báo `name="<module>.<task>"` cố định | `services` | Logic nghiệp vụ |
 | `api/*/serializers.py` | Validate dữ liệu vào, định dạng dữ liệu ra | — | Gọi `.save()` lên model, logic nghiệp vụ |
 | `api/*/views.py` | `APIView` hoặc `GenericAPIView`: phân quyền, gọi serializer, gọi service/selector | `services`, `selectors`, `serializers` | `ModelViewSet` tự động CRUD; truy vấn ORM trực tiếp |
