@@ -11,3 +11,22 @@ class EmailAlreadyUsed(DomainError):
     code = "EMAIL_ALREADY_USED"
     http_status = 409
     message = _("Email đã được dùng cho một Tài khoản khác.")
+
+
+class InvalidEmail(DomainError):
+    """Email rỗng, sai định dạng hoặc dài quá 254 ký tự (03 mục 2.1)."""
+
+    code = "INVALID_EMAIL"
+    http_status = 422
+    message = _("Email không hợp lệ.")
+
+
+class WeakPassword(DomainError):
+    """Mật khẩu không qua `AUTH_PASSWORD_VALIDATORS` (05 mục 3).
+
+    `details["messages"]` là danh sách thông báo của các validator không đạt.
+    """
+
+    code = "WEAK_PASSWORD"
+    http_status = 422
+    message = _("Mật khẩu chưa đủ mạnh.")
