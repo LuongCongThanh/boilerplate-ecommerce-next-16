@@ -34,7 +34,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture(autouse=True)
 def _code_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
-    # beat_schedule của config/celery.py còn rỗng: thay bằng lịch giả có cả interval và crontab
+    # Thay lịch thật của config/celery.py bằng lịch giả có cả interval và crontab
     monkeypatch.setitem(app.conf, "beat_schedule", CODE_SCHEDULE)
 
 
