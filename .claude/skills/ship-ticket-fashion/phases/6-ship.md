@@ -23,7 +23,7 @@ git push -u origin <nhánh>        # nhánh của mình: --force-with-lease sau 
 ## 2. Mở PR
 
 1. Tiêu đề Conventional Commits, scope là module (`shared`, `catalog`…); tiêu đề này thành commit squash trên `dev`.
-2. Thân PR theo `.github/pull_request_template.md`, ghi vào `.git/PR_BODY.md` (lý do ở `gotchas/windows-shell.md`). **Closes** là đường dẫn ticket; **Notes** là báo cáo trong ticket (Đã làm / Chưa làm / Gap, kết luận review, bảng *Commit*); checklist tick theo sự thật, mục không áp dụng ghi N/A.
+2. Thân PR theo `.github/pull_request_template.md`, ghi vào `.git/PR_BODY.md` (lý do ở `gotchas/windows-shell.md`). **Closes** là đường dẫn ticket. Lấy từ báo cáo trong ticket: *Cách kiểm* ← bảng AC → bằng chứng; *Gap và lưu ý* ← Chưa làm, Gap, ticket mới, AC `untestable`, mỗi dòng có nội dung hoặc "Không"; **Notes** ← kết luận review và bảng *Commit*. Checklist tick theo sự thật, mục không áp dụng ghi N/A.
 3. Tạo, rồi ghi số PR vào state:
 
 ```bash
