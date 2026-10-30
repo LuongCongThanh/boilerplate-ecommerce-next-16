@@ -24,7 +24,7 @@ Cập nhật trong cùng PR đóng ticket. Nguồn sự thật vẫn là dòng `
 | Mốc / feature | Trạng thái | Ticket |
 |---|---|---|
 | [`dev-security-baseline`](../dev-security-baseline/spec.md) | Gần xong | ✅ 01, 02 · 🟡 03 chờ chủ repo tự kiểm tra 3 AC |
-| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07, 08, 09, 10, 15, 16, 17, 18 · ⬜ 11, 12, 14, 19, 20, 21, 22, 23 làm được · ⬜ 01–04 làm được · ⏸ 13 macOS, không chặn M0 · ❔ 24–28 outbox sau review, `needs-triage` |
+| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07, 08, 09, 10, 11, 15, 16, 17, 18 · ⬜ 12 (còn lại để đóng M0) · Backlog không chặn M0, làm xen kẽ: 01–04, 14, 19–23 · ⏸ trước go-live: 13 macOS, 24–28 outbox (`needs-triage`) |
 | **M1** – **M6** | Chưa có spec | Tạo spec khi mốc trước gần xong |
 | **M7** `sandbox-acceptance` | Chưa có spec | ⏸ [01](../sandbox-acceptance/issues/01-load-test-k6-staging.md) k6, `needs-triage` |
 
@@ -38,6 +38,8 @@ Ký hiệu: ✅ `resolved` · 🟡 đang dở · ⬜ chưa làm · ⏸ để sau
 - 29/10/2026: Đăng ký luôn trả `202` như nhau, không lộ email đã tồn tại (US-501 AC2).
 - 29/10/2026: Bằng chứng tuân thủ giữ HMAC số điện thoại sau ẩn danh ([ADR 0016](../../docs/adr/0016-erasure-evidence-phone-hmac.md)).
 - 29/10/2026: Hoá đơn điện tử giữ xuất thủ công ở MVP; kế toán xác nhận trước go-live.
+- 30/10/2026: M0 xong khi có ticket 11 (idempotency) và 12 (`Account`), rồi vào M1. Ticket 01–04, 14, 19–23 thành backlog làm xen kẽ, không chặn mốc; 13 và 24–28 để trước go-live. Lý do: các ticket này không chặn endpoint nào của M1, và M0 đã phình từ 4 lên 27 ticket do mỗi review sinh ticket mới.
+- 30/10/2026: Lõi idempotency ở `shared/idempotency.py`, không import DRF, để service (checkout, Thanh toán, kho) gọi `claim.complete()` trong transaction của mình; `shared/api/idempotency.py` chỉ là lớp HTTP ([ticket 11](../backend-bootstrap/issues/11-shared-idempotency.md)).
 - 29/10/2026: ADR 0019 đổi số thành [0015](../../docs/adr/0015-local-postgres-on-host.md).
 - 29/10/2026: Không dùng Django Admin ở mọi môi trường, kể cả local; xem dữ liệu bằng `psql`/IDE ([ADR 0004](../../docs/adr/0004-custom-nextjs-admin.md)).
 - 29/10/2026: Biến môi trường và lệnh `Makefile` thêm ở mốc dùng tới, không khai báo trước ([08](../../docs/architecture/08-local-development.md) mục 2.3 và 3).

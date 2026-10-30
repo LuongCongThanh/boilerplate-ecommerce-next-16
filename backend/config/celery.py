@@ -22,6 +22,10 @@ app.conf.beat_schedule = {
         "task": "shared.purge_old_outbox_events",
         "schedule": crontab(hour=3, minute=30),
     },
+    "shared.purge_idempotency_keys": {
+        "task": "shared.purge_idempotency_keys",
+        "schedule": crontab(hour=3, minute=45),
+    },
 }
 
 # Mặc định Celery chỉ tìm <app>.tasks, nên liệt kê từng package có tasks.py (02 mục 5)

@@ -1,8 +1,9 @@
 """Urlconf chỉ dùng cho test của shared/api."""
 
-from typing import Any
+from typing import Any, ClassVar
 
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.db import models, transaction
 from django.http import HttpRequest, HttpResponse
 from django.urls import path
 from django.utils import translation
@@ -15,9 +16,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from shared.api import idempotency
 from shared.api.client_ip import get_client_ip
 from shared.api.throttling import AnonThrottle
 from shared.exceptions import DomainError
+from shared.idempotency import Claim
 
 # Stub của DRF chỉ nhận QuerySet; paginator thật nhận mọi sequence, nên dùng list cho gọn
 PAGED_ROWS: Any = [{"id": i} for i in range(1, 251)]
@@ -123,6 +126,49 @@ class LanguageView(APIView):
         return Response({"language": translation.get_language()})
 
 
+class IdempotentEffect(models.Model):
+    """Tác động nghiệp vụ của endpoint mẫu, để đếm số lần thật sự chạy."""
+
+    note = models.CharField(max_length=100)
+
+    # Khai báo tường minh để mypy thấy manager khi model đi qua tham số `type[...]`
+    objects: ClassVar[models.Manager[IdempotentEffect]] = models.Manager()
+
+    class Meta:
+        app_label = "shared"
+        db_table = "shared_test_idempotent_effect"
+
+    def __str__(self) -> str:
+        return self.note
+
+
+class IdempotentCreateView(APIView):
+    """Endpoint mẫu dùng `Idempotency-Key` như checkout: claim, ghi tác động, lưu kết quả.
+
+    Body có `fail_after_effect` thì ném lỗi nghiệp vụ sau khi đã ghi tác động,
+    `fail_after_complete` thì ném sau khi đã lưu kết quả, cùng transaction.
+    """
+
+    permission_classes = (AllowAny,)
+
+    def post(self, request: Request, code: str) -> Response:
+        outcome = idempotency.begin(request)
+        if not isinstance(outcome, Claim):
+            return idempotency.response(outcome)
+        with outcome, transaction.atomic():
+            effect = IdempotentEffect.objects.create(note=str(request.data.get("note", "")))
+            if request.data.get("fail_after_effect"):
+                raise OutOfStock
+            body = {"effect_id": str(effect.pk), "operation_id": str(outcome.operation_id)}
+            outcome.complete(201, body)
+            if request.data.get("fail_after_complete"):
+                raise OutOfStock
+        return Response(body, status=201)
+
+    # Cùng luồng với POST, để test scope tách theo method
+    put = post
+
+
 def suspicious_view(request: HttpRequest) -> HttpResponse:
     """View Django thường; Django đổi `SuspiciousOperation` thành 400 qua `handler400`."""
     raise SuspiciousOperation("secret internal detail")
@@ -144,4 +190,5 @@ urlpatterns = [
     path("suspicious", suspicious_view),
     path("forbidden", forbidden_view),
     path("language", LanguageView.as_view()),
+    path("idempotent/<str:code>/", IdempotentCreateView.as_view()),
 ]
