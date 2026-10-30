@@ -3,11 +3,12 @@
 Management command và Celery task chỉ là lớp mỏng gọi vào các hàm ở đây.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 import structlog
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from shared.events.models import DeliveryStatus, EventDelivery, OutboxEvent
@@ -17,6 +18,8 @@ from shared.events.relay import build_deliveries
 logger = structlog.get_logger(__name__)
 
 REPLAY_BATCH = 100
+OUTBOX_RETENTION = timedelta(days=90)
+PURGE_BATCH = 1000
 
 
 def retry_failed_deliveries(
@@ -93,3 +96,34 @@ def replay_events(*, event_type: str, since: datetime, handler: str | None = Non
         last_id = batch[-1].id
     logger.info("outbox_events_replayed", event_type=event_type, handler=handler, count=replayed)
     return replayed
+
+
+def purge_old_outbox_events() -> int:
+    """Xoá sự kiện quá `OUTBOX_RETENTION` mà mọi delivery đã kết thúc, kèm delivery của nó.
+
+    Giữ sự kiện còn delivery `pending`/`failed` để relay hoặc `retry_failed_events` khôi phục.
+    Sự kiện có marker mà không có delivery nào cũng bị xoá. Mỗi lô `PURGE_BATCH` sự kiện một
+    transaction, lặp tới khi hết. Còn sự kiện quá hạn bị giữ thì log `WARNING`. Trả số sự kiện
+    đã xoá.
+    """
+    cutoff = timezone.now() - OUTBOX_RETENTION
+    old = OutboxEvent.objects.filter(occurred_at__lt=cutoff)
+    unfinished = EventDelivery.objects.filter(
+        event=OuterRef("pk"), status__in=[DeliveryStatus.PENDING, DeliveryStatus.FAILED]
+    )
+    purgeable = old.filter(deliveries_created_at__isnull=False).exclude(Exists(unfinished))
+    purged = 0
+    while True:
+        with transaction.atomic():
+            # Khoá sự kiện chặn delivery mới trỏ tới nó (khoá của FK) tới khi commit; lọc lại
+            # sau khi khoá để bỏ sự kiện vừa được replay thêm delivery `pending`
+            ids = list(purgeable.select_for_update().values_list("id", flat=True)[:PURGE_BATCH])
+            if not ids:
+                break
+            _, deleted = purgeable.filter(id__in=ids).delete()
+        purged += deleted.get(OutboxEvent._meta.label, 0)
+    kept = old.count()
+    if kept:
+        logger.warning("outbox_purge_kept_unfinished", count=kept)
+    logger.info("outbox_events_purged", count=purged)
+    return purged
