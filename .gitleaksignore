@@ -1,0 +1,2 @@
+# UUID mẫu của Idempotency-Key trong test (ticket backend-bootstrap/11), không phải secret
+e27a7dfb902afe26deef0e243a8133a1e46f87e3:backend/shared/tests/test_api_idempotency.py:generic-api-key:15

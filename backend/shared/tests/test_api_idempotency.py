@@ -22,7 +22,8 @@ from shared.tests.api_urls import IdempotentEffect, OutOfStock
 pytestmark = pytest.mark.urls("shared.tests.api_urls")
 
 URL = "/idempotent/FS2610-7K3QZD/"
-KEY = "0192f3a4-5b6c-7d8e-9f01-23456789abcd"
+# UUID mẫu của Idempotency-Key, không phải secret
+KEY = "0192f3a4-5b6c-7d8e-9f01-23456789abcd"  # gitleaks:allow
 CART_TOKEN = "cart-token-a"
 HEADERS = {"Idempotency-Key": KEY, "X-Cart-Token": CART_TOKEN}
 # Scope mà `begin` dựng cho `post(...)` mặc định
