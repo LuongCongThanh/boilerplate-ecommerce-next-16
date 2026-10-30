@@ -3,15 +3,20 @@
 Management command và Celery task chỉ là lớp mỏng gọi vào các hàm ở đây.
 """
 
+from datetime import datetime
 from uuid import UUID
 
 import structlog
 from django.db import transaction
 from django.utils import timezone
 
-from shared.events.models import DeliveryStatus, EventDelivery
+from shared.events.models import DeliveryStatus, EventDelivery, OutboxEvent
+from shared.events.registry import registry
+from shared.events.relay import build_deliveries
 
 logger = structlog.get_logger(__name__)
+
+REPLAY_BATCH = 100
 
 
 def retry_failed_deliveries(
@@ -54,3 +59,37 @@ def retry_failed_deliveries(
         )
     logger.info("failed_deliveries_retried", count=len(reopened))
     return len(reopened)
+
+
+def replay_events(*, event_type: str, since: datetime, handler: str | None = None) -> int:
+    """Bảo đảm sự kiện `event_type` từ `since` có delivery cho handler đang đăng ký.
+
+    Chỉ tạo delivery còn thiếu; delivery đã có giữ nguyên, kể cả `failed`, `completed`. Không
+    truyền `handler` nghĩa là mọi handler đăng ký cho `(event_type, schema_version)` của từng
+    sự kiện. Sự kiện relay chưa lập danh sách được bỏ qua. Mỗi lô `REPLAY_BATCH` sự kiện một
+    transaction. Trả số sự kiện đã xét.
+    """
+    events = OutboxEvent.objects.filter(
+        event_type=event_type, occurred_at__gte=since, deliveries_created_at__isnull=False
+    ).order_by("id")
+    replayed = 0
+    last_id: UUID | None = None
+    while True:
+        page = events if last_id is None else events.filter(id__gt=last_id)
+        with transaction.atomic():
+            batch = list(page[:REPLAY_BATCH])
+            if not batch:
+                break
+            now = timezone.now()
+            deliveries: list[EventDelivery] = []
+            for event in batch:
+                handlers = registry.handlers_for(event.event_type, event.schema_version)
+                if handler is not None:
+                    handlers = [found for found in handlers if found.name == handler]
+                deliveries.extend(build_deliveries(event, handlers, now))
+            # Cặp đã có bị UNIQUE(event_id, handler) bỏ qua, không bị ghi đè
+            EventDelivery.objects.bulk_create(deliveries, ignore_conflicts=True)
+        replayed += len(batch)
+        last_id = batch[-1].id
+    logger.info("outbox_events_replayed", event_type=event_type, handler=handler, count=replayed)
+    return replayed
