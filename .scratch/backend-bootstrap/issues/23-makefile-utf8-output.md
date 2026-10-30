@@ -1,6 +1,6 @@
 # `make lint` lỗi mã hoá trên Windows khi output bị chuyển hướng
 
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec.md](../spec.md)
 

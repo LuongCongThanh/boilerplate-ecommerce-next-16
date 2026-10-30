@@ -1,6 +1,6 @@
 # Khai báo `ErrorDTO` và response lỗi trong OpenAPI
 
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec.md](../spec.md)
 

@@ -224,7 +224,7 @@ Mỗi lệnh được thêm vào `Makefile` cùng ticket tạo ra lệnh mà nó
 |---|---|---|
 | `make up` / `make down` | Bật / tắt các container; `make up` chạy service `migrate` trước (mục 7) | M0 (ticket 15) |
 | `make run` | Chạy API trên máy (`uv run python manage.py runserver`) | M0 (ticket 15) |
-| `make restart-worker` | Khởi động lại worker, beat (relay từ ticket 10) sau khi sửa code (Celery không tự reload) | M0 (ticket 15) |
+| `make restart-worker` | Khởi động lại worker, beat, relay sau khi sửa code (Celery không tự reload) | M0 (ticket 15) |
 | `make logs s=worker` | Xem log của một service | M0 (ticket 15) |
 | `make shell` | `manage.py shell` chạy trên máy | M0 (ticket 15) |
 | `make makemigrations` / `make migrate` | Tạo / chạy migration; `make migrate` chạy thêm `manage.py sync_beat_schedule` để ghi lịch job vào DB ([07](./07-async-events-jobs.md) mục 3.2) | M0 (ticket 15) |
@@ -335,7 +335,7 @@ services:
   beat:
     <<: *app
     command: celery -A config beat -l info   # scheduler lấy từ CELERY_BEAT_SCHEDULER của settings
-  relay:   # từ ticket 10
+  relay:
     <<: *app
     command: python manage.py run_outbox_relay
   redis:

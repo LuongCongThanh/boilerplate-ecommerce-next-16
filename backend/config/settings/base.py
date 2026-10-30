@@ -106,6 +106,14 @@ CELERY_BROKER_URL = env.REDIS_URL
 CELERY_TASK_DEFAULT_QUEUE = "default"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+# Worker chết giữa chừng thì task được giao lại; công việc thật vẫn nằm trong PostgreSQL
+# (07 mục 3.3)
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# Ngắn hơn hạn giao lại 3 phút của relay (07 mục 1.1.1)
+CELERY_TASK_TIME_LIMIT = 120
+CELERY_TASK_IGNORE_RESULT = True
 
 # Bật Swagger UI và schema; production tắt (04 mục 4.4)
 API_DOCS_ENABLED = True
