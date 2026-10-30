@@ -1,14 +1,13 @@
 """Factory gốc dùng chung cho test (02 mục 5, mục 9.5)."""
 
-import hashlib
-
 import factory
 from django.utils import timezone
 from factory.django import DjangoModelFactory
 
-from shared.api.idempotency import LEASE
+from shared.api import idempotency as idempotency_api
 from shared.events.models import EventDelivery, OutboxEvent
 from shared.geo.models import Province, Ward
+from shared.idempotency import LEASE
 from shared.models import IdempotencyKey, IdempotencyStatus, uuid7
 
 
@@ -65,7 +64,7 @@ class IdempotencyKeyFactory(DjangoModelFactory[IdempotencyKey]):
 
     scope = factory.Sequence(lambda n: f"POST /api/v1/store/checkout|account:{n}")
     key = factory.LazyFunction(uuid7)
-    request_hash = hashlib.sha256(b"{}").hexdigest()
+    request_hash = idempotency_api.request_hash({})
     lease_token = factory.LazyFunction(uuid7)
     lease_expires_at = factory.LazyFunction(lambda: timezone.now() + LEASE)
 

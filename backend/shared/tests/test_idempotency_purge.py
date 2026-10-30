@@ -7,7 +7,7 @@ from celery.schedules import crontab
 from structlog.testing import capture_logs
 
 from config.celery import app
-from shared.api import idempotency
+from shared import idempotency
 from shared.models import IdempotencyKey
 from shared.tasks import purge_idempotency_keys
 from shared.testing.factories import IdempotencyKeyFactory

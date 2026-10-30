@@ -20,6 +20,7 @@ from shared.api import idempotency
 from shared.api.client_ip import get_client_ip
 from shared.api.throttling import AnonThrottle
 from shared.exceptions import DomainError
+from shared.idempotency import Claim
 
 # Stub của DRF chỉ nhận QuerySet; paginator thật nhận mọi sequence, nên dùng list cho gọn
 PAGED_ROWS: Any = [{"id": i} for i in range(1, 251)]
@@ -144,22 +145,28 @@ class IdempotentEffect(models.Model):
 class IdempotentCreateView(APIView):
     """Endpoint mẫu dùng `Idempotency-Key` như checkout: claim, ghi tác động, lưu kết quả.
 
-    Body có `fail_after_effect` thì ném lỗi nghiệp vụ sau khi đã ghi tác động.
+    Body có `fail_after_effect` thì ném lỗi nghiệp vụ sau khi đã ghi tác động,
+    `fail_after_complete` thì ném sau khi đã lưu kết quả, cùng transaction.
     """
 
     permission_classes = (AllowAny,)
 
     def post(self, request: Request, code: str) -> Response:
         outcome = idempotency.begin(request)
-        if not isinstance(outcome, idempotency.Claim):
-            return outcome.response()
+        if not isinstance(outcome, Claim):
+            return idempotency.response(outcome)
         with outcome, transaction.atomic():
             effect = IdempotentEffect.objects.create(note=str(request.data.get("note", "")))
             if request.data.get("fail_after_effect"):
                 raise OutOfStock
             body = {"effect_id": str(effect.pk), "operation_id": str(outcome.operation_id)}
             outcome.complete(201, body)
+            if request.data.get("fail_after_complete"):
+                raise OutOfStock
         return Response(body, status=201)
+
+    # Cùng luồng với POST, để test scope tách theo method
+    put = post
 
 
 def suspicious_view(request: HttpRequest) -> HttpResponse:

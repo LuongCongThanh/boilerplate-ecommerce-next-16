@@ -9,7 +9,7 @@ from django.db import transaction
 from kombu.exceptions import OperationalError
 
 from config.celery import app
-from shared.api import idempotency
+from shared import idempotency
 from shared.events import operations
 
 logger = structlog.get_logger(__name__)
