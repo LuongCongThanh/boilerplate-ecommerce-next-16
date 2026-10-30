@@ -22,6 +22,14 @@ PROTECTED = {"uat", "main"}
 VALUE_FLAGS = {"-t", "--subject", "-b", "--body", "-F", "--body-file", "-A", "--author-email",
                "--match-head-commit", "-R", "--repo"}
 SEGMENT = r"([^;&|\n]*)"
+# chỉ bắt ở vị trí lệnh: đầu dòng hoặc sau ; & | (, có thể có gán biến đứng trước (GH_TOKEN="…")
+AT_COMMAND = r"(?:^|[;&|(])\s*(?:\w+=(?:\"[^\"]*\"|'[^']*'|\S+)\s+)*"
+HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
+
+
+def strip_heredocs(command: str) -> str:
+    """Thân heredoc là dữ liệu (thân PR, message), không phải lệnh."""
+    return HEREDOC.sub("<<HEREDOC", command)
 
 
 def tokens(raw: str) -> list[str]:
@@ -68,12 +76,13 @@ def push_problem(args: list[str]) -> str | None:
 
 
 def check(command: str) -> str | None:
-    for raw in re.findall(r"\bgh\s+pr\s+merge\b" + SEGMENT, command):
+    command = strip_heredocs(command)
+    for raw in re.findall(AT_COMMAND + r"gh\s+pr\s+merge\b" + SEGMENT, command, re.M):
         if problem := merge_problem(tokens(raw)):
             return problem
-    if re.search(r"\bgh\s+api\b[^;&|\n]*pulls/\d+/merge\b", command):
+    if re.search(AT_COMMAND + r"gh\s+api\b[^;&|\n]*pulls/\d+/merge\b", command, re.M):
         return "merge PR qua `gh api`: dùng `gh pr merge` để hook kiểm base"
-    for raw in re.findall(r"\bgit\s+push\b" + SEGMENT, command):
+    for raw in re.findall(AT_COMMAND + r"git\s+push\b" + SEGMENT, command, re.M):
         if problem := push_problem(tokens(raw)):
             return problem
     return None
