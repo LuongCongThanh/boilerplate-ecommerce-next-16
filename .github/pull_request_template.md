@@ -10,7 +10,9 @@
 
 ## 📌 Summary
 
-<!-- Làm gì và vì sao -->
+**Vấn đề:** <!-- Vì sao cần PR này: lỗi gì, thiếu gì, ticket yêu cầu gì. Người đọc không mở ticket vẫn hiểu -->
+
+**Giải pháp:** <!-- Làm gì, theo cách nào, và vì sao chọn cách đó thay vì cách khác -->
 
 **Module:** <!-- identity, catalog, inventory, promotions, payments, shipping, ordering, notifications, shared -->
 
@@ -20,13 +22,37 @@
 
 ## 📋 Changes
 
+<!-- Mỗi dòng: file hoặc nhóm file → thay đổi → lý do. Gom theo hành vi, không liệt kê từng file nhỏ -->
+
 -
 -
 -
 
-## 🔌 API / Migration
+## 🔌 API / Migration / Cấu hình
 
-<!-- Endpoint thêm hoặc đổi, migration mới, biến môi trường mới. Ghi "Không" nếu không có -->
+<!-- Ghi "Không" cho mục không có -->
+
+- **Endpoint:** <!-- thêm / đổi / bỏ, kèm method và path -->
+- **Migration:** <!-- tên file, có đảo ngược được không -->
+- **Biến môi trường, lệnh `make`:** <!-- tên mới, giá trị mặc định, đã thêm vào `.env.example` chưa -->
+
+## 🧪 Cách kiểm
+
+- **Tự động:** <!-- test chứng minh từng acceptance criterion: `file::test`; số test, coverage -->
+- **Kiểm tay:** <!-- bước tái hiện và kết quả; "Không" nếu chỉ cần test tự động -->
+
+---
+
+## ⚠️ Gap và lưu ý
+
+<!-- Bắt buộc. Mục nào không có thì ghi "Không", đừng xoá mục -->
+
+- **Chưa làm:** <!-- phần của ticket còn thiếu, lý do; acceptance criterion chưa kiểm được -->
+- **Gap / rủi ro:** <!-- chỗ tài liệu hoặc ticket sau phải xử lý, trường hợp biên chưa phủ, giới hạn đã biết -->
+- **Quyết định tạm:** <!-- cách làm tạm thời, khi nào cần quay lại -->
+- **Ticket mới:** <!-- việc ngoài phạm vi phát hiện được, đường dẫn ticket `needs-triage` -->
+- **Reviewer cần chú ý:** <!-- đoạn code khó, chỗ lệch tài liệu có lý do, thay đổi trong `shared/` -->
+- **Sau khi merge:** <!-- việc phải làm ở môi trường: chạy migrate, `make load-geo`, đặt biến môi trường; hoặc "Không" -->
 
 ---
 
@@ -40,13 +66,13 @@
 - [ ] 🔒 Security: không lộ secret, token, dữ liệu cá nhân thật trong code, log, test
 - [ ] ⚡ Performance: không có N+1 query (`django-zeal` không báo)
 - [ ] 📚 Docs: đã cập nhật GLOSSARY, business rules hoặc ADR nếu cần (hoặc N/A)
-- [ ] 💥 Breaking change: ghi rõ trong Notes và thêm `!` vào tiêu đề PR (hoặc N/A)
+- [ ] 💥 Breaking change: ghi rõ trong *Gap và lưu ý* và thêm `!` vào tiêu đề PR (hoặc N/A)
 
 ---
 
 ## 💬 Notes
 
-<!-- Chỗ cần review kỹ, cách test thủ công, phụ thuộc -->
+<!-- Thêm nếu có: kết luận review, bảng commit → task, link liên quan -->
 
 ---
 
