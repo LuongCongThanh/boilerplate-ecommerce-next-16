@@ -10,7 +10,7 @@ Mục tiêu: sau PR này, `docs/` và `.scratch/` mô tả đúng code trên nh�
    - `08-local-development.md`: lệnh `make` (bảng ở mục 3), biến môi trường (mục 2.3), `.env.example`.
    - `12-testing-strategy.md`: marker, fixture, cổng chặn CI.
 3. **Domain.** Thuật ngữ mới → `GLOSSARY.md`; quyết định kiến trúc lâu dài → ADR; cả hai qua `mattpocock-skills:domain-modeling`.
-4. **Ticket.** `## Quyết định` khớp code cuối cùng (chữ ký hàm, hành vi đổi khi review). Việc ngoài phạm vi phát hiện được → ticket mới `needs-triage`.
+4. **Ticket.** `## Quyết định` khớp code cuối cùng (chữ ký hàm, hành vi đổi khi review). Việc ngoài phạm vi phát hiện được → backlog theo `reference/rules.md` (*Phạm vi*).
 5. **Code nhỏ cùng loại**: thứ phase này lộ ra trong phạm vi ticket (tên lệch tài liệu đã chốt, comment sai) thì sửa code, chạy lại test liên quan.
 6. Ghi mục *Tài liệu đã cập nhật* và làm mới mục *Commit* của báo cáo (`commit_map.py <T> --md`), rồi commit tài liệu, code nhỏ của bước 5 và ticket trong một lần: `commit.py <T> --task sync -m "docs: sync docs and report for <chủ đề> ticket" -- <file>…`.
 7. **Check cuối**: `make lint`, `make test` qua `run_logged.py`, `check_ac_trace.py`, `check_ship.py <T>`. Mỗi dòng `WARN` / `FAIL` là một điểm của G2.

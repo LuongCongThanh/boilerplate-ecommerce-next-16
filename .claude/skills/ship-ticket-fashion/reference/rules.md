@@ -1,6 +1,6 @@
 # Quy tắc (mọi phase)
 
-- **Phạm vi = acceptance criteria + điều người dùng yêu cầu.** Chỉ sửa code mà một AC, mục `## Việc cần làm` hoặc mục `## Quyết định` của ticket đòi hỏi. Người dùng yêu cầu thêm thì làm, ghi vào `userRequested` của state và mục *Thay đổi theo yêu cầu* của báo cáo, test như một AC. Việc tốt nhưng ngoài phạm vi → ticket mới `needs-triage` cùng feature, số tiếp theo.
+- **Phạm vi = acceptance criteria + điều người dùng yêu cầu.** Chỉ sửa code mà một AC, mục `## Việc cần làm` hoặc mục `## Quyết định` của ticket đòi hỏi. Người dùng yêu cầu thêm thì làm, ghi vào `userRequested` của state và mục *Thay đổi theo yêu cầu* của báo cáo, test như một AC. Việc tốt nhưng ngoài phạm vi → một dòng trong `.scratch/backlog.md`; chỉ thành ticket `needs-triage` (cùng feature, số tiếp theo) khi nó chặn mốc đang làm hoặc mốc kế tiếp, và ticket ghi mốc bị chặn.
 - **`docs/` là nguồn chuẩn** (đã chốt cho MVP): code làm theo tài liệu. *Tài liệu chi phối* của một file code là các mục quy định cách viết nó: `docs/architecture/` (bản đồ ở `docs/architecture/README.md`), quy tắc trong `docs/business/`, ADR trong `docs/adr/`. Phase 1 ghi chúng vào `## Quyết định`; code và review đối chiếu với chúng. Ticket cố ý làm khác tài liệu → ghi lý do trong `## Quyết định`, sửa tài liệu trong cùng PR ở phase 5.
 - **Mỗi loại kiến thức một chỗ.**
   - Quyết định của ticket → `## Quyết định` của ticket (bảng Chủ đề | Quyết định).
