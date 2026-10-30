@@ -4,7 +4,7 @@ Full: một sub-agent cho mỗi slice, theo thứ tự DAG (`dependsOn` xong h�
 
 ## Trong một slice
 
-1. `state.py set <T> slices.<id>.status=code currentSlice=<id>`. Đọc các mục *tài liệu chi phối* (dòng đầu `## Quyết định`) của file slice sẽ đổi: code theo đúng tên, cấu trúc, quy ước ở đó.
+1. `state.py set <T> slices.<id>.status=code currentSlice=<id>`. Đọc các mục *tài liệu chi phối* (dòng đầu `## Quyết định`) của file slice sẽ đổi và `CONTRIBUTING.md` mục *Quy ước code*: code theo đúng tên, cấu trúc, quy ước ở đó.
 2. `mattpocock-skills:tdd`, chỉ test ở seam của slice. Mỗi vòng: viết một test, chạy `uv run pytest <file>::<test> -x` trong `backend/` và thấy nó _red_ đúng lý do (assert sai, không phải lỗi import), viết code tối thiểu cho _green_, lặp lại.
 3. Test đỏ không thuộc slice → chứng minh nó đỏ trên `origin/dev` (`reference/rules.md` → *Test*), ghi `notes`, làm tiếp.
 4. Cần migration → `uv run python manage.py makemigrations <app>` và đọc lại file sinh ra; migration phải đảo ngược được (`docs/architecture/12-testing-strategy.md` mục 6).

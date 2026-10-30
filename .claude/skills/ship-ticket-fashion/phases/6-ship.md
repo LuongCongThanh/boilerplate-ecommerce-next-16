@@ -64,7 +64,15 @@ Comment gắn vào dòng code (bot, reviewer) không nằm trong `comments` ở 
 GH_TOKEN="$(gh auth token --user LuongCongThanh)" gh api repos/LuongCongThanh/fashion-store-backend/pulls/<số>/comments --jq '.[] | "\(.path):\(.line) \(.user.login): \(.body)"'
 ```
 
-SonarCloud số khác 0 → nhờ người dùng dán danh sách issue từ link dashboard trong comment, xử lý từng issue như finding *sửa* của phase 4 và ghi vào *Thay đổi theo yêu cầu* của báo cáo.
+SonarCloud số khác 0 → lấy danh sách issue từ annotation của check-run (project Sonar private nên API của Sonar trả 0 issue):
+
+```bash
+export GH_TOKEN="$(gh auth token --user LuongCongThanh)"; sha=$(gh pr view <số> --json headRefOid -q .headRefOid)
+id=$(gh api repos/LuongCongThanh/fashion-store-backend/commits/$sha/check-runs --jq '.check_runs[] | select(.name=="SonarCloud Code Analysis") | .id')
+gh api repos/LuongCongThanh/fashion-store-backend/check-runs/$id/annotations --jq '.[] | "\(.path):\(.start_line) \(.title)"'
+```
+
+Xử lý từng issue như finding *sửa* của phase 4 và ghi vào *Thay đổi theo yêu cầu* của báo cáo. Issue thuộc một quy ước code chưa có trong `CONTRIBUTING.md` mục *Quy ước code* → đề xuất thêm ở retro.
 
 Mỗi lần push thêm vào PR đã mở: cập nhật thân PR (`gh pr edit <số> -F .git/PR_BODY.md`) và thêm comment tóm tắt đã sửa gì (`gh pr comment <số> -F <file>`).
 
