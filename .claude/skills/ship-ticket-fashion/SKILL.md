@@ -29,8 +29,8 @@ Mọi tin nhắn cho người dùng viết tiếng Việt. Mỗi lần chạy đ
 
 | # | Phase | File | Skill (`mattpocock-skills:`) | Kết quả |
 | --- | --- | --- | --- | --- |
-| 0 | plan | `phases/0-plan.md` | `grill-with-docs`, `to-spec`, `to-tickets` | spec + ticket của mốc mới |
-| 1 | grill | `phases/1-grill.md` | `grill-with-docs`; `codebase-design` khi có module / interface mới | nhánh, *spec* + *plan* đã commit, ⛔G1 |
+| 0 | plan | `phases/0-plan.md` | `grilling`, `to-spec`, `to-tickets` | spec + ticket của mốc mới |
+| 1 | grill | `phases/1-grill.md` | `grilling`; `codebase-design` khi có module / interface mới | nhánh, *spec* + *plan* đã commit, ⛔G1 |
 | 2 | code | `phases/2-code.md` | `tdd` | mọi slice xanh, mỗi slice một commit |
 | 3 | report | `phases/3-report.md` | — | *report* trong ticket (commit ở sync) |
 | 4 | review | `phases/4-review.md` | `code-review`; `code-review` dựng sẵn (trục Bug) | mọi finding có kết luận |

@@ -6,13 +6,14 @@ python -m unittest discover -s .claude/skills/ship-ticket-fashion/scripts
 # ruff: noqa: PT009, PT027
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
 
 from check_ac_trace import test_exists, trace
-from check_ship import check_dirty, check_subjects, diff_size, dirty_paths
+from check_ship import check_dirty, check_subjects, diff_size, dirty_paths, porcelain_z
 from close_ticket import close
 from commit import check_task, message
 from commit_map import parse_log, problems, render
@@ -313,6 +314,20 @@ class PlanAndCommits(unittest.TestCase):
         raw = f" M {REF}\0R  new.md\0old.md\0?? .scratch/f/issues/02-á.md\0"
         self.assertEqual(dirty_paths(raw), [REF, "new.md", ".scratch/f/issues/02-á.md"])
         self.assertEqual(dirty_paths(""), [])
+
+    def test_porcelain_keeps_leading_space_of_first_entry(self):
+        # strip() từng cắt dấu cách của " M " đầu tiên, làm ticket dirty thành FAIL nhầm
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            setup = (["init", "-q"], ["config", "user.email", "t@t"], ["config", "user.name", "t"])
+            for args in setup:
+                subprocess.run(["git", "-C", tmp, *args], check=True)
+            (repo / ".scratch").mkdir()
+            (repo / ".scratch" / "t.md").write_text("a", encoding="utf-8")
+            subprocess.run(["git", "-C", tmp, "add", "."], check=True)
+            subprocess.run(["git", "-C", tmp, "commit", "-qm", "init"], check=True)
+            (repo / ".scratch" / "t.md").write_text("b", encoding="utf-8")
+            self.assertEqual(dirty_paths(porcelain_z(repo)), [".scratch/t.md"])
 
     def test_missing_task_is_one_fail_not_also_a_duplicate(self):
         found = problems([commit("", "a1"), commit("", "b2")], REF)

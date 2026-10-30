@@ -9,9 +9,12 @@ import subprocess
 from pathlib import Path
 
 
-def git(*args: str) -> str:
+def git(*args: str, strip: bool = True) -> str:
+    """stdout của git, rỗng khi lỗi. Porcelain cần `strip=False`: dấu cách đầu là mã trạng thái."""
     out = subprocess.run(["git", *args], capture_output=True, text=True, encoding="utf-8")
-    return out.stdout.strip() if out.returncode == 0 else ""
+    if out.returncode != 0:
+        return ""
+    return out.stdout.strip() if strip else out.stdout
 
 
 def repo_root() -> Path:

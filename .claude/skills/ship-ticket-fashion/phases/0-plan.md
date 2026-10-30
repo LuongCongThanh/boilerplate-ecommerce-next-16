@@ -6,7 +6,7 @@ Dùng khi frontier của mốc hiện tại rỗng hoặc sắp rỗng, người
 
 1. Lấy dòng của mốc trong bảng **Notes** của `map.md`: thư mục, nội dung, user story, điều kiện "Xong khi". `progress.py` in những mốc chưa có thư mục.
 2. Sub-agent `Explore` đọc và tóm tắt: các user story đó trong `docs/business/03-user-stories.md`, quy tắc liên quan trong `04-business-rules.md` và `05-order-lifecycle.md`, các tài liệu architecture và ADR của module chạm tới, code `backend/shared` hiện có.
-3. `mattpocock-skills:grill-with-docs` để chốt phạm vi và quyết định.
+3. `mattpocock-skills:grilling` để chốt phạm vi và quyết định.
 4. `mattpocock-skills:to-spec` → `.scratch/<slug>/spec.md`, cùng khung với `.scratch/backend-bootstrap/spec.md`: Bối cảnh, Phạm vi, Quyết định, Ticket (danh sách theo thứ tự làm, `progress.py` dùng thứ tự này cho frontier), Ngoài phạm vi.
 5. `mattpocock-skills:to-tickets` → `.scratch/<slug>/issues/NN-<slug>.md` theo khung dưới.
 

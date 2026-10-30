@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from pathlib import Path
 
 from commit_map import problems, read_commits
 from common import git, load_state, repo_root, resolve, ticket_ref
@@ -32,6 +33,11 @@ def diff_size(numstat: str) -> int:
             continue
         total += int(added) + int(deleted)
     return total
+
+
+def porcelain_z(root: Path) -> str:
+    """`git status --porcelain -z` của repo."""
+    return git("-C", str(root), "status", "--porcelain", "-z", strip=False)
 
 
 def dirty_paths(porcelain_z: str) -> list[str]:
@@ -105,8 +111,7 @@ def main() -> int:
         results.append(("FAIL", f"nhánh {branch} khác nhánh của state {state.get('branch')}"))
     results.append(("OK" if BRANCH.match(branch) else "WARN", f"tên nhánh {branch}"))
 
-    porcelain = git("-C", str(repo_root()), "status", "--porcelain", "-z")
-    results.extend(check_dirty(dirty_paths(porcelain), ticket_ref(ticket)))
+    results.extend(check_dirty(dirty_paths(porcelain_z(repo_root())), ticket_ref(ticket)))
 
     # git() trả "" khi lỗi: thiếu origin/dev thì mọi phép so sánh bên dưới thành 0 và báo OK sai.
     if not git("rev-parse", "--verify", "--quiet", "origin/dev"):

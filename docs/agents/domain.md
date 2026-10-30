@@ -8,7 +8,7 @@ Cách các skill engineering đọc tài liệu domain của repo khi tìm hiể
 - **`docs/adr/`**: đọc các ADR liên quan tới khu vực sắp làm.
 - Khi việc đang làm chạm tới quy tắc nghiệp vụ hoặc vòng đời Đơn hàng, đọc thêm `docs/business/04-business-rules.md` và `docs/business/05-order-lifecycle.md`.
 
-Nếu file nào chưa có thì **bỏ qua, không báo**. Không đề xuất tạo trước. Skill `/domain-modeling` (gọi qua `/grill-with-docs` và `/improve-codebase-architecture`) tạo chúng khi thuật ngữ hoặc quyết định thực sự được chốt.
+Nếu file nào chưa có thì **bỏ qua, không báo**. Không đề xuất tạo trước. Skill `/domain-modeling` (gọi qua `/grilling` và `/improve-codebase-architecture`) tạo chúng khi thuật ngữ hoặc quyết định thực sự được chốt.
 
 ## Cấu trúc
 
