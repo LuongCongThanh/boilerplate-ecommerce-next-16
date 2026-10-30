@@ -6,15 +6,15 @@ from typing import Any
 import pytest
 import time_machine
 from django.db import connection
-from django.utils import timezone
 from structlog.testing import capture_logs
 
-from shared.events import handles, publish
+from shared.events import handles
 from shared.events.consumer import RETRY_DELAYS, process_delivery
-from shared.events.models import EventDelivery, OutboxEvent
+from shared.events.models import EventDelivery
 from shared.events.tasks import dispatch_event
 from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
 from shared.exceptions import DomainError, RetryLater
+from shared.testing.factories import EventDeliveryFactory, OutboxEventFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -34,16 +34,6 @@ class Boom(Exception):
     pass
 
 
-def _publish() -> OutboxEvent:
-    return publish(SampleHappenedV1(order_code=ORDER_CODE, amount=250000))
-
-
-def _delivery(event: OutboxEvent, handler: str, **fields: Any) -> EventDelivery:
-    now = timezone.now()
-    defaults: dict[str, Any] = {"next_attempt_at": now, "next_dispatch_at": now}
-    return EventDelivery.objects.create(event=event, handler=handler, **(defaults | fields))
-
-
 def _record(effects: type[HandlerEffect], handler: str, event: SampleHappenedV1) -> None:
     effects.objects.create(handler=handler, order_code=event.order_code)
 
@@ -59,8 +49,8 @@ def test_success_commits_effect_and_completed(
         received.append(event)
         _record(handler_effect_table, "shared.record_effect", event)
 
-    event_row = _publish()
-    delivery = _delivery(event_row, "shared.record_effect")
+    event_row = OutboxEventFactory.create()
+    delivery = EventDeliveryFactory.create(event=event_row, handler="shared.record_effect")
 
     # Đi qua task Celery thật (eager trong test) như relay giao
     dispatch_event.apply_async(args=(str(event_row.id), "shared.record_effect"), queue="events")
@@ -90,7 +80,7 @@ def test_retry_later_keeps_pending_with_schedule(
         _record(handler_effect_table, "shared.wait_for_source", event)
         raise TransitionNotYetValid
 
-    delivery = _delivery(_publish(), "shared.wait_for_source", attempts=2)
+    delivery = EventDeliveryFactory.create(handler="shared.wait_for_source", attempts=2)
 
     process_delivery(delivery.event_id, "shared.wait_for_source")
 
@@ -113,7 +103,7 @@ def test_exception_rolls_back_handler_and_schedules_retry(
         _record(handler_effect_table, "shared.crash", event)
         raise Boom("khach@example.com")
 
-    delivery = _delivery(_publish(), "shared.crash")
+    delivery = EventDeliveryFactory.create(handler="shared.crash")
 
     with capture_logs() as logs:
         process_delivery(delivery.event_id, "shared.crash")
@@ -135,7 +125,7 @@ def test_exhausted_retries_mark_failed() -> None:
     def never_ready(event: SampleHappenedV1) -> None:
         raise TransitionNotYetValid
 
-    delivery = _delivery(_publish(), "shared.never_ready", attempts=len(RETRY_DELAYS))
+    delivery = EventDeliveryFactory.create(handler="shared.never_ready", attempts=len(RETRY_DELAYS))
 
     with capture_logs() as logs:
         process_delivery(delivery.event_id, "shared.never_ready")
@@ -160,7 +150,7 @@ def test_domain_error_rejects_without_retry(
         _record(handler_effect_table, "shared.reject", event)
         raise InvalidTransition
 
-    delivery = _delivery(_publish(), "shared.reject")
+    delivery = EventDeliveryFactory.create(handler="shared.reject")
 
     with capture_logs() as logs:
         process_delivery(delivery.event_id, "shared.reject")
@@ -195,9 +185,9 @@ def test_failing_handler_does_not_affect_other_handler(
         _record(handler_effect_table, "shared.crash", event)
         raise Boom
 
-    event_row = _publish()
-    ok = _delivery(event_row, "shared.record_effect")
-    failing = _delivery(event_row, "shared.crash")
+    event_row = OutboxEventFactory.create()
+    ok = EventDeliveryFactory.create(event=event_row, handler="shared.record_effect")
+    failing = EventDeliveryFactory.create(event=event_row, handler="shared.crash")
 
     # Mỗi cặp sự kiện-handler là một task riêng; thứ tự lỗi trước không ảnh hưởng
     dispatch_event.delay(str(event_row.id), "shared.crash")
@@ -229,7 +219,7 @@ def test_skips_finished_delivery(fields: dict[str, Any]) -> None:
     def record_call(event: SampleHappenedV1) -> None:
         calls.append(event)
 
-    delivery = _delivery(_publish(), "shared.record_call", **fields)
+    delivery = EventDeliveryFactory.create(handler="shared.record_call", **fields)
 
     process_delivery(delivery.event_id, "shared.record_call")
 
@@ -249,9 +239,8 @@ def test_skips_before_next_attempt_at() -> None:
 
     retry_at = NOW + timedelta(seconds=10)
     # Task tới sớm (giao trùng hoặc relay cũ) trước hạn retry đã lưu
-    delivery = _delivery(
-        _publish(),
-        "shared.record_call",
+    delivery = EventDeliveryFactory.create(
+        handler="shared.record_call",
         attempts=1,
         next_attempt_at=retry_at,
         next_dispatch_at=NOW,
@@ -268,7 +257,7 @@ def test_skips_before_next_attempt_at() -> None:
 
 @time_machine.travel(NOW, tick=False)
 def test_missing_handler_keeps_pending_without_attempt() -> None:
-    delivery = _delivery(_publish(), "shared.removed_handler")
+    delivery = EventDeliveryFactory.create(handler="shared.removed_handler")
 
     with capture_logs() as logs:
         process_delivery(delivery.event_id, "shared.removed_handler")
@@ -294,7 +283,7 @@ def test_concurrent_duplicate_dispatch_commits_once(
         # Giữ khoá delivery đủ lâu để task trùng phải chờ tới khi commit
         time.sleep(0.2)
 
-    delivery = _delivery(_publish(), "shared.record_effect")
+    delivery = EventDeliveryFactory.create(handler="shared.record_effect")
     barrier = threading.Barrier(2)
     errors: list[BaseException] = []
 

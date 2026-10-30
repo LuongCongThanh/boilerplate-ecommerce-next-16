@@ -36,11 +36,13 @@ def process_delivery(event_id: UUID | str, handler_name: str) -> None:
     `DatabaseError` ngoài savepoint của handler (kết nối hỏng) không bị bắt: toàn transaction
     rollback, relay giao lại theo `next_dispatch_at` đã lưu.
     """
+    # Task Celery truyền chuỗi; chuẩn hoá về UUID đúng kiểu của khoá ngoại
+    event_uuid = event_id if isinstance(event_id, UUID) else UUID(event_id)
     with transaction.atomic():
         delivery = (
             EventDelivery.objects.select_for_update(of=("self",))
             .select_related("event")
-            .filter(event_id=event_id, handler=handler_name)
+            .filter(event_id=event_uuid, handler=handler_name)
             .first()
         )
         now = timezone.now()

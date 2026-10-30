@@ -16,7 +16,8 @@ fmt:
 	uv run ruff format .
 	uv run ruff check --fix .
 
-# Service migrate chạy migrate và sync_beat_schedule trước khi worker, beat khởi động (08 mục 7)
+# Service migrate chạy migrate và sync_beat_schedule trước khi worker, beat, relay khởi động
+# (08 mục 7)
 up:
 	docker compose up -d --build
 
@@ -27,9 +28,9 @@ down:
 run:
 	uv run python manage.py runserver
 
-# Celery không tự reload: chạy sau khi sửa code
+# Celery và relay không tự reload: chạy sau khi sửa code
 restart-worker:
-	docker compose restart worker beat
+	docker compose restart worker beat relay
 
 # make logs s=worker
 logs:

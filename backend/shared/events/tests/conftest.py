@@ -1,6 +1,7 @@
 """Sự kiện mẫu, registry cô lập và model test-only cho test của `shared.events`."""
 
 from collections.abc import Iterator
+from typing import ClassVar
 
 import pytest
 from django.db import connection, models
@@ -22,6 +23,9 @@ class HandlerEffect(models.Model):
 
     handler = models.CharField(max_length=100)
     order_code = models.CharField(max_length=32)
+
+    # Khai báo tường minh để mypy thấy manager khi model đi qua tham số `type[HandlerEffect]`
+    objects: ClassVar[models.Manager[HandlerEffect]] = models.Manager()
 
     class Meta:
         app_label = "shared"

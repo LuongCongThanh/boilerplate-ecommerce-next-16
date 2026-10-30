@@ -62,7 +62,9 @@ def test_handles_rejects_duplicate_name() -> None:
         @handles("shared.sample-happened", version=1, name="shared.record_sample")
         def second(event: SampleHappenedV1) -> None: ...
 
-    assert registry.get_handler("shared.record_sample").func is first
+    registered = registry.get_handler("shared.record_sample")
+    assert registered is not None
+    assert registered.func is first
     assert [h.name for h in registry.handlers_for("shared.sample-happened", 1)] == [
         "shared.record_sample"
     ]

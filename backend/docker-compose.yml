@@ -1,6 +1,6 @@
 # Worker, beat, Redis, Mailpit cho local (08 mục 7). Không có service postgres (ADR 0015)
 # và không có service api: API chạy trên máy bằng `make run` (ADR 0017).
-# Service relay thêm ở ticket 10, cùng lúc với lệnh run_outbox_relay.
+# Service relay chạy outbox relay (07 mục 1.1.1), độc lập với Celery Beat.
 
 # Tên project cố định: mặc định là tên thư mục (backend), dễ trùng container của project khác
 name: fashion
@@ -13,7 +13,7 @@ x-container-env: &container-env
   EMAIL_HOST: mailpit
 
 x-base: &base
-  # Đặt tên image chung: migrate, worker, beat dùng một image thay vì Compose build ba lần
+  # Đặt tên image chung: migrate, worker, beat, relay dùng một image thay vì Compose build nhiều lần
   image: fashion-backend
   build: .
   env_file: .env
@@ -27,7 +27,7 @@ x-app: &app
   <<: *base
   depends_on:
     redis: {condition: service_started}
-    # beat cần bảng django_celery_beat; relay (ticket 10) cần bảng outbox
+    # beat cần bảng django_celery_beat; relay cần bảng outbox
     migrate: {condition: service_completed_successfully}
 
 services:
@@ -45,6 +45,11 @@ services:
     <<: *app
     # Scheduler lấy từ CELERY_BEAT_SCHEDULER trong config/settings/base.py
     command: celery -A config beat -l info
+
+  relay:
+    <<: *app
+    # Lặp mỗi giây; lỗi DB/broker chỉ log rồi thử lại, nên không khởi động lại liên tục
+    command: python manage.py run_outbox_relay
 
   redis:
     # Cùng bản với service của CI
