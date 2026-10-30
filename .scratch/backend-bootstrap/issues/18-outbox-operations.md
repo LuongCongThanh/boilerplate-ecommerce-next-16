@@ -1,6 +1,8 @@
 # Lệnh vận hành và theo dõi outbox
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #38
 
 Blocked by: 10
 
@@ -48,16 +50,16 @@ Commit dự kiến: `plan` → `S1` → `S2` → `S3` → `S4` → `R1 (khi revi
 
 ## Acceptance criteria
 
-- [ ] `retry_failed_events` mở lại delivery `failed` và lần chạy sau thành công.
-- [ ] Purge không xoá sự kiện còn delivery `pending` hoặc `failed`.
-- [ ] `get_delivery_outcomes` trả đúng trạng thái của từng handler được hỏi.
-- [ ] Các kịch bản ở [07 mục 5](../../../docs/architecture/07-async-events-jobs.md#5-kịch-bản-kiểm-thử) về lệnh vận hành và purge đều có test.
+- [x] `retry_failed_events` mở lại delivery `failed` và lần chạy sau thành công.
+- [x] Purge không xoá sự kiện còn delivery `pending` hoặc `failed`.
+- [x] `get_delivery_outcomes` trả đúng trạng thái của từng handler được hỏi.
+- [x] Các kịch bản ở [07 mục 5](../../../docs/architecture/07-async-events-jobs.md#5-kịch-bản-kiểm-thử) về lệnh vận hành và purge đều có test.
 
 ## Comments
 
 ### Báo cáo 30/10/2026
 
-**Nhánh:** `feat/outbox-operations` · **PR:** chưa mở · **Mode:** full
+**Nhánh:** `feat/outbox-operations` · **PR:** #38 · **Mode:** full
 
 #### Đã làm
 
