@@ -193,7 +193,8 @@ def test_filters_select_only_matching_pairs() -> None:
 
     untouched[2].refresh_from_db()
     assert untouched[2].status == DeliveryStatus.PENDING
-    assert EventDelivery.objects.filter(status=DeliveryStatus.FAILED).count() == 2
+    still_failed = EventDelivery.objects.filter(status=DeliveryStatus.FAILED).count()
+    assert still_failed == 2
 
 
 def test_requires_a_filter() -> None:

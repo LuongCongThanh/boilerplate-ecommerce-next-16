@@ -97,7 +97,8 @@ def test_purge_respects_retention_boundary() -> None:
     purge_old_outbox_events()
 
     # Chỉ xoá sự kiện quá 90 ngày, đúng 90 ngày thì còn giữ
-    assert operations.OUTBOX_RETENTION == timedelta(days=90)  # noqa: SIM300 (CONTRIBUTING: actual == expected)
+    retention = operations.OUTBOX_RETENTION
+    assert retention == timedelta(days=90)
     assert list(OutboxEvent.objects.values_list("id", flat=True)) == [at_boundary.id]
 
 

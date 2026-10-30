@@ -80,11 +80,10 @@ Commit dự kiến: `plan` → `S1` → `S2` → `S3` → `S4` → `R1 (khi revi
 
 - `replay_events --since` không ghi múi giờ thì hiểu theo `TIME_ZONE` (Asia/Ho_Chi_Minh); ghi vào 07 ở phase sync.
 - Delivery mồ côi đẩy `delivery_lag` lên mãi, purge quét toàn bảng khi tồn đọng lớn, `occurred_at` thay cho giờ ghi DB, `retry_failed_events --all` không chia lô: ticket [28](./28-outbox-operations-hardening.md) (`needs-triage`).
-- `test_purge.py` có `# noqa: SIM300`: ruff coi `OUTBOX_RETENTION` là hằng và đòi đặt nó ở vế trái, trái quy ước `actual == expected` của CONTRIBUTING.
 
 #### Thay đổi theo yêu cầu
 
-- Không
+- 30/10/2026, SonarCloud `test_purge.py:47`, `test_retry_failed_events.py:53` (trộn hai thứ tự đối số assert trong một file): vế trái bắt đầu bằng tên viết hoa (`operations.OUTBOX_RETENTION`, `EventDelivery.objects…`) bị coi là giá trị kỳ vọng; gán vào biến thường rồi assert `actual == expected`, bỏ `# noqa: SIM300`. Hành vi test không đổi.
 
 #### Review
 
