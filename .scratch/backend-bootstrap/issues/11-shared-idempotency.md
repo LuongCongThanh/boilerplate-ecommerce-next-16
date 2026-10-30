@@ -1,6 +1,8 @@
 # Xử lý header `Idempotency-Key`
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #40
 
 Blocked by: 16
 
@@ -46,18 +48,18 @@ Commit dự kiến: `plan` → `S1` → `S2` → `S3` → `R1 (khi review cần 
 
 ## Acceptance criteria
 
-- [ ] Cùng key, cùng body: lần hai trả nguyên status và body đã lưu, không chạy lại tác động.
-- [ ] Cùng key, khác body: `409 IDEMPOTENCY_CONFLICT`.
-- [ ] Cùng key khi lần đầu còn xử lý: `202 IdempotencyPendingDTO` kèm `Retry-After`.
-- [ ] Tác động nghiệp vụ rollback thì key không ở trạng thái `completed`.
-- [ ] Cùng key nhưng khác danh tính không thấy kết quả của nhau.
-- [ ] Purge không xoá key `in_progress`.
+- [x] Cùng key, cùng body: lần hai trả nguyên status và body đã lưu, không chạy lại tác động.
+- [x] Cùng key, khác body: `409 IDEMPOTENCY_CONFLICT`.
+- [x] Cùng key khi lần đầu còn xử lý: `202 IdempotencyPendingDTO` kèm `Retry-After`.
+- [x] Tác động nghiệp vụ rollback thì key không ở trạng thái `completed`.
+- [x] Cùng key nhưng khác danh tính không thấy kết quả của nhau.
+- [x] Purge không xoá key `in_progress`.
 
 ## Comments
 
 ### Báo cáo 30/10/2026
 
-**Nhánh:** `feat/shared-idempotency` · **PR:** chưa mở · **Mode:** full
+**Nhánh:** `feat/shared-idempotency` · **PR:** #40 · **Mode:** full
 
 #### Đã làm
 
