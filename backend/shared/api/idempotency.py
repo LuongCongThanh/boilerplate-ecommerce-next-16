@@ -14,6 +14,7 @@ from datetime import timedelta
 from types import TracebackType
 from typing import Any, Self, cast
 
+import structlog
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -29,6 +30,11 @@ CART_HEADER = "X-Cart-Token"
 # Thời gian một worker giữ key đang xử lý trước khi worker khác được giành lại
 LEASE = timedelta(seconds=60)
 RETRY_AFTER_SECONDS = 3
+# Key `completed` giữ để replay trong khoảng này rồi job purge xoá (07 mục 3.2)
+RETENTION = timedelta(hours=24)
+PURGE_BATCH = 1000
+
+logger = structlog.get_logger(__name__)
 
 
 class IdempotencyConflict(DomainError):
@@ -154,6 +160,31 @@ def begin(request: Request) -> Claim | Replay | Pending:
         row.lease_expires_at = now + LEASE
         row.save(update_fields=["lease_token", "lease_expires_at", "updated_at"])
         return Claim(key_id=row.pk, operation_id=row.operation_id, lease_token=lease_token)
+
+
+def purge_idempotency_keys() -> int:
+    """Xoá key `completed` quá `RETENTION`; key `in_progress` chưa rõ kết quả nên luôn giữ.
+
+    Mỗi lô `PURGE_BATCH` key một transaction, lặp tới khi hết. Trả số key đã xoá.
+    """
+    cutoff = timezone.now() - RETENTION
+    purgeable = IdempotencyKey.objects.filter(
+        status=IdempotencyStatus.COMPLETED, completed_at__lt=cutoff
+    )
+    purged = 0
+    while True:
+        with transaction.atomic():
+            ids = list(
+                purgeable.select_for_update()
+                .order_by("id")
+                .values_list("id", flat=True)[:PURGE_BATCH]
+            )
+            if not ids:
+                break
+            deleted, _ = IdempotencyKey.objects.filter(id__in=ids).delete()
+        purged += deleted
+    logger.info("idempotency_keys_purged", count=purged)
+    return purged
 
 
 def _parse_key(request: Request) -> uuid.UUID:

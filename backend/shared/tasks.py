@@ -9,6 +9,7 @@ from django.db import transaction
 from kombu.exceptions import OperationalError
 
 from config.celery import app
+from shared.api import idempotency
 from shared.events import operations
 
 logger = structlog.get_logger(__name__)
@@ -38,3 +39,8 @@ def enqueue_on_commit(task_name: str, **kwargs: Any) -> None:
 @shared_task(name="shared.purge_old_outbox_events", queue="default")
 def purge_old_outbox_events() -> None:
     operations.purge_old_outbox_events()
+
+
+@shared_task(name="shared.purge_idempotency_keys", queue="default")
+def purge_idempotency_keys() -> None:
+    idempotency.purge_idempotency_keys()
