@@ -60,7 +60,7 @@ Lỗi phát hiện khi nghiệm thu trên `uat` được sửa bằng nhánh `fi
 ```
 
 - `<loại>`: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `hotfix`.
-- Tên nhánh không chứa mã ticket. Ticket là file trong `.scratch/` (xem [docs/agents/issue-tracker.md](../agents/issue-tracker.md)); đường dẫn ticket ghi trong mô tả PR và footer `Refs:` của commit.
+- Tên nhánh không chứa mã ticket. Ticket là thư mục trong `.scratch/` (xem [docs/agents/issue-tracker.md](../agents/issue-tracker.md)); đường dẫn ticket ghi trong mô tả PR và footer `Refs:` của commit.
 - `<mô-tả-ngắn>`: tiếng Anh, chữ thường, nối bằng dấu `-`, tối đa khoảng 5 từ.
 
 | ✅ Đúng | ❌ Sai |
@@ -77,7 +77,7 @@ Lỗi phát hiện khi nghiệm thu trên `uat` được sửa bằng nhánh `fi
 
 [thân: giải thích VÌ SAO, có thể nhiều dòng]
 
-[footer: BREAKING CHANGE: …, Refs: .scratch/checkout-cod/issues/02-reserve-stock.md]
+[footer: BREAKING CHANGE: …, Refs: .scratch/checkout-cod/issues/02-reserve-stock]
 ```
 
 ### 3.1. `type`
@@ -111,7 +111,7 @@ fix(payments): reject VNPay IPN when amount mismatches
 Previously the IPN handler trusted vnp_Amount. Now it compares against
 payments_payment.amount and responds RspCode 04 (BR-PAY-04).
 
-Refs: .scratch/vnpay-ipn/issues/01-check-amount.md
+Refs: .scratch/vnpay-ipn/issues/01-check-amount
 
 feat(ordering)!: split checkout and payment start into two endpoints
 

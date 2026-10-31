@@ -14,12 +14,12 @@ from pathlib import Path
 
 from check_ac_trace import test_exists, trace
 from check_ship import check_dirty, check_subjects, diff_size, dirty_paths, porcelain_z
-from close_ticket import close
+from close_ticket import close, fill_pr
 from commit import check_task, message
 from commit_map import parse_log, problems, render
+from common import resolve
 from plan import render as render_plan
-from plan import upsert
-from progress import Feature, frontier, parse_blocked, parse_ticket
+from progress import Feature, frontier, load_features, parse_blocked, parse_ticket
 from run_logged import make_recipe
 from state import apply, check_transition, hooks_installed, pick_active, plan_ready, validate
 
@@ -29,7 +29,7 @@ Status: ready-for-agent
 
 Blocked by: 09
 
-Spec: [spec.md](../spec.md)
+Spec: [spec.md](../../spec.md)
 
 ## Việc cần làm
 
@@ -39,8 +39,6 @@ Spec: [spec.md](../spec.md)
 
 - [ ] lỗi trả ErrorDTO
 - [x] page_size tối đa 100
-
-## Comments
 """
 
 
@@ -63,8 +61,9 @@ def make_state(**overrides) -> dict:
 class TicketParsing(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
-        self.path = self.dir / "16-shared-api.md"
-        self.path.write_text(TICKET, encoding="utf-8")
+        self.path = self.dir / "16-shared-api"
+        self.path.mkdir()
+        (self.path / "spec.md").write_text(TICKET, encoding="utf-8")
 
     def test_counts_only_acceptance_criteria(self):
         ticket = parse_ticket(self.path)
@@ -96,15 +95,24 @@ class TicketParsing(unittest.TestCase):
         self.assertIn("- [x] lỗi trả ErrorDTO", text)
         self.assertEqual(ticked, ["lỗi trả ErrorDTO"])
 
-    def test_close_adds_pr_line_even_when_report_says_not_opened(self):
-        report = (
-            "\n### Báo cáo 29/10/2026\n\n**Nhánh:** `feat/x` · **PR:** chưa mở · **Mode:** lite\n"
-        )
-        text, _, _ = close(TICKET + report, 31)
+    def test_close_fills_pr_in_report_and_adds_pr_line_to_spec(self):
+        report = "**Nhánh:** `feat/x` · **PR:** chưa mở · **Mode:** lite\n"
+        self.assertIn("· **PR:** #31 · **Mode:** lite", fill_pr(report, 31))
+        text, _, _ = close(TICKET, 31)
         self.assertIn("Status: resolved\n\n**PR:** #31", text)
-        self.assertIn("· **PR:** #31 · **Mode:** lite", text)
-        self.path.write_text(text, encoding="utf-8")
+        (self.path / "spec.md").write_text(text, encoding="utf-8")
         self.assertEqual(parse_ticket(self.path).pr, "#31")
+
+    def test_resolve_accepts_ticket_folder_or_file_inside_it(self):
+        issues = self.dir / ".scratch" / "f" / "issues"
+        issues.mkdir(parents=True)
+        self.path.rename(issues / "16-shared-api")
+        folder = issues / "16-shared-api"
+        features = load_features(self.dir)
+        self.assertEqual(list(features["f"].tickets), [16])
+        for arg in (folder, folder / "spec.md"):
+            feature, ticket = resolve(str(arg), features)
+            self.assertEqual((feature.slug, ticket.num, ticket.path), ("f", 16, folder))
 
     def test_close_keeps_existing_pr_line(self):
         text, _, _ = close(TICKET.replace("Status: ready-for-agent", "Status: x\n\n**PR:** #7"), 31)
@@ -241,7 +249,7 @@ class Checks(unittest.TestCase):
             make_recipe("up:\n\tdocker compose -f $(FILE) up\n", "up")
 
 
-REF = ".scratch/f/issues/01-x.md"
+REF = ".scratch/f/issues/01-x"
 
 
 def commit(task: str, sha: str = "a1", refs: str = REF) -> dict:
@@ -249,31 +257,23 @@ def commit(task: str, sha: str = "a1", refs: str = REF) -> dict:
 
 
 class PlanAndCommits(unittest.TestCase):
-    def test_code_needs_committed_spec_and_plan_in_ticket(self):
-        self.assertIn("## Quyết định, ## Kế hoạch", plan_ready(TICKET, ticket_dirty=False))
-        ready = TICKET.replace(
-            "## Acceptance", "## Quyết định\n\nx\n\n## Kế hoạch\n\ny\n\n## Acceptance"
-        )
-        self.assertIn("chưa commit", plan_ready(ready, ticket_dirty=True))
-        self.assertIsNone(plan_ready(ready, ticket_dirty=False))
+    def test_code_needs_committed_spec_and_plan_files(self):
+        self.assertIn("spec.md § Quyết định, plan.md", plan_ready(TICKET, None, ticket_dirty=False))
+        spec = TICKET.replace("## Acceptance", "## Quyết định\n\nx\n\n## Acceptance")
+        self.assertIn("plan.md", plan_ready(spec, "", ticket_dirty=False))
+        self.assertIn("chưa commit", plan_ready(spec, "# Kế hoạch", ticket_dirty=True))
+        self.assertIsNone(plan_ready(spec, "# Kế hoạch", ticket_dirty=False))
 
-    def test_plan_inserts_before_acceptance_criteria_then_replaces_itself(self):
+    def test_plan_renders_whole_plan_file(self):
         state = make_state(
             slices=[{"id": "S1", "acs": [1, 2], "seam": "APIClient", "tests": ["t.py::a"]}],
             untestable={"3": "cần Redis thật"},
         )
-        once = upsert(TICKET, render_plan(state))
-        self.assertLess(once.index("## Kế hoạch"), once.index("## Acceptance criteria"))
-        self.assertIn("| S1 | 1, 2 | APIClient | `t.py::a` | — | — |", once)
-        self.assertIn("`plan` → `S1` → `R1 (khi review cần sửa)` → `sync` → `close`", once)
-        state["slices"][0]["seam"] = "service"
-        twice = upsert(once, render_plan(state))
-        self.assertEqual(twice.count("## Kế hoạch"), 1)
-        self.assertEqual(upsert(twice, render_plan(state)), twice)
-        self.assertIn("`close`.\n\n## Acceptance criteria", twice)
-        self.assertIn("## Kế hoạch\n\nSinh", twice)
-        self.assertIn("| S1 | 1, 2 | service |", twice)
-        self.assertNotIn("APIClient", twice)
+        text = render_plan(state)
+        self.assertTrue(text.startswith("# Kế hoạch\n\nSinh"))
+        self.assertIn("| S1 | 1, 2 | APIClient | `t.py::a` | — | — |", text)
+        self.assertIn("AC 3 không test tự động: cần Redis thật", text)
+        self.assertIn("`plan` → `S1` → `R1 (khi review cần sửa)` → `sync` → `close`", text)
 
     def test_commit_message_carries_refs_and_task_trailers(self):
         msg = message("feat(shared): add x", "Vì sao.", REF, "S1")
@@ -314,8 +314,10 @@ class PlanAndCommits(unittest.TestCase):
         self.assertIn("| S1 | 2 code | 1, 3 | `a1` feat: S1 | 2 |", table)
 
     def test_dirty_ticket_alone_is_only_a_warning(self):
-        self.assertEqual(check_dirty([REF], REF)[0][0], "WARN")
-        self.assertEqual(check_dirty([REF, "backend/x.py"], REF)[0][0], "FAIL")
+        report = f"{REF}/report.md"
+        self.assertEqual(check_dirty([report, f"{REF}/spec.md"], REF)[0][0], "WARN")
+        self.assertEqual(check_dirty([report, "backend/x.py"], REF)[0][0], "FAIL")
+        self.assertEqual(check_dirty([f"{REF}y/spec.md"], REF)[0][0], "FAIL")
         self.assertEqual(check_dirty([], REF)[0][0], "OK")
 
     def test_dirty_paths_reads_porcelain_z_unquoted_and_skips_rename_source(self):
@@ -365,9 +367,9 @@ class CommitOnlyListedPaths(unittest.TestCase):
         run("init", "-q")
         run("config", "user.email", "t@t")
         run("config", "user.name", "t")
-        issues = repo / ".scratch" / "f" / "issues"
-        issues.mkdir(parents=True)
-        (issues / "01-x.md").write_text(TICKET, encoding="utf-8")
+        folder = repo / ".scratch" / "f" / "issues" / "01-x"
+        folder.mkdir(parents=True)
+        (folder / "spec.md").write_text(TICKET, encoding="utf-8")
         run("add", "-A")
         run("commit", "-qm", "chore: init")
         state_dir = repo / ".git" / "ship-ticket-fashion"

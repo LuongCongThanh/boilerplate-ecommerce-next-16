@@ -20,11 +20,12 @@ def state_path(feature: str, num: int) -> Path:
 
 
 def resolve(arg: str, features: dict[str, Feature] | None = None) -> tuple[Feature, Ticket]:
-    """`<feature>/<NN>`, `<NN>` hoặc đường dẫn ticket → (feature, ticket)."""
+    """`<feature>/<NN>`, `<NN>`, thư mục ticket hoặc một file trong nó → (feature, ticket)."""
     features = features if features is not None else load_features(repo_root())
     path = Path(arg)
-    if path.suffix == ".md" and path.exists():
-        feature, num = path.resolve().parent.parent.name, int(path.name.split("-", 1)[0])
+    if path.exists() and (path.is_dir() or path.suffix == ".md"):
+        folder = path.resolve() if path.is_dir() else path.resolve().parent
+        feature, num = folder.parent.parent.name, int(folder.name.split("-", 1)[0])
     elif "/" in arg:
         feature, _, raw = arg.partition("/")
         num = int(raw)
@@ -45,7 +46,7 @@ def resolve(arg: str, features: dict[str, Feature] | None = None) -> tuple[Featu
 
 
 def ticket_ref(ticket: Ticket) -> str:
-    """Đường dẫn ticket tính từ gốc repo, dạng dùng trong state và trailer `Refs:`."""
+    """Thư mục ticket tính từ gốc repo, dạng dùng trong state và trailer `Refs:`."""
     return ticket.path.relative_to(ticket.path.parents[3]).as_posix()
 
 

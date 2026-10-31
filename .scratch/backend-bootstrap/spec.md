@@ -29,22 +29,22 @@ Tài liệu `docs/` đã chốt cho MVP nhưng repo chưa có `backend/`. M0 d�
 
 Thứ tự làm theo số; `Blocked by` ghi ở đầu từng ticket.
 
-1. [`07-project-skeleton.md`](./issues/07-project-skeleton.md): pyproject, settings, health check, `make lint`/`test`/`fmt`, job CI `backend`.
-2. [`08-local-postgres-installer.md`](./issues/08-local-postgres-installer.md): bộ cài PostgreSQL trên Windows (`postgres.ps1`, không dùng WSL2); chặn 15.
-3. [`15-docker-compose-local.md`](./issues/15-docker-compose-local.md): Dockerfile, Compose, lệnh Makefile dùng container, `sync_beat_schedule`.
-4. [`09-shared-core.md`](./issues/09-shared-core.md): BaseModel, Money, phones, privacy, lỗi, logging, extension PostgreSQL.
-5. [`16-shared-api-layer.md`](./issues/16-shared-api-layer.md): `ErrorDTO`, pagination, permissions, `client_ip`, throttling, i18n.
-6. [`17-shared-geo.md`](./issues/17-shared-geo.md): địa giới hành chính, `load_geo`.
-7. [`10-shared-events-outbox.md`](./issues/10-shared-events-outbox.md): outbox, relay, consumer, retry.
-8. [`18-outbox-operations.md`](./issues/18-outbox-operations.md): lệnh vận hành và theo dõi outbox.
-9. [`11-shared-idempotency.md`](./issues/11-shared-idempotency.md): `Idempotency-Key`.
-10. [`12-account-bootstrap.md`](./issues/12-account-bootstrap.md): model Account và `create_staff`.
-11. Cổng chặn CI: [`01`](./issues/01-services-coverage-gate.md) coverage, [`02`](./issues/02-pytest-markers-and-br-report.md) marker, [`03`](./issues/03-openapi-schema-drift-check.md) OpenAPI drift, [`04`](./issues/04-import-linter-test-factories.md) `gen_importlinter.py` và import-linter.
-12. [`14-trivy-and-dependabot-backend.md`](./issues/14-trivy-and-dependabot-backend.md): quét image bằng trivy, xác nhận Dependabot cho `backend/`.
+1. [`07-project-skeleton.md`](./issues/07-project-skeleton/spec.md): pyproject, settings, health check, `make lint`/`test`/`fmt`, job CI `backend`.
+2. [`08-local-postgres-installer.md`](./issues/08-local-postgres-installer/spec.md): bộ cài PostgreSQL trên Windows (`postgres.ps1`, không dùng WSL2); chặn 15.
+3. [`15-docker-compose-local.md`](./issues/15-docker-compose-local/spec.md): Dockerfile, Compose, lệnh Makefile dùng container, `sync_beat_schedule`.
+4. [`09-shared-core.md`](./issues/09-shared-core/spec.md): BaseModel, Money, phones, privacy, lỗi, logging, extension PostgreSQL.
+5. [`16-shared-api-layer.md`](./issues/16-shared-api-layer/spec.md): `ErrorDTO`, pagination, permissions, `client_ip`, throttling, i18n.
+6. [`17-shared-geo.md`](./issues/17-shared-geo/spec.md): địa giới hành chính, `load_geo`.
+7. [`10-shared-events-outbox.md`](./issues/10-shared-events-outbox/spec.md): outbox, relay, consumer, retry.
+8. [`18-outbox-operations.md`](./issues/18-outbox-operations/spec.md): lệnh vận hành và theo dõi outbox.
+9. [`11-shared-idempotency.md`](./issues/11-shared-idempotency/spec.md): `Idempotency-Key`.
+10. [`12-account-bootstrap.md`](./issues/12-account-bootstrap/spec.md): model Account và `create_staff`.
+11. Cổng chặn CI: [`01`](./issues/01-services-coverage-gate/spec.md) coverage, [`02`](./issues/02-pytest-markers-and-br-report/spec.md) marker, [`03`](./issues/03-openapi-schema-drift-check/spec.md) OpenAPI drift, [`04`](./issues/04-import-linter-test-factories/spec.md) `gen_importlinter.py` và import-linter.
+12. [`14-trivy-and-dependabot-backend.md`](./issues/14-trivy-and-dependabot-backend/spec.md): quét image bằng trivy, xác nhận Dependabot cho `backend/`.
 
-[`13-local-postgres-installer-macos.md`](./issues/13-local-postgres-installer-macos.md) (bộ cài trên macOS, người làm) không chặn M0; làm khi team có người dùng Mac.
+[`13-local-postgres-installer-macos.md`](./issues/13-local-postgres-installer-macos/spec.md) (bộ cài trên macOS, người làm) không chặn M0; làm khi team có người dùng Mac.
 
-Test tải k6 không thuộc M0; ticket ở [`sandbox-acceptance/issues/01`](../sandbox-acceptance/issues/01-load-test-k6-staging.md) (M7).
+Test tải k6 không thuộc M0; ticket ở [`sandbox-acceptance/issues/01`](../sandbox-acceptance/issues/01-load-test-k6-staging/spec.md) (M7).
 
 ## Ngoài phạm vi
 

@@ -56,8 +56,8 @@ def dirty_paths(porcelain_z: str) -> list[str]:
 
 
 def check_dirty(porcelain: list[str], ticket: str) -> list[tuple[str, str]]:
-    """Báo cáo trong ticket được commit ở task sync, nên trước đó ticket dirty chỉ là WARN."""
-    others = [path for path in porcelain if path != ticket]
+    """`report.md` được commit ở task sync, nên trước đó thư mục ticket dirty chỉ là WARN."""
+    others = [path for path in porcelain if not path.startswith(f"{ticket}/")]
     if others:
         return [("FAIL", f"{len(others)} file chưa commit ngoài ticket")]
     if porcelain:

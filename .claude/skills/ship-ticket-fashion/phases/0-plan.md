@@ -8,9 +8,9 @@ Dùng khi frontier của mốc hiện tại rỗng hoặc sắp rỗng, người
 2. Sub-agent `Explore` đọc và tóm tắt: các user story đó trong `docs/business/03-user-stories.md`, quy tắc liên quan trong `04-business-rules.md` và `05-order-lifecycle.md`, các tài liệu architecture và ADR của module chạm tới, code `backend/shared` hiện có.
 3. `mattpocock-skills:grilling` để chốt phạm vi và quyết định.
 4. `mattpocock-skills:to-spec` → `.scratch/<slug>/spec.md`, cùng khung với `.scratch/backend-bootstrap/spec.md`: Bối cảnh, Phạm vi, Quyết định, Ticket (danh sách theo thứ tự làm, `progress.py` dùng thứ tự này cho frontier), Ngoài phạm vi.
-5. `mattpocock-skills:to-tickets` → `.scratch/<slug>/issues/NN-<slug>.md` theo khung dưới.
+5. `mattpocock-skills:to-tickets` → `.scratch/<slug>/issues/NN-<slug>/spec.md` theo khung dưới; `plan.md` và `report.md` sinh ra khi làm ticket.
 
-## Khung ticket
+## Khung `spec.md` của ticket
 
 ```markdown
 # <Tiêu đề tiếng Việt>
@@ -19,7 +19,7 @@ Status: ready-for-agent
 
 Blocked by: NN, NN
 
-Spec: [spec.md](../spec.md)
+Spec: [spec.md](../../spec.md)
 
 ## Việc cần làm
 
@@ -30,7 +30,7 @@ Spec: [spec.md](../spec.md)
 
 - Mỗi ticket là một _tracer bullet_ vừa một PR (dưới khoảng 400 dòng, không tính migration), chạy được từ đầu tới cuối.
 - Acceptance criteria viết thành hành vi đặt được thành tên test; ghi `US-xxx`, `BR-xxx` liên quan.
-- Tách ticket lớn: giữ số cũ cho phần đầu, phần tách ra lấy số tiếp theo của feature, ghi `Tách từ ticket [NN](./NN-….md).` Không đánh số lại ticket đã có.
+- Tách ticket lớn: giữ số cũ cho phần đầu, phần tách ra lấy số tiếp theo của feature, ghi `Tách từ ticket [NN](../NN-…/spec.md).` Không đánh số lại ticket đã có.
 
 ## Xong khi
 

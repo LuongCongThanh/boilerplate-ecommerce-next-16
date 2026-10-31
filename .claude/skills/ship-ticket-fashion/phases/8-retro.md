@@ -2,7 +2,7 @@
 
 Mục tiêu: cải thiện **môi trường** (skill, script, check, tài liệu cho agent), không phải code của ticket. Chạy ở phiên chính.
 
-1. **Bằng chứng.** Phiên này; sau một `/clear` thì state, báo cáo trong ticket, log trong `.git/ship-ticket-fashion/logs/`, và:
+1. **Bằng chứng.** Phiên này; sau một `/clear` thì state, `report.md` của ticket, log trong `.git/ship-ticket-fashion/logs/`, và:
 
    ```bash
    python S/scripts/user_prompts.py --last 3

@@ -23,7 +23,7 @@ git push -u origin <nhánh>        # nhánh của mình: --force-with-lease sau 
 ## 2. Mở PR
 
 1. Tiêu đề Conventional Commits, scope là module (`shared`, `catalog`…); tiêu đề này thành commit squash trên `dev`.
-2. Thân PR theo `.github/pull_request_template.md`, ghi vào `.git/PR_BODY.md` (lý do ở `gotchas/windows-shell.md`). **Closes** là đường dẫn ticket. Lấy từ báo cáo trong ticket: *Cách kiểm* ← bảng AC → bằng chứng; *Gap và lưu ý* ← Chưa làm, Gap, ticket mới, AC `untestable`, mỗi dòng có nội dung hoặc "Không"; **Notes** ← kết luận review và bảng *Commit*. Checklist tick theo sự thật, mục không áp dụng ghi N/A.
+2. Thân PR theo `.github/pull_request_template.md`, ghi vào `.git/PR_BODY.md` (lý do ở `gotchas/windows-shell.md`). **Closes** là thư mục ticket. Lấy từ `report.md`: *Cách kiểm* ← bảng AC → bằng chứng; *Gap và lưu ý* ← Chưa làm, Gap, ticket mới, AC `untestable`, mỗi dòng có nội dung hoặc "Không"; **Notes** ← kết luận review và bảng *Commit*. Checklist tick theo sự thật, mục không áp dụng ghi N/A.
 3. Tạo, rồi ghi số PR vào state:
 
 ```bash
@@ -34,7 +34,7 @@ python S/scripts/state.py set <T> pr=<số>
 ## 3. Đóng ticket trong PR
 
 ```bash
-python S/scripts/close_ticket.py <đường dẫn ticket> --pr <số>
+python S/scripts/close_ticket.py <T> --pr <số>
 python S/scripts/progress.py --feature <feature>
 ```
 
@@ -42,7 +42,7 @@ python S/scripts/progress.py --feature <feature>
 
 Cùng commit, sửa `.scratch/mvp-roadmap/map.md`: dòng của mốc trong bảng **Tiến độ** khớp `progress.py`; **Decisions-so-far** thêm `DD/MM/YYYY: …` cho mỗi quyết định ảnh hưởng ngoài ticket.
 
-`commit.py <T> --task close -m "docs: close <chủ đề> ticket" -- <ticket> .scratch/mvp-roadmap/map.md`, push.
+`commit.py <T> --task close -m "docs: close <chủ đề> ticket" -- <thư mục ticket> .scratch/mvp-roadmap/map.md`, push.
 
 ## 4. CI
 

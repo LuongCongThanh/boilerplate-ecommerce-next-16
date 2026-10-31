@@ -6,7 +6,7 @@
   push <T> key=value ...  thêm vào field list (value là list thì thêm từng phần tử)
   transition <T> --to <phase> --next "…" --reason "…" [--gate g1|g2]
   check <T>
-<T>: <feature>/<NN>, <NN> hoặc đường dẫn ticket.
+<T>: <feature>/<NN>, <NN> hoặc thư mục ticket.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from common import git, load_state, repo_root, resolve, save_state, state_dir, ticket_ref
-from progress import find_section, frontier, load_features
+from progress import PLAN, SPEC, find_section, frontier, load_features
 
 SKILL = ".claude/skills/ship-ticket-fashion"
 PHASES = ["grill", "code", "report", "review", "sync", "ship", "done", "retro", "closed"]
@@ -114,13 +114,15 @@ def check_transition(state: dict, to: str, gate: str | None) -> str | None:
     return None
 
 
-def plan_ready(ticket_text: str, ticket_dirty: bool) -> str | None:
-    """grill → code: ticket đã có spec (`## Quyết định`) và plan (`## Kế hoạch`), đã commit."""
-    missing = [h for h in ("Quyết định", "Kế hoạch") if not find_section(ticket_text, h)]
+def plan_ready(spec_text: str, plan_text: str | None, ticket_dirty: bool) -> str | None:
+    """grill → code: `spec.md` có `## Quyết định`, có `plan.md`, cả hai đã commit."""
+    missing = [] if find_section(spec_text, "Quyết định") else [f"{SPEC} § Quyết định"]
+    if not plan_text:
+        missing.append(f"{PLAN} (plan.py)")
     if missing:
-        return "ticket thiếu " + ", ".join(f"## {h}" for h in missing) + " (phase 1 bước 6, 7)"
+        return "ticket thiếu " + ", ".join(missing) + " (phase 1 bước 6, 7)"
     if ticket_dirty:
-        return "spec và plan trong ticket chưa commit (commit.py --task plan)"
+        return f"{SPEC} và {PLAN} chưa commit (commit.py --task plan)"
     return None
 
 
@@ -219,10 +221,15 @@ def cmd_transition(args: argparse.Namespace) -> int:
     state, _ = require(args.ticket)
     error = check_transition(state, args.to, args.gate)
     if error is None and (state["phase"], args.to) == ("grill", "code"):
-        path = repo_root() / state["ticket"]
+        folder = repo_root() / state["ticket"]
+        plan = folder / PLAN
         # -C: đường dẫn ticket tính từ gốc repo, dù lệnh chạy ở backend/
         dirty = bool(git("-C", str(repo_root()), "status", "--porcelain", "--", state["ticket"]))
-        error = plan_ready(path.read_text(encoding="utf-8"), dirty)
+        error = plan_ready(
+            (folder / SPEC).read_text(encoding="utf-8"),
+            plan.read_text(encoding="utf-8") if plan.exists() else None,
+            dirty,
+        )
     if error:
         print(f"TỪ CHỐI: {error}")
         return 1

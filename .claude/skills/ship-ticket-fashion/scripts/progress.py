@@ -25,12 +25,14 @@ KNOWN_STATUSES = {
     "claimed",
 }
 MAP = Path(".scratch/mvp-roadmap/map.md")
+# Mỗi ticket là thư mục `issues/NN-<slug>/` gồm ba file (docs/agents/issue-tracker.md).
+SPEC, PLAN, REPORT = "spec.md", "plan.md", "report.md"
 
 
 @dataclass
 class Ticket:
     num: int
-    path: Path
+    path: Path  # thư mục ticket
     title: str
     status: str
     blocked_by: list[int]
@@ -72,7 +74,7 @@ def parse_blocked(raw: str) -> tuple[list[int], list[str]]:
 
 
 def parse_ticket(path: Path) -> Ticket:
-    text = path.read_text(encoding="utf-8")
+    text = (path / SPEC).read_text(encoding="utf-8")
     title = re.search(r"^# (.+)$", text, re.M)
     status = re.search(r"^Status:\s*(\S+)", text, re.M)
     blocked = re.search(r"^Blocked by:\s*(.+)$", text, re.M)
@@ -82,7 +84,7 @@ def parse_ticket(path: Path) -> Ticket:
     return Ticket(
         num=int(path.name.split("-", 1)[0]),
         path=path,
-        title=title.group(1).strip() if title else path.stem,
+        title=title.group(1).strip() if title else path.name,
         status=status.group(1) if status else "?",
         blocked_by=blocked_by,
         ac_done=len(re.findall(r"^\s*- \[[xX]\]", ac, re.M)),
@@ -96,8 +98,8 @@ def load_features(root: Path) -> dict[str, Feature]:
     features: dict[str, Feature] = {}
     for issues in sorted((root / ".scratch").glob("*/issues")):
         feature = Feature(slug=issues.parent.name)
-        for path in sorted(issues.glob("[0-9][0-9]-*.md")):
-            ticket = parse_ticket(path)
+        for spec_path in sorted(issues.glob(f"[0-9][0-9]-*/{SPEC}")):
+            ticket = parse_ticket(spec_path.parent)
             feature.tickets[ticket.num] = ticket
         spec = issues.parent / "spec.md"
         if spec.exists():
@@ -140,7 +142,7 @@ def warnings(feature: Feature) -> list[str]:
             out.append(f"{name}: đã tick hết AC nhưng Status là {t.status}")
         for n in t.blocked_by:
             if n not in feature.tickets:
-                out.append(f"{name}: Blocked by {n:02d} không có file ticket")
+                out.append(f"{name}: Blocked by {n:02d} không có thư mục ticket")
         for token in t.blocked_unparsed:
             out.append(f"{name}: Blocked by '{token}' không đọc được (dạng NN, NN)")
     return out

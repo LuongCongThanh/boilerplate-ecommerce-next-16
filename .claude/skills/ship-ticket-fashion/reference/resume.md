@@ -14,7 +14,7 @@
 
 | Phase | Làm tiếp |
 | --- | --- |
-| `grill` | G1 đã hỏi nhưng chưa trả lời → trình lại G1 từ `## Quyết định` của ticket và slice trong state |
+| `grill` | G1 đã hỏi nhưng chưa trả lời → trình lại G1 từ `## Quyết định` trong `spec.md` và slice trong state |
 | `sync` | G2 đã hỏi nhưng chưa trả lời → trình lại G2; các phase trước giữ nguyên |
 | `done` | `gh pr view <pr> --json state` (tài khoản ở `phases/6-ship.md`): `MERGED` → bước sau merge của phase 7; `OPEN` → hỏi merge hay chờ |
 | `retro` | Danh sách đề xuất đã trình nhưng chưa trả lời → trình lại; đã ghi xong → bước push của phase 8 |
