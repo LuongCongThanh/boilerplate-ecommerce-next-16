@@ -16,7 +16,7 @@
 
 **Module:** <!-- identity, catalog, inventory, promotions, payments, shipping, ordering, notifications, shared -->
 
-**🔗 Closes:** `.scratch/<feature>/issues/NN-<slug>.md` · **User story:** US-XXX · **Quy tắc:** BR-XXX
+**🔗 Closes:** `.scratch/<feature>/issues/NN-<slug>/` · **User story:** US-XXX · **Quy tắc:** BR-XXX
 
 ---
 
