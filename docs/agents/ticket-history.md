@@ -35,6 +35,7 @@ Thứ tự hoàn thành thực tế của ticket trong `.scratch/`, theo thời 
 10. [11](../../.scratch/backend-bootstrap/issues/11-shared-idempotency/spec.md) · `Idempotency-Key` · PR #40 · 30/10/2026
 11. [12](../../.scratch/backend-bootstrap/issues/12-account-bootstrap/spec.md) · model `Account` và `create_staff` · PR #42 · 31/10/2026
 12. [21](../../.scratch/backend-bootstrap/issues/21-validate-database-url/spec.md) · từ chối `DATABASE_URL` sai định dạng ngay khi đọc env · PR #45 · 31/10/2026
+13. [24](../../.scratch/backend-bootstrap/issues/24-outbox-killed-handler-redispatch/spec.md) · delivery bị kill liên tục chuyển `failed` sau 3 lần chạy dở (`interrupted_runs`) · PR #47 · 31/10/2026
 
 ### Còn mở
 
@@ -55,7 +56,6 @@ Làm xen kẽ, không chặn mốc:
 Trước go-live:
 
 - [13](../../.scratch/backend-bootstrap/issues/13-local-postgres-installer-macos/spec.md) · bộ cài PostgreSQL trên macOS · `ready-for-human`
-- [24](../../.scratch/backend-bootstrap/issues/24-outbox-killed-handler-redispatch/spec.md) · delivery bị kill do time limit được giao lại vô hạn · `ready-for-agent`
 - [25](../../.scratch/backend-bootstrap/issues/25-outbox-relay-throughput/spec.md) · relay xả tồn đọng nhanh hơn 100 delivery mỗi giây · `ready-for-agent`
 - [26](../../.scratch/backend-bootstrap/issues/26-outbox-refactor-smells/spec.md) · gom chuyển trạng thái delivery và helper test · `ready-for-agent`
 - [27](../../.scratch/backend-bootstrap/issues/27-outbox-invalid-payload-fails-fast/spec.md) · payload không hợp lệ thì delivery `failed` ngay · `ready-for-agent`

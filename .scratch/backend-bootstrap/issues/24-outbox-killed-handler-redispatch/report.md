@@ -2,7 +2,7 @@
 
 ### Báo cáo 31/10/2026
 
-**Nhánh:** `fix/outbox-killed-delivery-redispatch` · **PR:** chưa mở · **Mode:** full
+**Nhánh:** `fix/outbox-killed-delivery-redispatch` · **PR:** #47 · **Mode:** full
 
 #### Đã làm
 

@@ -1,6 +1,8 @@
 # Delivery bị kill do time limit được giao lại vô hạn
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #47
 
 Spec: [spec.md](../../spec.md)
 
@@ -34,5 +36,5 @@ Chốt khi grilling ngày 31/10/2026.
 
 ## Acceptance criteria
 
-- [ ] Handler luôn vượt time limit thì delivery cuối cùng chuyển `failed` và có log `ERROR`, không giao lại vô hạn.
-- [ ] Task mất do Redis (không phải do handler) vẫn không tiêu lượt retry.
+- [x] Handler luôn vượt time limit thì delivery cuối cùng chuyển `failed` và có log `ERROR`, không giao lại vô hạn.
+- [x] Task mất do Redis (không phải do handler) vẫn không tiêu lượt retry.
