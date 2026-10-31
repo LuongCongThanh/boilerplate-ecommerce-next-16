@@ -1,8 +1,8 @@
 """OpenAPI: component `ErrorDTO` và response lỗi mặc định cho mọi operation (04 mục 3, 5.1, 5.6).
 
-`AutoSchema` là `DEFAULT_SCHEMA_CLASS`: thêm 400, 429, 500 cho mọi operation, thêm 404 khi
-path có tham số. View tự khai mã đặc thù (409, 422…) bằng `extend_schema`; mã đã khai thì giữ
-nguyên. 401/403 thêm khi có JWT (M1).
+`AutoSchema` là `DEFAULT_SCHEMA_CLASS`: thêm 400, 500 cho mọi operation, 429 khi view có
+throttle, 404 khi path có tham số hoặc có query `page` của phân trang. View tự khai mã đặc thù
+(409, 422…) bằng `extend_schema`; mã đã khai thì giữ nguyên. 401/403 thêm khi có JWT (M1).
 """
 
 from typing import Any
@@ -11,6 +11,8 @@ from drf_spectacular.openapi import AutoSchema as SpectacularAutoSchema
 from drf_spectacular.plumbing import ComponentRegistry
 from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
+
+from shared.api.pagination import StandardPagination
 
 # Chuỗi thường, không dịch: schema sinh bằng CLI phải giống nhau ở mọi máy (12 mục 5)
 ERROR_BODY_SCHEMA: dict[str, Any] = {
@@ -34,12 +36,12 @@ ERROR_BODY_SCHEMA: dict[str, Any] = {
     "required": ["code", "message", "details", "request_id"],
 }
 
-COMMON_ERROR_RESPONSES = {
-    "400": "Request không hợp lệ (`VALIDATION_ERROR`, `BAD_REQUEST`).",
+ERROR_DESCRIPTIONS = {
+    "400": "Request không hợp lệ (`VALIDATION_ERROR`, `PARSE_ERROR`, `BAD_REQUEST`).",
+    "404": "Không tìm thấy (`NOT_FOUND`).",
     "429": "Vượt giới hạn request (`THROTTLED`).",
     "500": "Lỗi hệ thống (`INTERNAL_ERROR`).",
 }
-NOT_FOUND_RESPONSE = {"404": "Không tìm thấy (`NOT_FOUND`)."}
 
 
 @extend_schema_field(ERROR_BODY_SCHEMA)
@@ -67,20 +69,29 @@ class AutoSchema(SpectacularAutoSchema):
         if operation is None:
             return None
 
-        defaults = dict(COMMON_ERROR_RESPONSES)
-        if any(param["in"] == "path" for param in operation.get("parameters", [])):
-            defaults.update(NOT_FOUND_RESPONSE)
-
         ref = self.resolve_serializer(ErrorOutput, "response").ref
         responses: dict[str, Any] = operation["responses"]
-        for code, description in defaults.items():
+        for code in self._default_error_codes(operation):
             responses.setdefault(
                 code,
                 {
                     "content": {"application/json": {"schema": dict(ref)}},
-                    "description": description,
+                    "description": ERROR_DESCRIPTIONS[code],
                 },
             )
         # Thứ tự mã cố định để `openapi.yaml` không đổi giữa các lần sinh
         operation["responses"] = dict(sorted(responses.items()))
         return operation
+
+    def _default_error_codes(self, operation: dict[str, Any]) -> list[str]:
+        codes = ["400", "500"]
+        # Đối tượng theo path không tồn tại, hoặc trang vượt quá cuối của `StandardPagination`
+        if any(
+            param["in"] == "path"
+            or (param["in"], param["name"]) == ("query", StandardPagination.page_query_param)
+            for param in operation.get("parameters", [])
+        ):
+            codes.append("404")
+        if self.view.get_throttles():
+            codes.append("429")
+        return codes
