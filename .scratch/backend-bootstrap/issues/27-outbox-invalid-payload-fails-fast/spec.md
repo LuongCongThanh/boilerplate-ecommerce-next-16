@@ -1,6 +1,8 @@
 # Payload không còn hợp lệ với class sự kiện thì delivery `failed` ngay
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #49
 
 Spec: [spec.md](../../spec.md)
 
@@ -30,5 +32,5 @@ Chốt khi grilling ngày 01/11/2026.
 
 ## Acceptance criteria
 
-- [ ] Payload không parse được bằng class sự kiện thì delivery chuyển `failed` ở lần đầu, có `failed_at`, `last_error`, log `ERROR`.
-- [ ] Lỗi trong handler (sau khi parse thành công) vẫn theo lịch retry cũ.
+- [x] Payload không parse được bằng class sự kiện thì delivery chuyển `failed` ở lần đầu, có `failed_at`, `last_error`, log `ERROR`.
+- [x] Lỗi trong handler (sau khi parse thành công) vẫn theo lịch retry cũ.

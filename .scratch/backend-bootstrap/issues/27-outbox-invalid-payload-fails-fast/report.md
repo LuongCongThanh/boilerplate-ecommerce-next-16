@@ -2,7 +2,7 @@
 
 ### Báo cáo 01/11/2026
 
-**Nhánh:** `fix/outbox-invalid-payload-fails-fast` · **PR:** chưa mở · **Mode:** lite
+**Nhánh:** `fix/outbox-invalid-payload-fails-fast` · **PR:** #49 · **Mode:** lite
 
 #### Đã làm
 
