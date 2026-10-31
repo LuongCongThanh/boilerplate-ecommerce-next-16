@@ -187,11 +187,11 @@ def _invalid_fields(exc: ValidationError) -> list[dict[str, object]]:
     # Chỉ field gốc và loại lỗi: input và message có thể chứa PII của payload (03 mục 1.4).
     # `loc[0]` là tên field đã khai báo; phần sau có thể là key lấy từ dữ liệu (field kiểu
     # `dict`). Bỏ trùng để kích thước log có giới hạn theo số field của class
-    pairs = dict.fromkeys(
-        (error["loc"][0] if error["loc"] else "__root__", error["type"])
+    entries: list[dict[str, object]] = [
+        {"field": error["loc"][0] if error["loc"] else "__root__", "type": error["type"]}
         for error in exc.errors(include_input=False, include_url=False)
-    )
-    return [{"field": field, "type": kind} for field, kind in pairs]
+    ]
+    return [entry for index, entry in enumerate(entries) if entry not in entries[:index]]
 
 
 def _reject(delivery: EventDelivery, exc: DomainError, now: datetime) -> list[str]:
