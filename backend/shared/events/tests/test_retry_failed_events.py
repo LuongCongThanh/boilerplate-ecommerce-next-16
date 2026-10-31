@@ -77,7 +77,7 @@ def test_reopens_interrupted_delivery_with_counter_reset() -> None:
     reopened = (delivery.status, delivery.interrupted_runs)
     assert reopened == (DeliveryStatus.PENDING, 0)
 
-    # Bộ đếm còn ở ngưỡng thì lần giao này chuyển `failed` ngay mà không gọi handler
+    # Nếu không đặt lại bộ đếm thì lần giao này chuyển `failed` ngay mà không gọi handler
     process_delivery(delivery.event_id, "shared.fixed_handler")
 
     delivery.refresh_from_db()

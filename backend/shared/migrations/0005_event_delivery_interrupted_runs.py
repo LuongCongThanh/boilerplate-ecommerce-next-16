@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="eventdelivery",
             name="interrupted_runs",
-            field=models.IntegerField(default=0),
+            field=models.IntegerField(db_default=0),
         ),
         migrations.AddConstraint(
             model_name="eventdelivery",

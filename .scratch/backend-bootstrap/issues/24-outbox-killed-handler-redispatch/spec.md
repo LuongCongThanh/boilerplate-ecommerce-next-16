@@ -29,6 +29,8 @@ Chốt khi grilling ngày 31/10/2026.
 | `attempts` | Không đổi ý nghĩa: chỉ đếm lỗi handler đã lưu được. Lần chạy dở đếm riêng ở `interrupted_runs` |
 | `retry_failed_events` | Đặt `interrupted_runs = 0` cùng `attempts`, để delivery `failed` vì chạy dở được chạy lại thật |
 | Task trùng | Task trùng tới giữa hai transaction có thể tăng bộ đếm thêm 1, nhưng transaction 2 của task đầu đặt về 0 khi lưu kết quả; task trùng sau đó thấy delivery đã kết thúc và bỏ qua |
+| Rủi ro chấp nhận (review S2/B2) | Task trùng chen vào khe giữa transaction 1 và 2 đúng lúc bộ đếm vừa lên ngưỡng làm delivery `failed` sớm một lần. Khe rất ngắn, có cảnh báo `event_delivery_failed` và mở lại được bằng `retry_failed_events` |
+| Rủi ro chấp nhận (review B3) | Gián đoạn không do handler (cold shutdown khi deploy, DB failover, worker hết bộ nhớ vì task khác) cũng tính là lần chạy dở. Cần 3 lần liên tiếp trên cùng delivery mới chuyển `failed` |
 
 ## Acceptance criteria
 

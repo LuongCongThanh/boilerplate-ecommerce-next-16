@@ -69,8 +69,9 @@ class EventDelivery(models.Model):
         max_length=32, choices=DeliveryStatus.choices, default=DeliveryStatus.PENDING
     )
     attempts = models.IntegerField(default=0)
-    # Số lần liên tiếp handler đã bắt đầu chạy mà consumer không lưu được kết quả (07 mục 1.3)
-    interrupted_runs = models.IntegerField(default=0)
+    # Số lần liên tiếp handler đã bắt đầu chạy mà consumer không lưu được kết quả (07 mục 1.3).
+    # Mặc định ở mức DB để relay bản cũ (chưa biết cột) vẫn INSERT được khi rolling deploy
+    interrupted_runs = models.IntegerField(db_default=0)
     next_attempt_at = models.DateTimeField()
     next_dispatch_at = models.DateTimeField()
     last_dispatched_at = models.DateTimeField(null=True, blank=True)

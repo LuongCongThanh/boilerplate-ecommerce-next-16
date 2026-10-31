@@ -185,7 +185,7 @@ Mỗi dòng là công việc của một handler với một sự kiện, đồn
 | `handler` | `varchar(100)` | không | — | ID đăng ký ổn định của handler |
 | `status` | `enum(pending \| completed \| rejected \| failed)` | không | `pending` | |
 | `attempts` | `integer` | không | `0` | Số lần handler lỗi đã lưu; `CHECK(attempts >= 0)` |
-| `interrupted_runs` | `integer` | không | `0` | Số lần liên tiếp handler đã bắt đầu chạy mà consumer không lưu được kết quả (worker bị kill, kết nối DB hỏng); `CHECK(interrupted_runs >= 0)` |
+| `interrupted_runs` | `integer` | không | `db_default 0` | Số lần liên tiếp handler đã bắt đầu chạy mà consumer không lưu được kết quả (worker bị kill, kết nối DB hỏng); `CHECK(interrupted_runs >= 0)`. Mặc định ở mức DB để bản code cũ chưa biết cột vẫn INSERT được khi rolling deploy |
 | `next_attempt_at` | `timestamptz` | không | — | Thời điểm sớm nhất handler được chạy lại (lịch retry) |
 | `next_dispatch_at` | `timestamptz` | không | — | Hạn relay giao lại task nếu chưa có kết quả, kể cả khi Redis đã nhận rồi mất task |
 | `last_dispatched_at` | `timestamptz` | có | `NULL` | Chỉ để quan sát |

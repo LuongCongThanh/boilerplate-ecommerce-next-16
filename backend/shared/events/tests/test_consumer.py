@@ -9,7 +9,12 @@ from django.db import DatabaseError, connection
 from structlog.testing import capture_logs
 
 from shared.events import handles
-from shared.events.consumer import MAX_INTERRUPTED_RUNS, RETRY_DELAYS, process_delivery
+from shared.events.consumer import (
+    INTERRUPTED_ERROR,
+    MAX_INTERRUPTED_RUNS,
+    RETRY_DELAYS,
+    process_delivery,
+)
 from shared.events.models import DeliveryStatus
 from shared.events.tasks import dispatch_event
 from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
@@ -279,6 +284,8 @@ def test_missing_handler_keeps_pending_without_attempt() -> None:
     assert logs[0]["log_level"] == "error"
 
 
+# Transaction thật thay vì savepoint: chứng minh bộ đếm đã commit trước khi worker bị kill
+@pytest.mark.django_db(transaction=True)
 @time_machine.travel(NOW, tick=False)
 def test_interrupted_handler_fails_after_max_interrupted_runs(
     handler_effect_table: type[HandlerEffect],
@@ -298,7 +305,8 @@ def test_interrupted_handler_fails_after_max_interrupted_runs(
             process_delivery(delivery.event_id, "shared.killed")
         delivery.refresh_from_db()
         # Bộ đếm commit trước khi handler chạy nên còn lại sau khi worker bị kill
-        assert (delivery.status, delivery.interrupted_runs) == (DeliveryStatus.PENDING, run)
+        after_run = (delivery.status, delivery.interrupted_runs)
+        assert after_run == (DeliveryStatus.PENDING, run)
 
     with capture_logs() as logs:
         process_delivery(delivery.event_id, "shared.killed")
@@ -306,7 +314,7 @@ def test_interrupted_handler_fails_after_max_interrupted_runs(
     delivery.refresh_from_db()
     assert delivery.status == DeliveryStatus.FAILED
     assert delivery.failed_at == NOW
-    assert delivery.last_error == "HandlerInterrupted"
+    assert delivery.last_error == INTERRUPTED_ERROR
     assert delivery.interrupted_runs == MAX_INTERRUPTED_RUNS
     # Lần chạy dở không tiêu lượt retry: `attempts` chỉ đếm lỗi handler đã lưu được
     assert delivery.attempts == 0
@@ -348,7 +356,8 @@ def test_saved_outcome_resets_interrupted_runs(
     process_delivery(delivery.event_id, "shared.recovered")
 
     delivery.refresh_from_db()
-    assert (delivery.status, delivery.interrupted_runs) == (status, 0)
+    outcome = (delivery.status, delivery.interrupted_runs)
+    assert outcome == (status, 0)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -388,6 +397,9 @@ def test_concurrent_duplicate_dispatch_commits_once(
     assert handler_effect_table.objects.count() == 1
     delivery.refresh_from_db()
     assert delivery.status == DeliveryStatus.COMPLETED
+    # Task trùng chen vào giữa hai transaction có thể tăng bộ đếm, nhưng kết quả lưu sau cùng
+    # đặt về 0
+    assert delivery.interrupted_runs == 0
 
 
 HANDLER_DURATION = timedelta(seconds=30)

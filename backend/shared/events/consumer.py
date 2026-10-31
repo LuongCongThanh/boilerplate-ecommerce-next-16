@@ -78,7 +78,9 @@ def process_delivery(event_id: UUID | str, handler_name: str) -> None:
         delivery.save(update_fields=["interrupted_runs"])
 
     with transaction.atomic():
-        delivery = _lock_delivery(event_uuid, handler_name)
+        # Khoá lại theo khoá chính; sự kiện không đổi nên dùng tiếp `event_row`, `handler`,
+        # `event_class` của transaction 1 thay vì join lại
+        delivery = EventDelivery.objects.select_for_update().filter(pk=delivery.pk).first()
         # Task trùng có thể đã lưu kết quả trong lúc khoá được nhả giữa hai transaction
         if delivery is None or not _is_due(delivery):
             return
@@ -94,19 +96,21 @@ def process_delivery(event_id: UUID | str, handler_name: str) -> None:
                 handler.func(event)
         # Mốc kết thúc và lịch retry tính từ lúc handler xong, không phải lúc khoá delivery
         except DomainError as exc:
-            _reject(delivery, exc, timezone.now())
+            fields = _reject(delivery, exc, timezone.now())
             log.warning("event_rejected", code=exc.code)
         except RetryLater as exc:
-            _schedule_retry(delivery, exc, timezone.now(), log)
+            fields = _schedule_retry(delivery, exc, timezone.now(), log)
         except Exception as exc:
             # Traceback chỉ đi vào log; `last_error` không mang message (03 mục 1.4)
             log.exception("event_handler_error")
-            _schedule_retry(delivery, exc, timezone.now(), log)
+            fields = _schedule_retry(delivery, exc, timezone.now(), log)
         else:
             delivery.status = DeliveryStatus.COMPLETED
             delivery.completed_at = timezone.now()
-            delivery.interrupted_runs = 0
-            delivery.save(update_fields=["status", "completed_at", "interrupted_runs"])
+            fields = ["status", "completed_at"]
+        # Kết quả đã lưu được nghĩa là lần chạy này không dở: chuỗi chạy dở liên tiếp bị ngắt
+        delivery.interrupted_runs = 0
+        delivery.save(update_fields=[*fields, "interrupted_runs"])
 
 
 def _lock_delivery(event_uuid: UUID, handler_name: str) -> EventDelivery | None:
@@ -122,27 +126,34 @@ def _is_due(delivery: EventDelivery) -> bool:
     return delivery.status == DeliveryStatus.PENDING and delivery.next_attempt_at <= timezone.now()
 
 
+def _mark_failed(
+    delivery: EventDelivery, now: datetime, log: structlog.stdlib.BoundLogger, **context: int
+) -> list[str]:
+    """Chuyển `failed`, trả về các field đã đổi để nơi gọi lưu cùng phần còn lại.
+
+    Sentry bắt log ERROR để cảnh báo delivery cần người vận hành (07 mục 1.3). `context` là
+    bộ đếm dẫn tới `failed` (`attempts` hoặc `interrupted_runs`).
+    """
+    delivery.status = DeliveryStatus.FAILED
+    delivery.failed_at = now
+    log.error("event_delivery_failed", **context, error=delivery.last_error)
+    return ["status", "failed_at"]
+
+
 def _fail_interrupted(
     delivery: EventDelivery, now: datetime, log: structlog.stdlib.BoundLogger
 ) -> None:
-    delivery.status = DeliveryStatus.FAILED
-    delivery.failed_at = now
+    # Giữ `interrupted_runs` ở ngưỡng để người vận hành thấy vì sao delivery `failed`
     delivery.last_error = INTERRUPTED_ERROR
-    delivery.save(update_fields=["status", "failed_at", "last_error"])
-    # Cảnh báo Sentry như khi hết retry (07 mục 1.3)
-    log.error(
-        "event_delivery_failed",
-        interrupted_runs=delivery.interrupted_runs,
-        error=delivery.last_error,
-    )
+    fields = _mark_failed(delivery, now, log, interrupted_runs=delivery.interrupted_runs)
+    delivery.save(update_fields=[*fields, "last_error"])
 
 
-def _reject(delivery: EventDelivery, exc: DomainError, now: datetime) -> None:
+def _reject(delivery: EventDelivery, exc: DomainError, now: datetime) -> list[str]:
     delivery.status = DeliveryStatus.REJECTED
     delivery.completed_at = now
     delivery.last_error = describe_error(exc)
-    delivery.interrupted_runs = 0
-    delivery.save(update_fields=["status", "completed_at", "last_error", "interrupted_runs"])
+    return ["status", "completed_at", "last_error"]
 
 
 def _schedule_retry(
@@ -150,25 +161,17 @@ def _schedule_retry(
     exc: Exception,
     now: datetime,
     log: structlog.stdlib.BoundLogger,
-) -> None:
+) -> list[str]:
     delivery.attempts += 1
     delivery.last_error = describe_error(exc)
-    # Lỗi đã lưu được nghĩa là lần chạy này không dở; chuỗi chạy dở liên tiếp bị ngắt
-    delivery.interrupted_runs = 0
-    fields = ["attempts", "last_error", "interrupted_runs"]
+    fields = ["attempts", "last_error"]
     if delivery.attempts > len(RETRY_DELAYS):
-        delivery.status = DeliveryStatus.FAILED
-        delivery.failed_at = now
-        fields += ["status", "failed_at"]
-        # Sentry bắt log ERROR để cảnh báo delivery cần người vận hành (07 mục 1.3)
-        log.error("event_delivery_failed", attempts=delivery.attempts, error=delivery.last_error)
-    else:
-        retry_at = now + RETRY_DELAYS[delivery.attempts - 1]
-        delivery.next_attempt_at = retry_at
-        delivery.next_dispatch_at = retry_at
-        fields += ["next_attempt_at", "next_dispatch_at"]
-        log.info("event_retry_scheduled", attempts=delivery.attempts, retry_at=retry_at)
-    delivery.save(update_fields=fields)
+        return [*fields, *_mark_failed(delivery, now, log, attempts=delivery.attempts)]
+    retry_at = now + RETRY_DELAYS[delivery.attempts - 1]
+    delivery.next_attempt_at = retry_at
+    delivery.next_dispatch_at = retry_at
+    log.info("event_retry_scheduled", attempts=delivery.attempts, retry_at=retry_at)
+    return [*fields, "next_attempt_at", "next_dispatch_at"]
 
 
 def describe_error(exc: BaseException) -> str:
