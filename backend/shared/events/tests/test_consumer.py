@@ -155,6 +155,60 @@ def test_exhausted_retries_mark_failed() -> None:
 
 
 @time_machine.travel(NOW, tick=False)
+def test_invalid_payload_fails_without_calling_handler() -> None:
+    calls: list[SampleHappenedV1] = []
+
+    @handles("shared.sample-happened", name="shared.never_called")
+    def never_called(event: SampleHappenedV1) -> None:
+        calls.append(event)
+
+    # Payload cũ không còn khớp class: thiếu `amount`, `order_code` sai kiểu
+    event = OutboxEventFactory.create(payload={"order_code": ["khach@example.com"]})
+    delivery = EventDeliveryFactory.create(event=event, handler="shared.never_called")
+
+    with capture_logs() as logs:
+        process_delivery(delivery.event_id, "shared.never_called")
+
+    delivery.refresh_from_db()
+    assert delivery.status == DeliveryStatus.FAILED
+    assert delivery.failed_at == NOW
+    assert delivery.last_error == "ValidationError"
+    # Handler không chạy: không tiêu lượt retry, không tính là lần chạy dở
+    counters = (delivery.attempts, delivery.interrupted_runs)
+    assert counters == (0, 0)
+    assert calls == []
+    failed = [log for log in logs if log["event"] == "event_delivery_failed"]
+    assert len(failed) == 1
+    assert failed[0]["log_level"] == "error"
+    assert failed[0]["handler"] == "shared.never_called"
+    # Chỉ vị trí và loại lỗi, không mang input (có thể là PII)
+    assert failed[0]["invalid_fields"] == [
+        {"loc": ["order_code"], "type": "string_type"},
+        {"loc": ["amount"], "type": "missing"},
+    ]
+    assert "khach@example.com" not in repr(logs)
+
+
+@time_machine.travel(NOW, tick=False)
+def test_validation_error_inside_handler_schedules_retry() -> None:
+    # Payload sự kiện hợp lệ; handler tự parse dữ liệu khác và lỗi
+    @handles("shared.sample-happened", name="shared.parse_external")
+    def parse_external(event: SampleHappenedV1) -> None:
+        SampleHappenedV1.model_validate({"order_code": event.order_code})
+
+    delivery = EventDeliveryFactory.create(handler="shared.parse_external")
+
+    process_delivery(delivery.event_id, "shared.parse_external")
+
+    delivery.refresh_from_db()
+    assert delivery.status == DeliveryStatus.PENDING
+    assert delivery.attempts == 1
+    assert delivery.next_attempt_at == NOW + RETRY_DELAYS[0]
+    assert delivery.last_error == "ValidationError"
+    assert delivery.failed_at is None
+
+
+@time_machine.travel(NOW, tick=False)
 def test_domain_error_rejects_without_retry(
     handler_effect_table: type[HandlerEffect],
 ) -> None:

@@ -62,6 +62,7 @@ Handler báo kết quả cho consumer bằng cách kết thúc bình thường h
 
 | Handler kết thúc bằng | Consumer làm gì |
 |---|---|
+| Chưa chạy: payload không parse được bằng class sự kiện (`pydantic.ValidationError`, ví dụ thêm field bắt buộc vào `…V1` trái quy tắc ở mục 2) | Chuyển delivery `failed` ngay, không retry vì lần nào cũng lỗi như nhau: ghi `failed_at`, `last_error = "ValidationError"`, log `ERROR` `event_delivery_failed` kèm `invalid_fields` (chỉ `loc` và `type`, không có input) để Sentry cảnh báo. Không gọi handler nên `attempts` và `interrupted_runs` giữ nguyên. Sửa class hoặc thêm version rồi mở lại bằng `retry_failed_events`. `ValidationError` ném ra **trong** handler vẫn là "Exception khác" |
 | Chạy xong | Commit tác động handler và delivery `completed` |
 | `RetryLater`, ví dụ `TransitionNotYetValid` | Rollback savepoint handler; delivery giữ `pending`; tăng `attempts`, ghi `last_error` và lưu lịch retry trên delivery trong transaction ngoài |
 | `DomainError` khác, ví dụ `InvalidTransition` | Rollback savepoint handler nhưng chuyển delivery `rejected`, không retry. Log `WARNING` `event_rejected` kèm `event_type`, `handler`, `code` |
