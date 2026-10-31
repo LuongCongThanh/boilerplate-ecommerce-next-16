@@ -185,12 +185,13 @@ Mỗi dòng là công việc của một handler với một sự kiện, đồn
 | `handler` | `varchar(100)` | không | — | ID đăng ký ổn định của handler |
 | `status` | `enum(pending \| completed \| rejected \| failed)` | không | `pending` | |
 | `attempts` | `integer` | không | `0` | Số lần handler lỗi đã lưu; `CHECK(attempts >= 0)` |
+| `interrupted_runs` | `integer` | không | `0` | Số lần liên tiếp handler đã bắt đầu chạy mà consumer không lưu được kết quả (worker bị kill, kết nối DB hỏng); `CHECK(interrupted_runs >= 0)` |
 | `next_attempt_at` | `timestamptz` | không | — | Thời điểm sớm nhất handler được chạy lại (lịch retry) |
 | `next_dispatch_at` | `timestamptz` | không | — | Hạn relay giao lại task nếu chưa có kết quả, kể cả khi Redis đã nhận rồi mất task |
 | `last_dispatched_at` | `timestamptz` | có | `NULL` | Chỉ để quan sát |
 | `completed_at` | `timestamptz` | có | `NULL` | Lúc kết thúc với `completed` hoặc `rejected` |
 | `last_error` | `text` | không | `''` | Lỗi của lần thất bại gần nhất, đã cắt ngắn, không chứa PII |
-| `failed_at` | `timestamptz` | có | `NULL` | Lúc chuyển `failed` (hết retry) |
+| `failed_at` | `timestamptz` | có | `NULL` | Lúc chuyển `failed` (hết retry hoặc quá số lần chạy dở) |
 | `retried_at` | `timestamptz` | có | `NULL` | Lần gần nhất `retry_failed_events` mở lại cặp này |
 
 Ràng buộc và index:
@@ -204,7 +205,8 @@ Ràng buộc và index:
 Ghi chú:
 
 - Consumer khoá dòng delivery. Gặp `status` khác `pending` thì bỏ qua; nhờ vậy cùng cặp không bao giờ chạy hai lần. Tác động của handler và việc chuyển sang `completed`/`rejected` commit cùng transaction. Xem [07 mục 1.1.1](./07-async-events-jobs.md#111-postgresql-quyết-định-công-việc-còn-chờ).
-- Hết retry: chuyển `failed`, ghi `failed_at` và `last_error` cùng transaction. `manage.py retry_failed_events` khoá dòng `failed`, đặt lại `pending`, `attempts = 0`, lịch về hiện tại và ghi `retried_at`.
+- Hết retry: chuyển `failed`, ghi `failed_at` và `last_error` cùng transaction. `manage.py retry_failed_events` khoá dòng `failed`, đặt lại `pending`, `attempts = 0`, `interrupted_runs = 0`, lịch về hiện tại và ghi `retried_at`.
+- Consumer tăng `interrupted_runs` và commit trước khi gọi handler, rồi đặt về `0` cùng transaction lưu kết quả (`completed`, `rejected`, lịch retry, `failed`). Bộ đếm còn lại nghĩa là lần chạy trước bị cắt ngang. Đã đủ 3 lần liên tiếp thì lần giao sau chuyển `failed` với `last_error = 'HandlerInterrupted'`, không gọi handler; `attempts` không đổi. Task mất do Redis không tới consumer nên không tăng bộ đếm. Xem [07 mục 1.3](./07-async-events-jobs.md#13-retry-và-lỗi).
 - Purge chỉ xoá outbox quá 90 ngày đã có `deliveries_created_at` và mọi delivery `completed`/`rejected` (delivery bị xoá theo `CASCADE`). Giữ sự kiện còn delivery `pending`/`failed` để khôi phục.
 
 ### 1.5. `shared_idempotency_key`: Khoá chống tạo trùng

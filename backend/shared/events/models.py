@@ -69,6 +69,8 @@ class EventDelivery(models.Model):
         max_length=32, choices=DeliveryStatus.choices, default=DeliveryStatus.PENDING
     )
     attempts = models.IntegerField(default=0)
+    # Số lần liên tiếp handler đã bắt đầu chạy mà consumer không lưu được kết quả (07 mục 1.3)
+    interrupted_runs = models.IntegerField(default=0)
     next_attempt_at = models.DateTimeField()
     next_dispatch_at = models.DateTimeField()
     last_dispatched_at = models.DateTimeField(null=True, blank=True)
@@ -89,6 +91,10 @@ class EventDelivery(models.Model):
             ),
             models.CheckConstraint(
                 condition=Q(attempts__gte=0), name="shared_event_delivery_attempts_gte_0"
+            ),
+            models.CheckConstraint(
+                condition=Q(interrupted_runs__gte=0),
+                name="shared_event_delivery_interrupted_runs_gte_0",
             ),
             # (status IN ('completed', 'rejected')) = (completed_at IS NOT NULL)
             models.CheckConstraint(
