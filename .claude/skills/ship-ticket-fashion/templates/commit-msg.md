@@ -5,7 +5,7 @@
 
 <Thân: VÌ SAO, và phần chưa làm hoặc còn gap của commit này nếu có.>
 
-Refs: .scratch/<feature>/issues/NN-<slug>.md
+Refs: .scratch/<feature>/issues/NN-<slug>
 Task: <task>
 ```
 
@@ -13,7 +13,7 @@ Task: <task>
 
 | Task | Phase | Subject |
 | --- | --- | --- |
-| `plan` | 1 | `docs: plan <chủ đề> ticket` (spec + plan trong ticket) |
+| `plan` | 1 | `docs: plan <chủ đề> ticket` (`spec.md` + `plan.md`) |
 | `S<n>` | 2 | `feat` / `fix` / `refactor` / `test` theo việc slice làm |
 | `R1`, `R2` | 4 | `fix(<scope>): address review findings on <chủ đề>`, thân liệt kê mã finding |
 | `sync` | 5 | `docs: sync docs and report for <chủ đề> ticket` |
