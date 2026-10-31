@@ -2,7 +2,7 @@
 
 ### Báo cáo 01/11/2026
 
-**Nhánh:** `fix/makefile-utf8-output` · **PR:** chưa mở · **Mode:** lite
+**Nhánh:** `fix/makefile-utf8-output` · **PR:** #52 · **Mode:** lite
 
 #### Đã làm
 

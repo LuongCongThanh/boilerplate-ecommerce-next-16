@@ -1,6 +1,8 @@
 # `make lint` lỗi mã hoá trên Windows khi output bị chuyển hướng
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #52
 
 Spec: [spec.md](../../spec.md)
 
@@ -32,5 +34,5 @@ Chốt khi grilling ngày 01/11/2026.
 
 ## Acceptance criteria
 
-- [ ] Trên Windows, `make lint > out.txt` exit 0 khi code sạch, không đặt biến môi trường nào trước.
+- [x] Trên Windows, `make lint > out.txt` exit 0 khi code sạch, không đặt biến môi trường nào trước.
 - [ ] `make lint` và `make test` trên CI vẫn xanh.
