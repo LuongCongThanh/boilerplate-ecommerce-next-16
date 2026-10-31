@@ -78,22 +78,46 @@ def get_env() -> Env:
     return load_env()
 
 
+def _malformed_database_url(problem: str) -> ImproperlyConfigured:
+    # Chỉ nêu phần sai và dạng đúng, không chứa giá trị nào của URL (có thể chứa password)
+    return ImproperlyConfigured(
+        f"DATABASE_URL {problem}, dạng đúng: postgres://user:pass@host:port/name"
+    )
+
+
 def database_config(url: str, host: str = "") -> dict[str, Any]:
     """Chuyển `postgres://user:pass@host:port/name?opt=v` thành một mục của `DATABASES`.
 
     Tham số query (ví dụ `sslmode=require` cho RDS) được giữ lại trong `OPTIONS`. `host` khác
     rỗng thì thay host của URL (container trong Compose gọi PostgreSQL trên máy).
+
+    Raises:
+        ImproperlyConfigured: URL sai scheme, thiếu user, thiếu host, có tên database rỗng
+            hoặc chứa `/`, `@`, `:`, hoặc có port không hợp lệ.
     """
     parts = urlsplit(url)
     if parts.scheme not in {"postgres", "postgresql"}:
         raise ImproperlyConfigured("DATABASE_URL phải bắt đầu bằng postgres://")
+    # URL sai cấu trúc vẫn tách được: phần còn lại rơi vào NAME và lỗi chỉ lộ ra khi kết nối,
+    # kèm nguyên chuỗi (có thể chứa password)
+    if not parts.username:
+        raise _malformed_database_url("thiếu user")
+    if not parts.hostname:
+        raise _malformed_database_url("thiếu host")
+    # removeprefix, không lstrip: "///fashion" phải giữ "/" để bị từ chối, không thành "fashion"
+    name = unquote(parts.path.removeprefix("/"))
+    if not name or any(char in name for char in "/@:"):
+        raise _malformed_database_url("có tên database rỗng hoặc chứa /, @, :")
+    # Kiểm port sau cùng: password chứa "/" làm phần sau ":" bị hiểu là port, kiểm trước thì
+    # báo "port không hợp lệ" thay vì chỉ ra URL thiếu user
     try:
         port = parts.port or 5432
-    except ValueError as exc:
-        raise ImproperlyConfigured("DATABASE_URL có port không hợp lệ") from exc
+    except ValueError:
+        # from None: ValueError của urllib chứa nguyên phần bị hiểu là port, có thể là password
+        raise ImproperlyConfigured("DATABASE_URL có port không hợp lệ") from None
     return {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": unquote(parts.path.lstrip("/")),
+        "NAME": name,
         "USER": unquote(parts.username or ""),
         "PASSWORD": unquote(parts.password or ""),
         "HOST": host or parts.hostname or "",

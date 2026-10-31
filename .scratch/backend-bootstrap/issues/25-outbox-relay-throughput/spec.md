@@ -1,6 +1,6 @@
 # Relay xả tồn đọng nhanh hơn 100 delivery mỗi giây
 
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec.md](../../spec.md)
 

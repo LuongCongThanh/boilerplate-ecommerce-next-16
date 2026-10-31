@@ -137,7 +137,7 @@ cd backend
 cp .env.example .env
 ```
 
-Các biến chính trong `.env`. Mỗi biến được khai báo trong `config/env.py` ở mốc đầu tiên dùng tới nó ([roadmap](../../.scratch/mvp-roadmap/map.md)); `.env.example` chỉ chứa biến đã khai báo. Thiếu biến bắt buộc thì Django dừng ngay khi khởi động và báo tên biến.
+Các biến chính trong `.env`. Mỗi biến được khai báo trong `config/env.py` ở mốc đầu tiên dùng tới nó ([roadmap](../../.scratch/mvp-roadmap/map.md)); `.env.example` chỉ chứa biến đã khai báo. Thiếu biến bắt buộc thì Django dừng ngay khi khởi động và báo tên biến. `DATABASE_URL` thiếu user, thiếu host hoặc có tên database rỗng hay chứa `/`, `@`, `:` cũng dừng như vậy, thông báo nêu phần sai mà không in giá trị URL; password có ký tự `/`, `@`, `:`, `?`, `#` phải mã hoá phần trăm (`%2F`, `%40`…).
 
 ```dotenv
 # Từ M0
