@@ -40,9 +40,9 @@ python S/scripts/progress.py --feature <feature>
 
 `close_ticket.py` in các AC vừa tick: đối chiếu với bảng AC → bằng chứng. AC nằm trong `untestable` (đọc từ state) không được tick và in riêng: đã kiểm tay thì tự tick, chưa thì ghi vào Notes của PR.
 
-Cùng commit, sửa `.scratch/mvp-roadmap/map.md`: dòng của mốc trong bảng **Tiến độ** khớp `progress.py`; **Decisions-so-far** thêm `DD/MM/YYYY: …` cho mỗi quyết định ảnh hưởng ngoài ticket.
+Cùng commit, sửa `.scratch/mvp-roadmap/map.md`: dòng của mốc trong bảng **Tiến độ** khớp `progress.py`; **Decisions-so-far** thêm `DD/MM/YYYY: …` cho mỗi quyết định ảnh hưởng ngoài ticket. Sửa `docs/agents/ticket-history.md`: thêm ticket vào cuối **Đã xong** của feature (`link · mô tả · PR #<số> · DD/MM/YYYY`), bỏ khỏi **Còn mở**.
 
-`commit.py <T> --task close -m "docs: close <chủ đề> ticket" -- <thư mục ticket> .scratch/mvp-roadmap/map.md`, push.
+`commit.py <T> --task close -m "docs: close <chủ đề> ticket" -- <thư mục ticket> .scratch/mvp-roadmap/map.md docs/agents/ticket-history.md`, push.
 
 ## 4. CI
 

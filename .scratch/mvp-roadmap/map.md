@@ -19,12 +19,12 @@ M1 có identity lõi vì endpoint back-office của catalog và inventory cần 
 
 ## Tiến độ
 
-Cập nhật trong cùng PR đóng ticket. Nguồn sự thật vẫn là dòng `Status:` của từng ticket; bảng này chỉ để nhìn nhanh.
+Cập nhật trong cùng PR đóng ticket. Nguồn sự thật vẫn là dòng `Status:` của từng ticket; bảng này chỉ để nhìn nhanh. Ticket ✅ xếp theo thứ tự merge; ngày và PR của từng ticket ở [`ticket-history.md`](../../docs/agents/ticket-history.md).
 
 | Mốc / feature | Trạng thái | Ticket |
 |---|---|---|
 | [`dev-security-baseline`](../dev-security-baseline/spec.md) | Gần xong | ✅ 01, 02 · 🟡 03 chờ chủ repo tự kiểm tra 3 AC |
-| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Xong (mốc chính) | ✅ 06, 07, 08, 09, 10, 11, 12, 15, 16, 17, 18 · Backlog không chặn M0, làm xen kẽ: 01–04, 14, 19–23 · ⏸ trước go-live: 13 macOS, 24–28 outbox (`needs-triage`) |
+| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Xong (mốc chính) | ✅ 06, 07, 08, 09, 16, 15, 17, 10, 18, 11, 12 · Backlog không chặn M0, làm xen kẽ: 01–04, 14, 19–23 · ⏸ trước go-live: 13 macOS, 24–28 outbox (`needs-triage`) |
 | **M1** `catalog-inventory` | Kế tiếp | Tạo spec (`/ship-ticket-fashion M1`) |
 | **M2** – **M6** | Chưa có spec | Tạo spec khi mốc trước gần xong |
 | **M7** `sandbox-acceptance` | Chưa có spec | ⏸ [01](../sandbox-acceptance/issues/01-load-test-k6-staging/spec.md) k6, `needs-triage` |
