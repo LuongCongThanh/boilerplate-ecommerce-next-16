@@ -2,7 +2,7 @@
 
 ### Báo cáo 01/11/2026
 
-**Nhánh:** `feat/openapi-error-responses` · **PR:** chưa mở · **Mode:** lite
+**Nhánh:** `feat/openapi-error-responses` · **PR:** #54 · **Mode:** lite
 
 #### Đã làm
 

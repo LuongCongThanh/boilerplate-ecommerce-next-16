@@ -1,6 +1,8 @@
 # Khai báo `ErrorDTO` và response lỗi trong OpenAPI
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #54
 
 Spec: [spec.md](../../spec.md)
 
@@ -32,5 +34,5 @@ Chốt khi grilling ngày 01/11/2026.
 
 ## Acceptance criteria
 
-- [ ] `manage.py spectacular --validate` sinh schema có component `ErrorDTO` đúng 04 mục 5.1.
-- [ ] Endpoint địa giới khai báo response 404 dạng `ErrorDTO` cho `geo/provinces/{code}/wards` và các status lỗi chung (400, 429, 500) theo cách đã chọn.
+- [x] `manage.py spectacular --validate` sinh schema có component `ErrorDTO` đúng 04 mục 5.1.
+- [x] Endpoint địa giới khai báo response 404 dạng `ErrorDTO` cho `geo/provinces/{code}/wards` và các status lỗi chung (400, 429, 500) theo cách đã chọn.
