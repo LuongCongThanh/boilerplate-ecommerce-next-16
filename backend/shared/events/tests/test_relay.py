@@ -14,6 +14,7 @@ from kombu.exceptions import OperationalError
 from structlog.testing import capture_logs
 
 from shared.events import handles, publish, relay
+from shared.events.consumer import MAX_INTERRUPTED_RUNS
 from shared.events.models import DeliveryStatus, EventDelivery, OutboxEvent
 from shared.events.tasks import dispatch_event
 from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
@@ -170,6 +171,33 @@ def test_lost_task_redispatched_after_deadline(
     assert delivery.status == DeliveryStatus.COMPLETED
     # Task mất không tiêu lượt retry và không reset lượt đã tiêu
     assert delivery.attempts == 2
+    assert handler_effect_table.objects.count() == 1
+
+
+def test_lost_tasks_do_not_count_as_interrupted_runs(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    _register_recorder(handler_effect_table, "shared.record_effect")
+    with time_machine.travel(NOW, tick=False) as traveller:
+        delivery = EventDeliveryFactory.create(handler="shared.record_effect", attempts=2)
+
+        # Redis mất task nhiều lần hơn ngưỡng chạy dở: không task nào tới consumer
+        with mock.patch.object(dispatch_event, "apply_async") as lost:
+            for _ in range(MAX_INTERRUPTED_RUNS + 1):
+                assert relay.dispatch_due() == 1
+                traveller.shift(relay.REDISPATCH_AFTER)
+        assert lost.call_count == MAX_INTERRUPTED_RUNS + 1
+
+        delivery.refresh_from_db()
+        after_lost = (delivery.status, delivery.attempts, delivery.interrupted_runs)
+        assert after_lost == (DeliveryStatus.PENDING, 2, 0)
+
+        # Task tới được worker thì handler vẫn chạy, không bị chuyển `failed`
+        assert relay.dispatch_due() == 1
+
+    delivery.refresh_from_db()
+    after_run = (delivery.status, delivery.attempts, delivery.interrupted_runs)
+    assert after_run == (DeliveryStatus.COMPLETED, 2, 0)
     assert handler_effect_table.objects.count() == 1
 
 

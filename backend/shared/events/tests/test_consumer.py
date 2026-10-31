@@ -9,7 +9,12 @@ from django.db import DatabaseError, connection
 from structlog.testing import capture_logs
 
 from shared.events import handles
-from shared.events.consumer import RETRY_DELAYS, process_delivery
+from shared.events.consumer import (
+    INTERRUPTED_ERROR,
+    MAX_INTERRUPTED_RUNS,
+    RETRY_DELAYS,
+    process_delivery,
+)
 from shared.events.models import DeliveryStatus
 from shared.events.tasks import dispatch_event
 from shared.events.tests.conftest import HandlerEffect, SampleHappenedV1
@@ -32,6 +37,14 @@ class InvalidTransition(DomainError):
 
 class Boom(Exception):
     pass
+
+
+class WorkerKilled(BaseException):
+    """Giả lập worker bị kill giữa lúc handler chạy (quá time limit, hết bộ nhớ).
+
+    Không phải `Exception` nên consumer không bắt được để lưu lỗi: transaction chạy handler
+    rollback như khi process chết.
+    """
 
 
 def _record(effects: type[HandlerEffect], handler: str, event: SampleHappenedV1) -> None:
@@ -264,9 +277,87 @@ def test_missing_handler_keeps_pending_without_attempt() -> None:
     delivery.refresh_from_db()
     assert delivery.status == DeliveryStatus.PENDING
     assert delivery.attempts == 0
+    # Handler chưa chạy nên không tính là lần chạy dở
+    assert delivery.interrupted_runs == 0
     assert delivery.next_attempt_at == NOW
     assert logs[0]["event"] == "event_handler_missing"
     assert logs[0]["log_level"] == "error"
+
+
+# Transaction thật thay vì savepoint: chứng minh bộ đếm đã commit trước khi worker bị kill
+@pytest.mark.django_db(transaction=True)
+@time_machine.travel(NOW, tick=False)
+def test_interrupted_handler_fails_after_max_interrupted_runs(
+    handler_effect_table: type[HandlerEffect],
+) -> None:
+    calls: list[SampleHappenedV1] = []
+
+    @handles("shared.sample-happened", name="shared.killed")
+    def killed(event: SampleHappenedV1) -> None:
+        calls.append(event)
+        _record(handler_effect_table, "shared.killed", event)
+        raise WorkerKilled
+
+    delivery = EventDeliveryFactory.create(handler="shared.killed")
+
+    for run in range(1, MAX_INTERRUPTED_RUNS + 1):
+        with pytest.raises(WorkerKilled):
+            process_delivery(delivery.event_id, "shared.killed")
+        delivery.refresh_from_db()
+        # Bộ đếm commit trước khi handler chạy nên còn lại sau khi worker bị kill
+        after_run = (delivery.status, delivery.interrupted_runs)
+        assert after_run == (DeliveryStatus.PENDING, run)
+
+    with capture_logs() as logs:
+        process_delivery(delivery.event_id, "shared.killed")
+
+    delivery.refresh_from_db()
+    assert delivery.status == DeliveryStatus.FAILED
+    assert delivery.failed_at == NOW
+    assert delivery.last_error == INTERRUPTED_ERROR
+    assert delivery.interrupted_runs == MAX_INTERRUPTED_RUNS
+    # Lần chạy dở không tiêu lượt retry: `attempts` chỉ đếm lỗi handler đã lưu được
+    assert delivery.attempts == 0
+    assert len(calls) == MAX_INTERRUPTED_RUNS
+    assert not handler_effect_table.objects.exists()
+    failed = [log for log in logs if log["event"] == "event_delivery_failed"]
+    assert len(failed) == 1
+    assert failed[0]["log_level"] == "error"
+    assert failed[0]["handler"] == "shared.killed"
+    assert failed[0]["interrupted_runs"] == MAX_INTERRUPTED_RUNS
+
+
+@pytest.mark.parametrize(
+    ("raised", "attempts", "status"),
+    [
+        (None, 0, DeliveryStatus.COMPLETED),
+        (InvalidTransition, 0, DeliveryStatus.REJECTED),
+        (Boom, 0, DeliveryStatus.PENDING),
+        (Boom, len(RETRY_DELAYS), DeliveryStatus.FAILED),
+    ],
+    ids=["completed", "rejected", "retry", "failed"],
+)
+@time_machine.travel(NOW, tick=False)
+def test_saved_outcome_resets_interrupted_runs(
+    raised: type[Exception] | None, attempts: int, status: DeliveryStatus
+) -> None:
+    @handles("shared.sample-happened", name="shared.recovered")
+    def recovered(event: SampleHappenedV1) -> None:
+        if raised is not None:
+            raise raised
+
+    # Đã chạy dở sát ngưỡng; lần này handler chạy tới cùng nên consumer lưu được kết quả
+    delivery = EventDeliveryFactory.create(
+        handler="shared.recovered",
+        attempts=attempts,
+        interrupted_runs=MAX_INTERRUPTED_RUNS - 1,
+    )
+
+    process_delivery(delivery.event_id, "shared.recovered")
+
+    delivery.refresh_from_db()
+    outcome = (delivery.status, delivery.interrupted_runs)
+    assert outcome == (status, 0)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -306,6 +397,9 @@ def test_concurrent_duplicate_dispatch_commits_once(
     assert handler_effect_table.objects.count() == 1
     delivery.refresh_from_db()
     assert delivery.status == DeliveryStatus.COMPLETED
+    # Task trùng chen vào giữa hai transaction có thể tăng bộ đếm, nhưng kết quả lưu sau cùng
+    # đặt về 0
+    assert delivery.interrupted_runs == 0
 
 
 HANDLER_DURATION = timedelta(seconds=30)
@@ -392,3 +486,5 @@ def test_handler_breaking_connection_rolls_back_whole_transaction() -> None:
     assert delivery.status == DeliveryStatus.PENDING
     assert delivery.attempts == 0
     assert delivery.last_error == ""
+    # Bộ đếm đã commit ở transaction trước khi gọi handler nên không rollback theo
+    assert delivery.interrupted_runs == 1
