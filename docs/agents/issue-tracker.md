@@ -28,6 +28,7 @@ Làm ngay trong PR của ticket đó, trên `spec.md`, để ticket được mer
 1. Đổi thành `Status: resolved`.
 2. Tick hết các acceptance criteria.
 3. Thêm dòng `**PR:** #<số>`.
+4. Thêm ticket vào cuối phần **Đã xong** của feature trong [`ticket-history.md`](./ticket-history.md) và bỏ khỏi phần **Còn mở**.
 
 `resolved` là trạng thái đóng, không thuộc 5 trạng thái triage.
 

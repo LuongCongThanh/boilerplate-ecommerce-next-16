@@ -4,6 +4,8 @@ Status: resolved
 
 Spec: [spec.md](../../spec.md)
 
+**PR:** #21
+
 ## Bối cảnh
 
 Theo [ADR 0017](../../../../docs/adr/0017-windows-native-dev-api-on-host.md), Windows dev thẳng trên Windows, không qua WSL2. PostgreSQL cài tay một lần bằng bộ cài EDB hoặc `winget install PostgreSQL.PostgreSQL.<major>`; script `scripts/setup/postgres.ps1` lo phần chạy lại được: role, database, kiểm tra extension. `scripts/setup/postgres.sh` chỉ còn dùng cho macOS và Ubuntu (ticket [13](../13-local-postgres-installer-macos/spec.md)).

@@ -30,9 +30,9 @@ Chỉ gồm quy trình phát triển. Quy tắc viết code an toàn trong Djang
 
 ## Ticket
 
-1. [`01-pre-commit-and-agent-guard.md`](./issues/01-pre-commit-and-agent-guard/spec.md): `pre-commit`, ruff `S`, rule deny cho Claude Code.
-2. [`02-ci-and-dependabot.md`](./issues/02-ci-and-dependabot/spec.md): CI workflow, CodeQL, Dependabot, trivy.
-3. [`03-github-settings-and-security-policy.md`](./issues/03-github-settings-and-security-policy/spec.md): cấu hình GitHub và `SECURITY.md`.
+1. [`01-pre-commit-and-agent-guard/`](./issues/01-pre-commit-and-agent-guard/spec.md): `pre-commit`, ruff `S`, rule deny cho Claude Code.
+2. [`02-ci-and-dependabot/`](./issues/02-ci-and-dependabot/spec.md): CI workflow, CodeQL, Dependabot, trivy.
+3. [`03-github-settings-and-security-policy/`](./issues/03-github-settings-and-security-policy/spec.md): cấu hình GitHub và `SECURITY.md`.
 
 ## Ngoài phạm vi
 

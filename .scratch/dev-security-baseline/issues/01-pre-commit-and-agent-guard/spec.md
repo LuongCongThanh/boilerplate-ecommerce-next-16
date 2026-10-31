@@ -4,6 +4,8 @@ Status: resolved
 
 Spec: [spec.md](../../spec.md)
 
+**PR:** #4
+
 ## Việc cần làm
 
 - Tạo `.pre-commit-config.yaml` ở gốc repo, gồm:
