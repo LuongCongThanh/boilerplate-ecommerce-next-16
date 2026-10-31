@@ -35,4 +35,4 @@ Chốt khi grilling ngày 01/11/2026.
 ## Acceptance criteria
 
 - [x] Trên Windows, `make lint > out.txt` exit 0 khi code sạch, không đặt biến môi trường nào trước.
-- [ ] `make lint` và `make test` trên CI vẫn xanh.
+- [x] `make lint` và `make test` trên CI vẫn xanh.
