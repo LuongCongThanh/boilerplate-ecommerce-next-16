@@ -1,6 +1,6 @@
 # Độ bền của theo dõi và purge outbox khi tồn đọng lớn
 
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec.md](../../spec.md)
 

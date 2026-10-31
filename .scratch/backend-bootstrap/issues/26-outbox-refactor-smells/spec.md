@@ -1,6 +1,6 @@
 # Gom chuyển trạng thái delivery và helper test của outbox
 
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec.md](../../spec.md)
 

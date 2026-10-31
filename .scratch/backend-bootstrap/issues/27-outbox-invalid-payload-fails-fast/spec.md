@@ -1,6 +1,6 @@
 # Payload không còn hợp lệ với class sự kiện thì delivery `failed` ngay
 
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec.md](../../spec.md)
 

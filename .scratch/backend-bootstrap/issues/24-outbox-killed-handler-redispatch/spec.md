@@ -1,6 +1,6 @@
 # Delivery bị kill do time limit được giao lại vô hạn
 
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec.md](../../spec.md)
 
