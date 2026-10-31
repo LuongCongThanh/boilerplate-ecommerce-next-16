@@ -7,7 +7,7 @@ from django.core.management.base import CommandError
 from structlog.testing import capture_logs
 
 from shared.events import handles
-from shared.events.consumer import process_delivery
+from shared.events.consumer import INTERRUPTED_ERROR, MAX_INTERRUPTED_RUNS, process_delivery
 from shared.events.models import DeliveryStatus, EventDelivery
 from shared.events.tests.conftest import SampleHappenedV1
 from shared.testing.factories import EventDeliveryFactory, OutboxEventFactory
@@ -51,6 +51,38 @@ def test_reopens_failed_and_next_run_succeeds() -> None:
     assert delivery.status == DeliveryStatus.COMPLETED
     assert delivery.completed_at == NOW
     assert len(received) == 1
+
+
+@time_machine.travel(NOW, tick=False)
+def test_reopens_interrupted_delivery_with_counter_reset() -> None:
+    received: list[SampleHappenedV1] = []
+
+    # Handler đã được sửa sau khi liên tục làm worker chết (quá time limit, hết bộ nhớ)
+    @handles("shared.sample-happened", name="shared.fixed_handler")
+    def fixed_handler(event: SampleHappenedV1) -> None:
+        received.append(event)
+
+    delivery = EventDeliveryFactory.create(
+        handler="shared.fixed_handler",
+        status=DeliveryStatus.FAILED,
+        interrupted_runs=MAX_INTERRUPTED_RUNS,
+        next_attempt_at=FAILED_AT,
+        failed_at=FAILED_AT,
+        last_error=INTERRUPTED_ERROR,
+    )
+
+    call_command("retry_failed_events", "--event-id", str(delivery.event_id))
+
+    delivery.refresh_from_db()
+    reopened = (delivery.status, delivery.interrupted_runs)
+    assert reopened == (DeliveryStatus.PENDING, 0)
+
+    # Bộ đếm còn ở ngưỡng thì lần giao này chuyển `failed` ngay mà không gọi handler
+    process_delivery(delivery.event_id, "shared.fixed_handler")
+
+    delivery.refresh_from_db()
+    processed = (delivery.status, delivery.interrupted_runs, len(received))
+    assert processed == (DeliveryStatus.COMPLETED, 0, 1)
 
 
 def _failed(**kwargs: object) -> EventDelivery:

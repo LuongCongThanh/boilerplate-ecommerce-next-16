@@ -30,8 +30,9 @@ def retry_failed_events(
 ) -> int:
     """Mở lại delivery `failed` khớp mọi bộ lọc được truyền; relay sẽ giao lại.
 
-    Đặt `pending`, `attempts = 0`, lịch retry và giao lại về hiện tại, ghi `retried_at`. Giữ
-    `failed_at`, `last_error` làm dấu vết tới lần lỗi sau. Delivery `completed`/`rejected` không
+    Đặt `pending`, `attempts = 0`, `interrupted_runs = 0` (delivery `failed` vì chạy dở được
+    chạy lại thật), lịch retry và giao lại về hiện tại, ghi `retried_at`. Giữ `failed_at`,
+    `last_error` làm dấu vết tới lần lỗi sau. Delivery `completed`/`rejected` không
     bao giờ được mở lại. Delivery của handler không còn trong registry không được mở lại (sẽ kẹt
     `pending` mãi) mà log `WARNING`. Không truyền bộ lọc nào nghĩa là mọi delivery `failed`. Trả
     số delivery đã mở lại.
@@ -55,6 +56,7 @@ def retry_failed_events(
         EventDelivery.objects.filter(id__in=[delivery_id for delivery_id, _, _ in reopened]).update(
             status=DeliveryStatus.PENDING,
             attempts=0,
+            interrupted_runs=0,
             next_attempt_at=now,
             next_dispatch_at=now,
             retried_at=now,
