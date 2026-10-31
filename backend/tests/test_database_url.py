@@ -1,7 +1,11 @@
+import os
+import subprocess
+import sys
+
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from config.env import database_config
+from config.env import BASE_DIR, database_config
 
 
 def test_keeps_query_parameters_as_options() -> None:
@@ -32,3 +36,61 @@ def test_host_argument_overrides_host_of_url() -> None:
 def test_invalid_port_raises_improperly_configured() -> None:
     with pytest.raises(ImproperlyConfigured, match="port"):
         database_config("postgres://u:p@localhost:54x2/fashion")
+
+
+@pytest.mark.parametrize(
+    ("url", "missing"),
+    [
+        ("postgres://localhost:5432/fashion", "user"),
+        ("postgres://:p@localhost:5432/fashion", "user"),
+        ("postgres://u:p@:5432/fashion", "host"),
+        # Password chèn sai chỗ: netloc rỗng, mọi thứ rơi vào path
+        ("postgres:///secret//fashion:fashion@localhost:5432/fashion", "user"),
+        ("postgres://u:p@localhost:5432", "tên database"),
+        ("postgres://u:p@localhost:5432/", "tên database"),
+        ("postgres://u:p@localhost:5432/a/b", "tên database"),
+        ("postgres://u:p@localhost:5432/a%40b", "tên database"),
+        ("postgres://u:p@localhost:5432/a:b", "tên database"),
+    ],
+)
+def test_rejects_malformed_url(url: str, missing: str) -> None:
+    # Không tới bước kết nối: lỗi nêu biến và phần sai để người dùng sửa .env
+    with pytest.raises(ImproperlyConfigured, match=f"DATABASE_URL.*{missing}"):
+        database_config(url, host="host.docker.internal")
+
+
+def test_error_message_hides_url_and_password() -> None:
+    url = "postgres:///top-secret//fashion:fashion@localhost:5432/fashion"
+
+    with pytest.raises(ImproperlyConfigured) as exc_info:
+        database_config(url)
+
+    message = str(exc_info.value)
+    assert "top-secret" not in message
+    assert "localhost" not in message
+
+
+def test_manage_py_check_stops_before_connecting() -> None:
+    # Biến môi trường thắng .env, nên chạy được cả trên máy dev lẫn CI
+    # PYTHONUTF8: trên Windows, output bị chuyển hướng mặc định ghi bằng cp1252
+    env = {
+        **os.environ,
+        "DATABASE_URL": "postgres:///top-secret//fashion:fashion@localhost:5432/fashion",
+        "PYTHONUTF8": "1",
+    }
+
+    result = subprocess.run(
+        [sys.executable, "manage.py", "check", "--database", "default"],
+        cwd=BASE_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "ImproperlyConfigured: DATABASE_URL thiếu user" in output
+    assert "top-secret" not in output

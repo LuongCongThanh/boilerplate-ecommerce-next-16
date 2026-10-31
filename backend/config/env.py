@@ -91,9 +91,24 @@ def database_config(url: str, host: str = "") -> dict[str, Any]:
         port = parts.port or 5432
     except ValueError as exc:
         raise ImproperlyConfigured("DATABASE_URL có port không hợp lệ") from exc
+    name = unquote(parts.path.lstrip("/"))
+    # URL sai cấu trúc vẫn tách được: phần còn lại rơi vào NAME và lỗi chỉ lộ ra khi kết nối,
+    # kèm nguyên chuỗi (có thể chứa password). Thông báo chỉ nêu phần sai, không chứa giá trị
+    if not parts.username:
+        problem = "thiếu user"
+    elif not parts.hostname:
+        problem = "thiếu host"
+    elif not name or any(char in name for char in "/@:"):
+        problem = "có tên database rỗng hoặc chứa /, @, :"
+    else:
+        problem = ""
+    if problem:
+        raise ImproperlyConfigured(
+            f"DATABASE_URL {problem}, dạng đúng: postgres://user:pass@host:port/name"
+        )
     return {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": unquote(parts.path.lstrip("/")),
+        "NAME": name,
         "USER": unquote(parts.username or ""),
         "PASSWORD": unquote(parts.password or ""),
         "HOST": host or parts.hostname or "",
