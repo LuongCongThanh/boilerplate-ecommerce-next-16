@@ -2,7 +2,7 @@
 
 ### Báo cáo 31/10/2026
 
-**Nhánh:** `fix/validate-database-url` · **PR:** chưa mở · **Mode:** lite
+**Nhánh:** `fix/validate-database-url` · **PR:** #45 · **Mode:** lite
 
 #### Đã làm
 

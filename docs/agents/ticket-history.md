@@ -34,6 +34,7 @@ Thứ tự hoàn thành thực tế của ticket trong `.scratch/`, theo thời 
 9. [18](../../.scratch/backend-bootstrap/issues/18-outbox-operations/spec.md) · lệnh vận hành và theo dõi outbox · PR #38 · 30/10/2026
 10. [11](../../.scratch/backend-bootstrap/issues/11-shared-idempotency/spec.md) · `Idempotency-Key` · PR #40 · 30/10/2026
 11. [12](../../.scratch/backend-bootstrap/issues/12-account-bootstrap/spec.md) · model `Account` và `create_staff` · PR #42 · 31/10/2026
+12. [21](../../.scratch/backend-bootstrap/issues/21-validate-database-url/spec.md) · từ chối `DATABASE_URL` sai định dạng ngay khi đọc env · PR #45 · 31/10/2026
 
 ### Còn mở
 
@@ -48,18 +49,17 @@ Làm xen kẽ, không chặn mốc:
 - [14](../../.scratch/backend-bootstrap/issues/14-trivy-and-dependabot-backend/spec.md) · quét image bằng trivy, Dependabot cho `backend/` · `ready-for-agent`
 - [19](../../.scratch/backend-bootstrap/issues/19-trust-upstream-request-id/spec.md) · dùng `X-Request-ID` từ BFF làm `request_id` · `ready-for-agent`
 - [20](../../.scratch/backend-bootstrap/issues/20-dependabot-compose-images/spec.md) · Dependabot theo dõi image trong Compose · `ready-for-agent`
-- [21](../../.scratch/backend-bootstrap/issues/21-validate-database-url/spec.md) · từ chối `DATABASE_URL` sai định dạng · `ready-for-agent`
 - [22](../../.scratch/backend-bootstrap/issues/22-openapi-error-responses/spec.md) · `ErrorDTO` và response lỗi trong OpenAPI · `ready-for-agent`
 - [23](../../.scratch/backend-bootstrap/issues/23-makefile-utf8-output/spec.md) · `make lint` lỗi mã hoá trên Windows · `ready-for-agent`
 
 Trước go-live:
 
 - [13](../../.scratch/backend-bootstrap/issues/13-local-postgres-installer-macos/spec.md) · bộ cài PostgreSQL trên macOS · `ready-for-human`
-- [24](../../.scratch/backend-bootstrap/issues/24-outbox-killed-handler-redispatch/spec.md) · delivery bị kill do time limit được giao lại vô hạn · `needs-triage`
-- [25](../../.scratch/backend-bootstrap/issues/25-outbox-relay-throughput/spec.md) · relay xả tồn đọng nhanh hơn 100 delivery mỗi giây · `needs-triage`
-- [26](../../.scratch/backend-bootstrap/issues/26-outbox-refactor-smells/spec.md) · gom chuyển trạng thái delivery và helper test · `needs-triage`
-- [27](../../.scratch/backend-bootstrap/issues/27-outbox-invalid-payload-fails-fast/spec.md) · payload không hợp lệ thì delivery `failed` ngay · `needs-triage`
-- [28](../../.scratch/backend-bootstrap/issues/28-outbox-operations-hardening/spec.md) · độ bền của theo dõi và purge outbox khi tồn đọng lớn · `needs-triage`
+- [24](../../.scratch/backend-bootstrap/issues/24-outbox-killed-handler-redispatch/spec.md) · delivery bị kill do time limit được giao lại vô hạn · `ready-for-agent`
+- [25](../../.scratch/backend-bootstrap/issues/25-outbox-relay-throughput/spec.md) · relay xả tồn đọng nhanh hơn 100 delivery mỗi giây · `ready-for-agent`
+- [26](../../.scratch/backend-bootstrap/issues/26-outbox-refactor-smells/spec.md) · gom chuyển trạng thái delivery và helper test · `ready-for-agent`
+- [27](../../.scratch/backend-bootstrap/issues/27-outbox-invalid-payload-fails-fast/spec.md) · payload không hợp lệ thì delivery `failed` ngay · `ready-for-agent`
+- [28](../../.scratch/backend-bootstrap/issues/28-outbox-operations-hardening/spec.md) · độ bền của theo dõi và purge outbox khi tồn đọng lớn · `ready-for-agent`
 
 ## `sandbox-acceptance` (M7)
 

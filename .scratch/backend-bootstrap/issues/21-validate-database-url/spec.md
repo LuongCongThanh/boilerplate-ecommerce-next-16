@@ -1,6 +1,8 @@
 # `config/env.py` từ chối `DATABASE_URL` sai định dạng ngay khi đọc env
 
-Status: ready-for-agent
+Status: resolved
+
+**PR:** #45
 
 Spec: [spec.md](../../spec.md)
 
@@ -38,6 +40,6 @@ Chốt khi grilling ngày 31/10/2026.
 
 ## Acceptance criteria
 
-- [ ] `DATABASE_URL` thiếu user, thiếu host hoặc tên database sai làm `manage.py check` và pytest dừng ngay với `ImproperlyConfigured` nhắc tới `DATABASE_URL`, không tới bước kết nối PostgreSQL.
-- [ ] Thông báo lỗi không chứa password hay toàn bộ URL.
-- [ ] Các test hiện có của `test_database_url.py` vẫn pass.
+- [x] `DATABASE_URL` thiếu user, thiếu host hoặc tên database sai làm `manage.py check` và pytest dừng ngay với `ImproperlyConfigured` nhắc tới `DATABASE_URL`, không tới bước kết nối PostgreSQL.
+- [x] Thông báo lỗi không chứa password hay toàn bộ URL.
+- [x] Các test hiện có của `test_database_url.py` vẫn pass.
