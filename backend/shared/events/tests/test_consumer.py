@@ -6,9 +6,11 @@ from typing import Any
 import pytest
 import time_machine
 from django.db import DatabaseError, connection
+from pydantic import model_validator
 from structlog.testing import capture_logs
 
 from shared.events import handles
+from shared.events.base import DomainEvent
 from shared.events.consumer import (
     INTERRUPTED_ERROR,
     MAX_INTERRUPTED_RUNS,
@@ -177,16 +179,98 @@ def test_invalid_payload_fails_without_calling_handler() -> None:
     counters = (delivery.attempts, delivery.interrupted_runs)
     assert counters == (0, 0)
     assert calls == []
+    # Đúng một log ERROR để Sentry cảnh báo một lần cho delivery này
+    errors = [log for log in logs if log["log_level"] == "error"]
+    assert len(errors) == 1
     failed = [log for log in logs if log["event"] == "event_delivery_failed"]
     assert len(failed) == 1
-    assert failed[0]["log_level"] == "error"
     assert failed[0]["handler"] == "shared.never_called"
-    # Chỉ vị trí và loại lỗi, không mang input (có thể là PII)
+    # Chỉ tên field đã khai báo và loại lỗi, không mang input (có thể là PII)
     assert failed[0]["invalid_fields"] == [
-        {"loc": ["order_code"], "type": "string_type"},
-        {"loc": ["amount"], "type": "missing"},
+        {"field": "order_code", "type": "string_type"},
+        {"field": "amount", "type": "missing"},
     ]
+    assert "exc_info" not in failed[0]
     assert "khach@example.com" not in repr(logs)
+
+
+@time_machine.travel(NOW, tick=False)
+def test_invalid_payload_fails_before_interrupted_runs_check() -> None:
+    calls: list[SampleHappenedV1] = []
+
+    @handles("shared.sample-happened", name="shared.never_called")
+    def never_called(event: SampleHappenedV1) -> None:
+        calls.append(event)
+
+    # Đã chạm ngưỡng chạy dở, nhưng nguyên nhân gốc là payload không parse được
+    event = OutboxEventFactory.create(payload={"order_code": ORDER_CODE})
+    delivery = EventDeliveryFactory.create(
+        event=event,
+        handler="shared.never_called",
+        attempts=2,
+        interrupted_runs=MAX_INTERRUPTED_RUNS,
+    )
+
+    process_delivery(delivery.event_id, "shared.never_called")
+
+    delivery.refresh_from_db()
+    assert delivery.status == DeliveryStatus.FAILED
+    assert delivery.last_error == "ValidationError"
+    counters = (delivery.attempts, delivery.interrupted_runs)
+    assert counters == (2, MAX_INTERRUPTED_RUNS)
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("event_type", "payload", "error"),
+    [
+        ("shared.broken-parse", {"order_code": ORDER_CODE}, "KeyError"),
+        ("shared.sample-happened", ["khach@example.com"], "TypeError"),
+    ],
+    ids=["validator_raises", "payload_not_dict"],
+)
+@time_machine.travel(NOW, tick=False)
+def test_non_validation_parse_error_fails_with_traceback(
+    event_type: str, payload: Any, error: str
+) -> None:
+    class BrokenParseV1(DomainEvent):
+        event_type = "shared.broken-parse"
+        schema_version = 1
+
+        order_code: str
+
+        @model_validator(mode="before")
+        @classmethod
+        def _read_legacy_code(cls, data: Any) -> Any:
+            # Lỗi code của class sự kiện: đọc key mà payload không có
+            return {**data, "order_code": data["legacy_code"]}
+
+    calls: list[DomainEvent] = []
+
+    @handles(event_type, name="shared.never_called")
+    def never_called(event: DomainEvent) -> None:
+        calls.append(event)
+
+    event = OutboxEventFactory.create(event_type=event_type, payload=payload)
+    delivery = EventDeliveryFactory.create(event=event, handler="shared.never_called")
+
+    with capture_logs() as logs:
+        process_delivery(delivery.event_id, "shared.never_called")
+
+    delivery.refresh_from_db()
+    assert delivery.status == DeliveryStatus.FAILED
+    assert delivery.failed_at == NOW
+    assert delivery.last_error == error
+    # Parse là hàm thuần nên retry vô ích; handler không chạy nên bộ đếm giữ nguyên
+    counters = (delivery.attempts, delivery.interrupted_runs)
+    assert counters == (0, 0)
+    assert calls == []
+    errors = [log for log in logs if log["log_level"] == "error"]
+    assert len(errors) == 1
+    assert errors[0]["event"] == "event_delivery_failed"
+    # Lỗi code của class sự kiện: cần traceback để sửa
+    assert errors[0]["exc_info"] is True
+    assert "invalid_fields" not in errors[0]
 
 
 @time_machine.travel(NOW, tick=False)
