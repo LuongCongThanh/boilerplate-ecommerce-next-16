@@ -24,8 +24,9 @@ Cập nhật trong cùng PR đóng ticket. Nguồn sự thật vẫn là dòng `
 | Mốc / feature | Trạng thái | Ticket |
 |---|---|---|
 | [`dev-security-baseline`](../dev-security-baseline/spec.md) | Gần xong | ✅ 01, 02 · 🟡 03 chờ chủ repo tự kiểm tra 3 AC |
-| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Đang làm | ✅ 06, 07, 08, 09, 10, 11, 15, 16, 17, 18 · ⬜ 12 (còn lại để đóng M0) · Backlog không chặn M0, làm xen kẽ: 01–04, 14, 19–23 · ⏸ trước go-live: 13 macOS, 24–28 outbox (`needs-triage`) |
-| **M1** – **M6** | Chưa có spec | Tạo spec khi mốc trước gần xong |
+| **M0** [`backend-bootstrap`](../backend-bootstrap/spec.md) | Xong (mốc chính) | ✅ 06, 07, 08, 09, 10, 11, 12, 15, 16, 17, 18 · Backlog không chặn M0, làm xen kẽ: 01–04, 14, 19–23 · ⏸ trước go-live: 13 macOS, 24–28 outbox (`needs-triage`) |
+| **M1** `catalog-inventory` | Kế tiếp | Tạo spec (`/ship-ticket-fashion M1`) |
+| **M2** – **M6** | Chưa có spec | Tạo spec khi mốc trước gần xong |
 | **M7** `sandbox-acceptance` | Chưa có spec | ⏸ [01](../sandbox-acceptance/issues/01-load-test-k6-staging.md) k6, `needs-triage` |
 
 Ký hiệu: ✅ `resolved` · 🟡 đang dở · ⬜ chưa làm · ⏸ để sau.
@@ -55,6 +56,7 @@ Ký hiệu: ✅ `resolved` · 🟡 đang dở · ⬜ chưa làm · ⏸ để sau
 - 30/10/2026: Ticket 17 chốt mã địa giới là mã Cục Thống kê có số 0 đứng đầu (tỉnh `01`, phường/xã `00004`); mọi FK `ward_code` của module sau dùng dạng này. `load_geo` không xoá mã cũ. Route `api/v1/store/` đầu tiên gắn trong `config/urls.py`; chi tiết ở [17](../backend-bootstrap/issues/17-shared-geo.md#quyết-định). Khai báo `ErrorDTO` trong OpenAPI tách sang ticket [22](../backend-bootstrap/issues/22-openapi-error-responses.md) (`needs-triage`).
 - 30/10/2026: Ticket 10 chốt API sự kiện cho mọi module: `shared.events.publish(event)` chỉ gọi trong `transaction.atomic` của service (ngoài transaction ném `RuntimeError`); handler khai báo `@handles(event_type, version=…, name="<module>.<snake_case>")`, `name` bắt buộc và cố định; `ModulesConfig.ready()` tự nạp `events.py`, `handlers.py` của module con; code nghiệp vụ đẩy task bằng `shared.tasks.enqueue_on_commit(task_name, **kwargs)` (task phải đã đăng ký, tên sai ném lỗi ngay); flow test gọi `shared.testing.events.drain_events()`. Chi tiết ở [10](../backend-bootstrap/issues/10-shared-events-outbox.md#quyết-định). Ticket mới từ review: [24](../backend-bootstrap/issues/24-outbox-killed-handler-redispatch.md)–[27](../backend-bootstrap/issues/27-outbox-invalid-payload-fails-fast.md) (`needs-triage`).
 - 30/10/2026: Ticket 18 chốt API theo dõi outbox cho module dùng sau: `shared.events.delivery_lag() -> timedelta` (job T4 của `ordering` so với 60 giây), `shared.events.get_delivery_outcomes(event_id, handler_names) -> dict[str, DeliveryStatus | None]` (`None` = chưa có delivery; `identity.reconcile_erasure_requests` chỉ coi `completed` là xong). Lệnh vận hành `retry_failed_events`, `replay_events` (chọn theo `deliveries_created_at`), job `shared.purge_old_outbox_events` 03:30 là lịch Beat đầu tiên trong `config/celery.py`. Chi tiết ở [18](../backend-bootstrap/issues/18-outbox-operations.md#quyết-định). Ticket mới từ review: [28](../backend-bootstrap/issues/28-outbox-operations-hardening.md) (`needs-triage`).
+- 31/10/2026: Ticket 12 đóng M0. API cho mốc sau: `Account` (`AUTH_USER_MODEL = "modules.Account"`, migration `modules/0001`, không cài `django.contrib.auth`); `modules.identity.services.accounts.create_staff_account(*, email, password, kind, full_name="")` kiểm email, độ mạnh mật khẩu (`AUTH_PASSWORD_VALIDATORS` theo 05 §3) và email trùng, ném `InvalidEmail`, `WeakPassword` (422), `EmailAlreadyUsed` (409); back-office tạo Staff (US-1001) dùng lại service này. Fixture `staff_client`/`admin_client` dùng `force_authenticate` với claims `aud = backoffice` tới khi ticket JWT của M1 thay bằng token thật, giữ tên fixture. Chi tiết ở [12](../backend-bootstrap/issues/12-account-bootstrap.md#quyết-định).
 
 ## Fog
 
