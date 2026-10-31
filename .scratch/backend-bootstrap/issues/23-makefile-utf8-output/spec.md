@@ -23,8 +23,10 @@ Chốt khi grilling ngày 01/11/2026.
 |---|---|
 | Tài liệu chi phối | `backend/Makefile` → [ADR 0017](../../../../docs/adr/0017-windows-native-dev-api-on-host.md) (recipe không dùng cú pháp riêng của shell POSIX), [08](../../../../docs/architecture/08-local-development.md) §3. `docs/architecture/08-local-development.md` → §3 |
 | Cách sửa | `export PYTHONUTF8 := 1` ở đầu `backend/Makefile`, như mục *Việc cần làm*. `export` là cú pháp của make nên hợp với ADR 0017. Bật chế độ UTF-8 của Python cho mọi recipe, gồm cả stdin và đọc file, chứ không chỉ stdout như `PYTHONIOENCODING` |
-| Tài liệu | 08 §3 thêm một câu: `Makefile` đặt `PYTHONUTF8=1`, nên output của `make` chuyển hướng ra file hay pipe trên Windows vẫn là UTF-8 |
-| Test | Không test tự động. Test đọc chữ trong `Makefile` không kiểm được hành vi; AC1 kiểm tay trên Windows, AC2 kiểm bằng CI |
+| Tài liệu | 08 §3 thêm một câu: `Makefile` đặt `PYTHONUTF8=1`, nên các lệnh Python trong recipe vẫn ghi UTF-8 khi output chuyển hướng trên Windows; hook `lint-imports` của pre-commit cũng đặt biến này |
+| Test | Không test tự động. Test đọc chữ trong `Makefile` không kiểm được hành vi; AC1 kiểm tay trên Windows. CI không chạy `make` (`ci.yml` gọi thẳng công cụ trong `.venv`), nên bằng chứng AC2 cho phần `make` là `make lint`, `make test` chạy local sau khi sửa; CI chỉ chứng minh lint và test vẫn xanh |
+| Hook pre-commit (thêm sau review, người dùng yêu cầu 01/11/2026) | Hook `lint-imports` trong `.pre-commit-config.yaml` cùng lỗi: `git commit` trên Windows bị chặn dù contract giữ. Entry đặt `PYTHONUTF8=1 uv run lint-imports` (entry chạy bằng `bash -c` nên cú pháp này hợp lệ). Kiểm tay bằng `pre-commit run lint-imports --all-files` |
+| Tiêu đề PR | `chore: run make recipes with Python UTF-8 mode`: lỗi chỉ ở tooling local, `config` dành cho Django settings |
 | Kiểm AC1 | Cài GNU make bằng `winget install ezwinports.make` (lệnh của 08 §2.1), rồi chạy `make lint > out.txt` trong `backend/` bằng Git Bash. Trước khi sửa đã tái hiện: `uv run lint-imports > out.txt` exit 1 vì `UnicodeEncodeError` (stdout `cp1252`); PowerShell 7 không tái hiện được |
 | Mode | lite: 2 AC, không thêm model, migration hay endpoint |
 
